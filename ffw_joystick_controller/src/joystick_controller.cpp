@@ -270,47 +270,56 @@ void JoystickController::publish_joystick_values()
 
 void JoystickController::handle_tact_switches(bool left_tact_pressed, bool right_tact_pressed)
 {
-  bool both_tact_switch_pressed = left_tact_pressed && right_tact_pressed;
+  // Create current state as bit pattern: left=bit1, right=bit0
+  // 00 = neither pressed, 01 = right only, 10 = left only, 11 = both pressed
+  uint8_t current_state = (left_tact_pressed ? 2 : 0) | (right_tact_pressed ? 1 : 0);
+  uint8_t prev_state = (prev_left_tact_switch_ ? 2 : 0) | (prev_right_tact_switch_ ? 1 : 0);
   
-  // Handle mode switching (both switches together)
-  if (!both_tact_switch_pressed && prev_tact_switch_) {
-    std_msgs::msg::String mode_msg;
-    if (current_mode_ == constants::ARM_CONTROL_MODE) {
-      current_mode_ = constants::SWERVE_MODE;
-    } else {
-      current_mode_ = constants::ARM_CONTROL_MODE;
+  // Only trigger on falling edges (when buttons are released)
+  if (current_state != prev_state && current_state == 0) {
+    switch (prev_state) {
+      case 1: // 01 -> 00 (right button released)
+        {
+          std_msgs::msg::String trigger_msg;
+          trigger_msg.data = "right";
+          tact_trigger_pub_->publish(trigger_msg);
+          RCLCPP_INFO(get_node()->get_logger(), "Right tact switch triggered!");
+        }
+        break;
+        
+      case 2: // 10 -> 00 (left button released)
+        {
+          std_msgs::msg::String trigger_msg;
+          trigger_msg.data = "left";
+          tact_trigger_pub_->publish(trigger_msg);
+          RCLCPP_INFO(get_node()->get_logger(), "Left tact switch triggered!");
+        }
+        break;
+        
+      case 3: // 11 -> 00 (both buttons released - mode change)
+        {
+          std_msgs::msg::String mode_msg;
+          if (current_mode_ == constants::ARM_CONTROL_MODE) {
+            current_mode_ = constants::SWERVE_MODE;
+          } else {
+            current_mode_ = constants::ARM_CONTROL_MODE;
+          }
+          mode_msg.data = current_mode_;
+          mode_pub_->publish(mode_msg);
+          RCLCPP_INFO(get_node()->get_logger(), "Mode switched to: %s", current_mode_.c_str());
+        }
+        break;
+        
+      default:
+        // No action for other transitions
+        break;
     }
-    mode_msg.data = current_mode_;
-    mode_pub_->publish(mode_msg);
-    
-    RCLCPP_INFO(get_node()->get_logger(), "Mode switched to: %s", current_mode_.c_str());
   }
-  prev_tact_switch_ = both_tact_switch_pressed;
   
-  // Handle individual tact switches ONLY if both are not pressed simultaneously
-  // and we're not in a state where both were just pressed
-  if (!both_tact_switch_pressed && !prev_tact_switch_) {
-    // Handle right tact switch (falling edge detection)
-    if (!right_tact_pressed && prev_right_tact_switch_) {
-      std_msgs::msg::String trigger_msg;
-      trigger_msg.data = "right";
-      tact_trigger_pub_->publish(trigger_msg);
-      
-      RCLCPP_INFO(get_node()->get_logger(), "Right tact switch triggered!");
-    }
-
-    // Handle left tact switch (falling edge detection)  
-    if (!left_tact_pressed && prev_left_tact_switch_) {
-      std_msgs::msg::String trigger_msg;
-      trigger_msg.data = "left";
-      tact_trigger_pub_->publish(trigger_msg);
-      
-      RCLCPP_INFO(get_node()->get_logger(), "Left tact switch triggered!");
-    }
-  }
-  
-  prev_right_tact_switch_ = right_tact_pressed;
+  // Update previous state
   prev_left_tact_switch_ = left_tact_pressed;
+  prev_right_tact_switch_ = right_tact_pressed;
+  prev_tact_switch_ = (current_state == 3); // both pressed
 }
 
 controller_interface::InterfaceConfiguration
