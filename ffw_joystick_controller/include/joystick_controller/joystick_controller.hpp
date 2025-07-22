@@ -149,6 +149,7 @@ protected:
   bool prev_tact_switch_ = false;
   bool prev_right_tact_switch_ = false;
   bool prev_left_tact_switch_ = false;
+  bool both_pressed_flag_ = false;  // Flag to track if both buttons were pressed
 
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr tact_trigger_pub_;

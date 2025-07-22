@@ -275,51 +275,55 @@ void JoystickController::handle_tact_switches(bool left_tact_pressed, bool right
   uint8_t current_state = (left_tact_pressed ? 2 : 0) | (right_tact_pressed ? 1 : 0);
   uint8_t prev_state = (prev_left_tact_switch_ ? 2 : 0) | (prev_right_tact_switch_ ? 1 : 0);
   
-  // Only trigger on falling edges (when buttons are released)
-  if (current_state != prev_state && current_state == 0) {
-    switch (prev_state) {
-      case 1: // 01 -> 00 (right button released)
-        {
-          std_msgs::msg::String trigger_msg;
-          trigger_msg.data = "right";
-          tact_trigger_pub_->publish(trigger_msg);
-          RCLCPP_INFO(get_node()->get_logger(), "Right tact switch triggered!");
-        }
-        break;
-        
-      case 2: // 10 -> 00 (left button released)
-        {
-          std_msgs::msg::String trigger_msg;
-          trigger_msg.data = "left";
-          tact_trigger_pub_->publish(trigger_msg);
-          RCLCPP_INFO(get_node()->get_logger(), "Left tact switch triggered!");
-        }
-        break;
-        
-      case 3: // 11 -> 00 (both buttons released - mode change)
-        {
-          std_msgs::msg::String mode_msg;
-          if (current_mode_ == constants::ARM_CONTROL_MODE) {
-            current_mode_ = constants::SWERVE_MODE;
-          } else {
-            current_mode_ = constants::ARM_CONTROL_MODE;
+  // Set flag when both buttons are pressed
+  if (current_state == 3) {
+    both_pressed_flag_ = true;
+  }
+  
+  // Only trigger actions when reaching 00 state (no buttons pressed)
+  if (current_state == 0 && prev_state != 0) {
+    if (both_pressed_flag_) {
+      // Mode change - both buttons were pressed at some point
+      std_msgs::msg::String mode_msg;
+      if (current_mode_ == constants::ARM_CONTROL_MODE) {
+        current_mode_ = constants::SWERVE_MODE;
+      } else {
+        current_mode_ = constants::ARM_CONTROL_MODE;
+      }
+      mode_msg.data = current_mode_;
+      mode_pub_->publish(mode_msg);
+      RCLCPP_INFO(get_node()->get_logger(), "Mode switched to: %s", current_mode_.c_str());
+      
+      // Reset flag after mode change
+      both_pressed_flag_ = false;
+    } else {
+      // Individual button trigger - only if both were never pressed
+      switch (prev_state) {
+        case 1: // 01 -> 00 (right button only was pressed)
+          {
+            std_msgs::msg::String trigger_msg;
+            trigger_msg.data = "right";
+            tact_trigger_pub_->publish(trigger_msg);
+            RCLCPP_INFO(get_node()->get_logger(), "Right tact switch triggered!");
           }
-          mode_msg.data = current_mode_;
-          mode_pub_->publish(mode_msg);
-          RCLCPP_INFO(get_node()->get_logger(), "Mode switched to: %s", current_mode_.c_str());
-        }
-        break;
-        
-      default:
-        // No action for other transitions
-        break;
+          break;
+          
+        case 2: // 10 -> 00 (left button only was pressed)
+          {
+            std_msgs::msg::String trigger_msg;
+            trigger_msg.data = "left";
+            tact_trigger_pub_->publish(trigger_msg);
+            RCLCPP_INFO(get_node()->get_logger(), "Left tact switch triggered!");
+          }
+          break;
+      }
     }
   }
   
   // Update previous state
   prev_left_tact_switch_ = left_tact_pressed;
   prev_right_tact_switch_ = right_tact_pressed;
-  prev_tact_switch_ = (current_state == 3); // both pressed
+  prev_tact_switch_ = (current_state == 3);
 }
 
 controller_interface::InterfaceConfiguration
@@ -569,6 +573,7 @@ controller_interface::CallbackReturn JoystickController::on_configure(
     "/leader/joystick_controller/tact_trigger", 10);
   prev_right_tact_switch_ = false;
   prev_left_tact_switch_ = false;
+  both_pressed_flag_ = false;
 
   // Create publisher for cmd_vel
   cmd_vel_pub_ = get_node()->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
