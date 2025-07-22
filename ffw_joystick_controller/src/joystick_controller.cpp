@@ -271,7 +271,8 @@ void JoystickController::publish_joystick_values()
 void JoystickController::handle_mode_switching(bool left_tact_pressed, bool right_tact_pressed)
 {
   bool both_tact_switch_pressed = left_tact_pressed && right_tact_pressed;
-  if (both_tact_switch_pressed && !prev_tact_switch_) {
+  // Detect falling edge (pressed -> released)
+  if (!both_tact_switch_pressed && prev_tact_switch_) {
     std_msgs::msg::String mode_msg;
     if (current_mode_ == constants::ARM_CONTROL_MODE) {
       current_mode_ = constants::SWERVE_MODE;
@@ -280,8 +281,23 @@ void JoystickController::handle_mode_switching(bool left_tact_pressed, bool righ
     }
     mode_msg.data = current_mode_;
     mode_pub_->publish(mode_msg);
+    
+    RCLCPP_INFO(get_node()->get_logger(), "Mode switched to: %s", current_mode_.c_str());
   }
   prev_tact_switch_ = both_tact_switch_pressed;
+}
+
+void JoystickController::handle_right_tact_switch(bool right_tact_pressed)
+{
+  // Detect falling edge for right tact switch (pressed -> released)
+  if (!right_tact_pressed && prev_right_tact_switch_) {
+    std_msgs::msg::String trigger_msg;
+    trigger_msg.data = "right_tact_triggered";
+    right_tact_trigger_pub_->publish(trigger_msg);
+    
+    RCLCPP_INFO(get_node()->get_logger(), "Right tact switch triggered!");
+  }
+  prev_right_tact_switch_ = right_tact_pressed;
 }
 
 controller_interface::InterfaceConfiguration
@@ -412,6 +428,9 @@ controller_interface::return_type JoystickController::update(
   // Handle mode switching
   handle_mode_switching(left_tact_switch_pressed, right_tact_switch_pressed);
 
+  // Handle right tact switch trigger
+  handle_right_tact_switch(right_tact_switch_pressed);
+
   RCLCPP_DEBUG(get_node()->get_logger(), "Joystick controller update completed");
 
   return controller_interface::return_type::OK;
@@ -525,6 +544,11 @@ controller_interface::CallbackReturn JoystickController::on_configure(
   mode_pub_ = get_node()->create_publisher<std_msgs::msg::String>(
     "/leader/joystick_controller_right/joystick_mode", 10);
   prev_tact_switch_ = false;
+
+  // Create publisher for right tact switch trigger
+  right_tact_trigger_pub_ = get_node()->create_publisher<std_msgs::msg::String>(
+    "/leader/joystick_controller_right/right_tact_trigger", 10);
+  prev_right_tact_switch_ = false;
 
   // Create publisher for cmd_vel
   cmd_vel_pub_ = get_node()->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
