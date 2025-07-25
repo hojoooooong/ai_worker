@@ -156,7 +156,6 @@ protected:
   rclcpp::Time right_tact_press_start_time_;
   bool left_tact_long_press_triggered_ = false;
   bool right_tact_long_press_triggered_ = false;
-  static constexpr double LONG_PRESS_DURATION = 2.0;  // 2 seconds
 
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr tact_trigger_pub_;

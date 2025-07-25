@@ -290,7 +290,7 @@ void JoystickController::handle_tact_switches(bool left_tact_pressed, bool right
   // Check for long press on left tact switch
   if (left_tact_pressed && !left_tact_long_press_triggered_) {
     auto press_duration = current_time - left_tact_press_start_time_;
-    if (press_duration.seconds() >= LONG_PRESS_DURATION) {
+    if (press_duration.seconds() >= params_.long_press_duration) {
       std_msgs::msg::String trigger_msg;
       trigger_msg.data = "left_long_time";
       tact_trigger_pub_->publish(trigger_msg);
@@ -302,7 +302,7 @@ void JoystickController::handle_tact_switches(bool left_tact_pressed, bool right
   // Check for long press on right tact switch
   if (right_tact_pressed && !right_tact_long_press_triggered_) {
     auto press_duration = current_time - right_tact_press_start_time_;
-    if (press_duration.seconds() >= LONG_PRESS_DURATION) {
+    if (press_duration.seconds() >= params_.long_press_duration) {
       std_msgs::msg::String trigger_msg;
       trigger_msg.data = "right_long_time";
       tact_trigger_pub_->publish(trigger_msg);
