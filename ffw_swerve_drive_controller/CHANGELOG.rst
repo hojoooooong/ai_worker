@@ -4,7 +4,8 @@ Changelog for package ffw_swerve_drive_controller
 
 1.1.11 (2025-08-13)
 ------------------
-* None
+* Fix velocity limit variable
+* Contributors: Woojin Wie
 
 1.1.10 (2025-07-22)
 ------------------

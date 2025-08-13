@@ -5,6 +5,7 @@ Changelog for package ffw
 1.1.11 (2025-08-13)
 ------------------
 * Updated URDF for ZED camera
+* Fix velocity limit variable for ffw_swerve_drive_controller
 * Contributors: Woojin Wie
 
 1.1.10 (2025-07-22)
