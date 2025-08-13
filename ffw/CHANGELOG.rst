@@ -2,6 +2,11 @@
 Changelog for package ffw
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.1.11 (2025-08-13)
+------------------
+* Updated URDF for ZED camera
+* Contributors: Woojin Wie
+
 1.1.10 (2025-07-22)
 -------------------
 * Added start/pause feature for ffw_joint_trajectory_command_broadcaster
