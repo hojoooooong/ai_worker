@@ -65,7 +65,7 @@ private:
     ros_position.z() = vr_position.y();
 
     // Transform position from zedm_camera_center frame to arm_base_link frame
-    Eigen::Vector3d arm_position = ros_position + transform_zedm_to_arm_;
+    Eigen::Vector3d base_position = ros_position + transform_zedm_to_base_;
 
 
     // === VR(Meta Quest/Unity) → ROS 변환 (orientation) ===
@@ -84,13 +84,14 @@ private:
 
 
     // Create target pose message
+
     auto target_pose = geometry_msgs::msg::PoseStamped();
     target_pose.header.stamp = this->get_clock()->now();
-    target_pose.header.frame_id = "arm_base_link";
+    target_pose.header.frame_id = "base_link";
 
-    target_pose.pose.position.x = arm_position.x();
-    target_pose.pose.position.y = arm_position.y();
-    target_pose.pose.position.z = arm_position.z();
+    target_pose.pose.position.x = base_position.x();
+    target_pose.pose.position.y = base_position.y();
+    target_pose.pose.position.z = base_position.z();
 
     target_pose.pose.orientation.x = arm_quaternion.x();
     target_pose.pose.orientation.y = arm_quaternion.y();
@@ -102,12 +103,12 @@ private:
 
         RCLCPP_DEBUG(this->get_logger(),
             "Transformed VR pose: pos=[%.3f, %.3f, %.3f]",
-            arm_position.x(), arm_position.y(), arm_position.z());
+            base_position.x(), base_position.y(), base_position.z());
     }
 
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr subscription_;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pose_pub_;
-    Eigen::Vector3d transform_zedm_to_arm_;
+    Eigen::Vector3d transform_zedm_to_base_;
 };
 
 int main(int argc, char* argv[])
