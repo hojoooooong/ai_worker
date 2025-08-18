@@ -3,11 +3,11 @@ Changelog for package ffw_bringup
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 1.1.11 (2025-08-13)
-------------------
+-------------------
 * None
 
 1.1.10 (2025-07-22)
-------------------
+-------------------
 * Merged two joint_trajectory_command_broadcaster into one
 * Contributors: Wonho Yun
 
