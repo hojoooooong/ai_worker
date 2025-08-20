@@ -12,12 +12,8 @@ public:
         // Declare and get VR scale parameter
         // 로봇 작업공간(836mm) vs 성인남성 팔길이(~650mm) 비율 고려
         // 로봇이 더 크므로 VR 움직임을 확대: 836/650 ≈ 1.29,
-        this->declare_parameter<double>("vr_scale_x", 1.3);
-        this->declare_parameter<double>("vr_scale_y", 1.3);
-        this->declare_parameter<double>("vr_scale_z", 1.3);
-        vr_scale_x_ = this->get_parameter("vr_scale_x").as_double();
-        vr_scale_y_ = this->get_parameter("vr_scale_y").as_double();
-        vr_scale_z_ = this->get_parameter("vr_scale_z").as_double();
+        this->declare_parameter<double>("vr_scale", 1.3);
+        vr_scale_ = this->get_parameter("vr_scale").as_double();
 
         // Subscribe to VR hand poses
         subscription_ = this->create_subscription<geometry_msgs::msg::PoseArray>(
@@ -28,7 +24,7 @@ public:
         target_pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(
             "/target_pose", 10);
 
-        RCLCPP_INFO(this->get_logger(), "VR Hand Pose Transformer node started (vr_scale_x=%.3f, vr_scale_y=%.3f, vr_scale_z=%.3f)", vr_scale_x_, vr_scale_y_, vr_scale_z_);
+        RCLCPP_INFO(this->get_logger(), "VR Hand Pose Transformer node started (vr_scale=%.3f)", vr_scale_);
     }
 
 private:
@@ -64,9 +60,9 @@ private:
     // === VR(Meta Quest/Unity) → ROS 변환 (position, with scale) ===
     // ROS.x = -VR.z, ROS.y = -VR.x, ROS.z = VR.y
     Eigen::Vector3d ros_position;
-    ros_position.x() = -vr_position.z() * vr_scale_z_;
-    ros_position.y() = -vr_position.x() * vr_scale_x_;
-    ros_position.z() =  vr_position.y() * vr_scale_y_;
+    ros_position.x() = -vr_position.z() * vr_scale_;
+    ros_position.y() = -vr_position.x() * vr_scale_;
+    ros_position.z() =  vr_position.y() * vr_scale_;
 
     // 기준 좌표: zedm_camera_center에서 base_link로 이동 (전체 변환 체인 적용)
     // zedm_camera_center → zedm_camera_link: (0, 0, -0.01325)
@@ -141,9 +137,7 @@ private:
 
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr subscription_;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pose_pub_;
-    double vr_scale_x_;
-    double vr_scale_y_;
-    double vr_scale_z_;
+    double vr_scale_;
 };
 
 int main(int argc, char* argv[])

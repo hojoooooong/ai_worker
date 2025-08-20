@@ -23,6 +23,24 @@ def generate_launch_description():
         description='Topic name for receiving target poses'
     )
 
+    # VR scale arguments
+    vr_scale_arg = DeclareLaunchArgument(
+        'vr_scale',
+        default_value='1.3',
+        description='VR scale factor'
+    )
+
+    # VR Hand Pose Transformer node
+    vr_hand_pose_transformer_node = Node(
+        package='ffw_kinematics',
+        executable='vr_hand_pose_transformer',
+        name='vr_hand_pose_transformer',
+        output='screen',
+        parameters=[{
+            'vr_scale': LaunchConfiguration('vr_scale'),
+        }]
+    )
+
     # Realtime IK Solver with Joint Limits node
     realtime_ik_solver_jl_node = Node(
         package='ffw_kinematics',
@@ -36,18 +54,11 @@ def generate_launch_description():
         }]
     )
 
-    # Target pose publisher node for testing
-    target_pose_publisher_node = Node(
-        package='ffw_kinematics',
-        executable='target_pose_publisher',
-        name='target_pose_publisher',
-        output='screen'
-    )
-
     return LaunchDescription([
         base_link_arg,
         end_effector_link_arg,
         target_pose_topic_arg,
+        vr_scale_arg,
+        vr_hand_pose_transformer_node,
         realtime_ik_solver_jl_node,
-        target_pose_publisher_node,
     ])

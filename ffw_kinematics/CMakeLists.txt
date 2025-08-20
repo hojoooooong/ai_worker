@@ -18,45 +18,7 @@ find_package(orocos_kdl REQUIRED)
 find_package(pinocchio REQUIRED)
 find_package(Eigen3 REQUIRED)
 
-# C++ executables
-add_executable(kdl_ik_solver_cpp src/kdl_ik_solver.cpp)
 
-target_include_directories(kdl_ik_solver_cpp PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
-
-target_compile_features(kdl_ik_solver_cpp PUBLIC c_std_99 cxx_std_17)
-
-ament_target_dependencies(kdl_ik_solver_cpp
-  rclcpp
-  sensor_msgs
-  geometry_msgs
-  std_msgs
-  trajectory_msgs
-  kdl_parser
-  urdf
-  orocos_kdl
-)
-
-# Realtime IK Solver executable
-add_executable(realtime_ik_solver src/realtime_ik_solver.cpp)
-
-target_include_directories(realtime_ik_solver PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
-
-target_compile_features(realtime_ik_solver PUBLIC c_std_99 cxx_std_17)
-
-ament_target_dependencies(realtime_ik_solver
-  rclcpp
-  sensor_msgs
-  geometry_msgs
-  std_msgs
-  trajectory_msgs
-  kdl_parser
-  urdf
-  orocos_kdl
-)
 
 # Target Pose Publisher executable
 add_executable(target_pose_publisher src/target_pose_publisher.cpp)
@@ -70,25 +32,6 @@ target_compile_features(target_pose_publisher PUBLIC c_std_99 cxx_std_17)
 ament_target_dependencies(target_pose_publisher
   rclcpp
   geometry_msgs
-)
-
-# IK Solver Comparison executable
-add_executable(ik_solver_comparison src/ik_solver_comparison.cpp)
-
-target_include_directories(ik_solver_comparison PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
-
-target_compile_features(ik_solver_comparison PUBLIC c_std_99 cxx_std_17)
-
-ament_target_dependencies(ik_solver_comparison
-  rclcpp
-  sensor_msgs
-  geometry_msgs
-  std_msgs
-  kdl_parser
-  urdf
-  orocos_kdl
 )
 
 # Realtime IK Solver with Joint Limits executable
@@ -151,7 +94,7 @@ target_link_libraries(pinocchio_ik_solver pinocchio::pinocchio)
 target_link_libraries(vr_hand_pose_transformer Eigen3::Eigen)
 
 # Install C++ executables
-install(TARGETS kdl_ik_solver_cpp realtime_ik_solver target_pose_publisher ik_solver_comparison realtime_ik_solver_jl pinocchio_ik_solver vr_hand_pose_transformer
+install(TARGETS target_pose_publisher realtime_ik_solver_jl pinocchio_ik_solver vr_hand_pose_transformer
   DESTINATION lib/${PROJECT_NAME})
 
 
