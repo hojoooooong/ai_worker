@@ -70,13 +70,13 @@ public:
             left_target_pose_topic, 10,
             std::bind(&RealtimeIKSolverJL::leftTargetPoseCallback, this, std::placeholders::_1));
 
-        // Subscribe to VR pinch values
+        // Subscribe to VR squeeze values
         left_pinch_sub_ = this->create_subscription<std_msgs::msg::Float32>(
-            "/vr_hand/left_pinch", 10,
+            "/vr_hand/left_squeeze", 10,
             std::bind(&RealtimeIKSolverJL::leftPinchCallback, this, std::placeholders::_1));
 
         right_pinch_sub_ = this->create_subscription<std_msgs::msg::Float32>(
-            "/vr_hand/right_pinch", 10,
+            "/vr_hand/right_squeeze", 10,
             std::bind(&RealtimeIKSolverJL::rightPinchCallback, this, std::placeholders::_1));
 
         // Publishers
@@ -232,61 +232,59 @@ private:
 
     void setupJointLimits(const urdf::Model& model)
     {
-        // Setup right arm joint limits
+        // Setup right arm joint limits using hardcoded values
         unsigned int right_num_joints = right_chain_.getNrOfJoints();
         right_q_min_.resize(right_num_joints);
         right_q_max_.resize(right_num_joints);
 
-        RCLCPP_INFO(this->get_logger(), "🔒 Setting up right arm joint limits:");
-        for (size_t i = 0; i < right_joint_names_.size(); i++) {
-            const std::string& joint_name = right_joint_names_[i];
-            auto joint_ptr = model.getJoint(joint_name);
+        RCLCPP_INFO(this->get_logger(), "🔒 Setting up right arm joint limits with hardcoded values:");
 
-            if (joint_ptr && joint_ptr->limits) {
-                right_q_min_(i) = joint_ptr->limits->lower;
-                right_q_max_(i) = joint_ptr->limits->upper;
-                RCLCPP_INFO(this->get_logger(), "  %s: [%.3f, %.3f] rad ([%.1f°, %.1f°])",
-                           joint_name.c_str(),
-                           right_q_min_(i), right_q_max_(i),
-                           right_q_min_(i) * 180.0 / M_PI, right_q_max_(i) * 180.0 / M_PI);
-            } else {
+        // Check if we have the expected number of joints
+        if (right_num_joints != right_min_joint_positions_.size()) {
+            RCLCPP_WARN(this->get_logger(), "Expected %zu joints for right arm, but found %d. Using default limits.",
+                       right_min_joint_positions_.size(), right_num_joints);
+            for (unsigned int i = 0; i < right_num_joints; i++) {
                 right_q_min_(i) = -3.14159;
                 right_q_max_(i) = 3.14159;
-                RCLCPP_WARN(this->get_logger(), "  %s: Using default limits [%.3f, %.3f] rad ([%.1f°, %.1f°])",
-                           joint_name.c_str(),
+            }
+        } else {
+            for (unsigned int i = 0; i < right_num_joints; i++) {
+                right_q_min_(i) = right_min_joint_positions_[i];
+                right_q_max_(i) = right_max_joint_positions_[i];
+                RCLCPP_INFO(this->get_logger(), "  %s: [%.3f, %.3f] rad ([%.1f°, %.1f°])",
+                           right_joint_names_[i].c_str(),
                            right_q_min_(i), right_q_max_(i),
                            right_q_min_(i) * 180.0 / M_PI, right_q_max_(i) * 180.0 / M_PI);
             }
         }
 
-        // Setup left arm joint limits
+        // Setup left arm joint limits using hardcoded values
         unsigned int left_num_joints = left_chain_.getNrOfJoints();
         left_q_min_.resize(left_num_joints);
         left_q_max_.resize(left_num_joints);
 
-        RCLCPP_INFO(this->get_logger(), "🔒 Setting up left arm joint limits:");
-        for (size_t i = 0; i < left_joint_names_.size(); i++) {
-            const std::string& joint_name = left_joint_names_[i];
-            auto joint_ptr = model.getJoint(joint_name);
+        RCLCPP_INFO(this->get_logger(), "🔒 Setting up left arm joint limits with hardcoded values:");
 
-            if (joint_ptr && joint_ptr->limits) {
-                left_q_min_(i) = joint_ptr->limits->lower;
-                left_q_max_(i) = joint_ptr->limits->upper;
-                RCLCPP_INFO(this->get_logger(), "  %s: [%.3f, %.3f] rad ([%.1f°, %.1f°])",
-                           joint_name.c_str(),
-                           left_q_min_(i), left_q_max_(i),
-                           left_q_min_(i) * 180.0 / M_PI, left_q_max_(i) * 180.0 / M_PI);
-            } else {
+        // Check if we have the expected number of joints
+        if (left_num_joints != left_min_joint_positions_.size()) {
+            RCLCPP_WARN(this->get_logger(), "Expected %zu joints for left arm, but found %d. Using default limits.",
+                       left_min_joint_positions_.size(), left_num_joints);
+            for (unsigned int i = 0; i < left_num_joints; i++) {
                 left_q_min_(i) = -3.14159;
                 left_q_max_(i) = 3.14159;
-                RCLCPP_WARN(this->get_logger(), "  %s: Using default limits [%.3f, %.3f] rad ([%.1f°, %.1f°])",
-                           joint_name.c_str(),
+            }
+        } else {
+            for (unsigned int i = 0; i < left_num_joints; i++) {
+                left_q_min_(i) = left_min_joint_positions_[i];
+                left_q_max_(i) = left_max_joint_positions_[i];
+                RCLCPP_INFO(this->get_logger(), "  %s: [%.3f, %.3f] rad ([%.1f°, %.1f°])",
+                           left_joint_names_[i].c_str(),
                            left_q_min_(i), left_q_max_(i),
                            left_q_min_(i) * 180.0 / M_PI, left_q_max_(i) * 180.0 / M_PI);
             }
         }
 
-        RCLCPP_INFO(this->get_logger(), "✅ Joint limits configured for both arms");
+        RCLCPP_INFO(this->get_logger(), "✅ Joint limits configured for both arms using hardcoded values");
     }
 
     void jointStateCallback(const sensor_msgs::msg::JointState::SharedPtr msg)
@@ -410,7 +408,7 @@ private:
         // Transform pose from base_link to arm_base_link frame
         geometry_msgs::msg::PoseStamped arm_base_pose = *msg;
 
-        // URDF lift_joint origin: xyz="0.0055 0 1.4316"  
+        // URDF lift_joint origin: xyz="0.0055 0 1.4316"
         // Transform: base_link -> arm_base_link
         arm_base_pose.pose.position.x -= 0.0055;  // lift_joint x offset
         arm_base_pose.pose.position.y -= 0.0;     // lift_joint y offset
@@ -448,7 +446,7 @@ private:
         // Transform pose from base_link to arm_base_link frame
         geometry_msgs::msg::PoseStamped arm_base_pose = *msg;
 
-        // URDF lift_joint origin: xyz="0.0055 0 1.4316"  
+        // URDF lift_joint origin: xyz="0.0055 0 1.4316"
         // Transform: base_link -> arm_base_link
         arm_base_pose.pose.position.x -= 0.0055;  // lift_joint x offset
         arm_base_pose.pose.position.y -= 0.0;     // lift_joint y offset
@@ -473,18 +471,24 @@ private:
     {
         left_pinch_value_ = msg->data;
         // Calculate corresponding gripper position for logging
-        double gripper_position = 1.2 - (left_pinch_value_ * 1.2 / 0.1);
+        // VR squeeze: 0.035=closed (fist), 0.095=open (palm open)
+        // Gripper: 1.2=closed, 0=open
+        // Map squeeze value to gripper position (invert mapping)
+        double gripper_position = 1.2 - ((left_pinch_value_ - 0.035) * 1.2 / (0.095 - 0.035));
         gripper_position = std::max(0.0, std::min(1.2, gripper_position));
-        RCLCPP_INFO(this->get_logger(), "🤏 Left pinch: %.3f → gripper: %.3f", left_pinch_value_, gripper_position);
+        RCLCPP_INFO(this->get_logger(), "🤏 Left squeeze: %.3f → gripper: %.3f", left_pinch_value_, gripper_position);
     }
 
     void rightPinchCallback(const std_msgs::msg::Float32::SharedPtr msg)
     {
         right_pinch_value_ = msg->data;
         // Calculate corresponding gripper position for logging
-        double gripper_position = 1.2 - (right_pinch_value_ * 1.2 / 0.1);
+        // VR squeeze: 0.035=closed (fist), 0.095=open (palm open)
+        // Gripper: 1.2=closed, 0=open
+        // Map squeeze value to gripper position (invert mapping)
+        double gripper_position = 1.2 - ((right_pinch_value_ - 0.035) * 1.2 / (0.095 - 0.035));
         gripper_position = std::max(0.0, std::min(1.2, gripper_position));
-        RCLCPP_INFO(this->get_logger(), "🤏 Right pinch: %.3f → gripper: %.3f", right_pinch_value_, gripper_position);
+        RCLCPP_INFO(this->get_logger(), "🤏 Right squeeze: %.3f → gripper: %.3f", right_pinch_value_, gripper_position);
     }
 
     void solveIKAndMove(const geometry_msgs::msg::PoseStamped& target_pose, const std::string& arm)
@@ -681,17 +685,17 @@ private:
         // Add gripper joint and position
         if (arm == "right") {
             arm_joint_names.push_back("gripper_r_joint1");
-            // Map VR pinch value (0=close, 0.1=open) to gripper position (1.2=close, 0=open)
-            // Invert the mapping: closed pinch (0) -> closed gripper (1.2), open pinch (0.1) -> open gripper (0)
-            double gripper_position = 1.2 - (right_pinch_value_ * 1.2 / 0.1);
+            // Map VR squeeze value (0.035=closed/fist, 0.095=open/palm) to gripper position (1.2=closed, 0=open)
+            // Invert the mapping: closed squeeze (0.035) -> closed gripper (1.2), open squeeze (0.095) -> open gripper (0)
+            double gripper_position = 1.2 - ((right_pinch_value_ - 0.035) * 1.2 / (0.095 - 0.035));
             // Clamp to valid range [0, 1.2]
             gripper_position = std::max(0.0, std::min(1.2, gripper_position));
             target_arm_positions.push_back(gripper_position);
         } else {
             arm_joint_names.push_back("gripper_l_joint1");
-            // Map VR pinch value (0=close, 0.1=open) to gripper position (1.2=close, 0=open)
-            // Invert the mapping: closed pinch (0) -> closed gripper (1.2), open pinch (0.1) -> open gripper (0)
-            double gripper_position = 1.2 - (left_pinch_value_ * 1.2 / 0.1);
+            // Map VR squeeze value (0.035=closed/fist, 0.095=open/palm) to gripper position (1.2=closed, 0=open)
+            // Invert the mapping: closed squeeze (0.035) -> closed gripper (1.2), open squeeze (0.095) -> open gripper (0)
+            double gripper_position = 1.2 - ((left_pinch_value_ - 0.035) * 1.2 / (0.095 - 0.035));
             // Clamp to valid range [0, 1.2]
             gripper_position = std::max(0.0, std::min(1.2, gripper_position));
             target_arm_positions.push_back(gripper_position);
@@ -839,6 +843,30 @@ private:
     KDL::JntArray left_q_min_;
     KDL::JntArray left_q_max_;
 
+    // Hardcoded joint limits (7 joints per arm)
+    // Right arm limits (index 0-6: joint1-joint7)
+    std::vector<float> right_min_joint_positions_ = {
+        -3.14, -3.14, -1.57, -2.9361,
+        -1.57, -1.57, -1.5804
+    };
+
+    std::vector<float> right_max_joint_positions_ = {
+        1.57, 0.0, 1.57, 0.0,
+        1.57, 1.57, 1.8201
+    };
+
+    // Left arm limits (index 0-6: joint1-joint7)
+    // Joint2 and Joint7 have inverted rotation direction compared to right arm
+    std::vector<float> left_min_joint_positions_ = {
+        -3.14, 0.0, -1.57, -2.9361,     // joint2 min/max swapped
+        -1.57, -1.57, -1.8201           // joint7 min/max swapped
+    };
+
+    std::vector<float> left_max_joint_positions_ = {
+        1.57, 3.14, 1.57, 0.0,          // joint2 min/max swapped
+        1.57, 1.57, 1.5804              // joint7 min/max swapped
+    };
+
     // Joint information for right arm
     std::vector<std::string> right_joint_names_;
     std::vector<double> right_current_joint_positions_;
@@ -851,9 +879,9 @@ private:
     int lift_joint_index_;  // Not used in arm-only chain
     double lift_joint_position_;  // Current lift joint position for coordinate transformation
 
-    // VR pinch values for gripper control
-    double left_pinch_value_;
-    double right_pinch_value_;
+    // VR squeeze values for gripper control
+    double left_pinch_value_;   // 0.035 = closed (fist), 0.095 = open (palm)
+    double right_pinch_value_;  // 0.035 = closed (fist), 0.095 = open (palm)
 
     // Status flags
     bool setup_complete_;
