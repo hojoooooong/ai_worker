@@ -19,7 +19,7 @@
   <depend>trajectory_msgs</depend>
   <depend>kdl_parser</depend>
   <depend>urdf</depend>
-  <depend>orocos_kdl</depend>
+  <depend>pinocchio</depend>
 
   <export>
     <build_type>ament_cmake</build_type>
