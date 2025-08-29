@@ -29,6 +29,14 @@ public:
         this->declare_parameter("max_iterations", 1000);
         this->declare_parameter("tolerance", 0.3);  // Relaxed tolerance
         this->declare_parameter("step_size", 0.01);
+        this->declare_parameter("ik_damping", 1e-4);  // Damped least squares lambda
+        this->declare_parameter("dt", 0.1);           // Integration step (s)
+        // New tunables for flexibility
+        this->declare_parameter("max_joint_velocity", 0.5); // rad/s equivalent per iteration
+        this->declare_parameter("min_progress", 1e-6);      // convergence progress threshold
+        this->declare_parameter("max_stagnation", 10);      // iterations with no progress before giving up
+        this->declare_parameter("pos_weight", 1.0);          // weight for position error in log6 vector
+        this->declare_parameter("ori_weight", 1.0);          // weight for orientation error in log6 vector
 
         use_robot_description_ = this->get_parameter("use_robot_description").as_bool();
         urdf_path_ = this->get_parameter("urdf_path").as_string();
@@ -37,6 +45,13 @@ public:
         max_iterations_ = this->get_parameter("max_iterations").as_int();
         tolerance_ = this->get_parameter("tolerance").as_double();
         step_size_ = this->get_parameter("step_size").as_double();
+        ik_damping_ = this->get_parameter("ik_damping").as_double();
+        dt_ = this->get_parameter("dt").as_double();
+        max_joint_velocity_ = this->get_parameter("max_joint_velocity").as_double();
+        min_progress_ = this->get_parameter("min_progress").as_double();
+        max_stagnation_ = this->get_parameter("max_stagnation").as_int();
+        pos_weight_ = this->get_parameter("pos_weight").as_double();
+        ori_weight_ = this->get_parameter("ori_weight").as_double();
 
         // Initialize Pinocchio model
         if (!initializePinocchioModel()) {
@@ -87,7 +102,7 @@ private:
                 // Load URDF from file
                 pinocchio::urdf::buildModel(urdf_path_, model_);
             }
-            
+
             data_ = pinocchio::Data(model_);
 
             RCLCPP_INFO(this->get_logger(), "Loaded URDF model with %ld joints", model_.njoints);
@@ -113,7 +128,7 @@ private:
 
             // Define joints to exclude from IK (only use right arm joints for IK)
             excluded_joints_ = {
-                "lift_joint", 
+                "lift_joint",
                 "wheel_fl_joint", "wheel_fr_joint", "wheel_bl_joint", "wheel_br_joint",
                 "arm_l_joint1", "arm_l_joint2", "arm_l_joint3", "arm_l_joint4", "arm_l_joint5", "arm_l_joint6", "arm_l_joint7",
                 "gripper_l_joint1", "gripper_l_joint2", "gripper_l_joint3", "gripper_l_joint4",
@@ -124,6 +139,8 @@ private:
             // Build mapping from joint names to indices
             for (size_t i = 1; i < model_.names.size(); ++i) {  // Skip universe joint
                 joint_name_to_index_[model_.names[i]] = i;
+                // Also map to configuration index (idx_q)
+                joint_name_to_qidx_[model_.names[i]] = model_.joints[i].idx_q();
 
                 // Check if this joint should be excluded from IK
                 if (std::find(excluded_joints_.begin(), excluded_joints_.end(), model_.names[i]) == excluded_joints_.end()) {
@@ -145,30 +162,37 @@ private:
 
     void jointStateCallback(const sensor_msgs::msg::JointState::SharedPtr msg)
     {
-        // Update current joint configuration
+        // Update current joint configuration (use configuration indices, not joint indices)
         for (size_t i = 0; i < msg->name.size(); ++i) {
             auto it = joint_name_to_index_.find(msg->name[i]);
-            if (it != joint_name_to_index_.end() && it->second < q_.size()) {
-                q_[it->second] = msg->position[i];
+            if (it != joint_name_to_index_.end()) {
+                size_t joint_idx = it->second;
+                size_t q_idx = model_.joints[joint_idx].idx_q();
+                if (q_idx < static_cast<size_t>(q_.size())) {
+                    q_[q_idx] = msg->position[i];
+                }
             }
         }
-        
+
         current_joint_state_ = *msg;
         has_joint_state_ = true;
-        
+
         // Debug: Print received joint state for right arm joints
         static int count = 0;
         if (++count % 50 == 0) {  // Print every 50 messages to avoid spam
             RCLCPP_INFO(this->get_logger(), "Received joint states. Right arm positions:");
-            for (const std::string& joint_name : {"arm_r_joint1", "arm_r_joint2", "arm_r_joint3", 
+            for (const std::string& joint_name : {"arm_r_joint1", "arm_r_joint2", "arm_r_joint3",
                                                  "arm_r_joint4", "arm_r_joint5", "arm_r_joint6", "arm_r_joint7"}) {
                 auto it = joint_name_to_index_.find(joint_name);
                 if (it != joint_name_to_index_.end()) {
-                    RCLCPP_INFO(this->get_logger(), "  %s: %.6f", joint_name.c_str(), q_[it->second]);
+                    size_t q_idx = model_.joints[it->second].idx_q();
+                    RCLCPP_INFO(this->get_logger(), "  %s: %.6f", joint_name.c_str(), q_[q_idx]);
                 }
             }
         }
-    }    void targetPoseCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
+    }
+
+    void targetPoseCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
     {
         if (!has_joint_state_) {
             RCLCPP_WARN(this->get_logger(), "No joint state received yet, ignoring target pose");
@@ -176,20 +200,20 @@ private:
         }
 
         RCLCPP_INFO(this->get_logger(), "Joint state received: %s", has_joint_state_ ? "YES" : "NO");
-        
+
         // First, compute forward kinematics with current joint state to see where end effector is
         pinocchio::forwardKinematics(model_, data_, q_);
         pinocchio::updateFramePlacements(model_, data_);
         pinocchio::SE3 current_ee_pose = data_.oMf[ee_frame_id_];
-        
+
         RCLCPP_INFO(this->get_logger(), "Current end effector pose:");
-        RCLCPP_INFO(this->get_logger(), "  Position: [%.3f, %.3f, %.3f]", 
+        RCLCPP_INFO(this->get_logger(), "  Position: [%.3f, %.3f, %.3f]",
                    current_ee_pose.translation().x(), current_ee_pose.translation().y(), current_ee_pose.translation().z());
-        
+
         Eigen::Quaterniond current_quat(current_ee_pose.rotation());
         RCLCPP_INFO(this->get_logger(), "  Orientation: [%.3f, %.3f, %.3f, %.3f]",
                    current_quat.w(), current_quat.x(), current_quat.y(), current_quat.z());
-        
+
         auto start_time = std::chrono::high_resolution_clock::now();
 
         // Convert ROS pose to Pinocchio SE3
@@ -209,19 +233,19 @@ private:
                    msg->pose.orientation.w, msg->pose.orientation.x,
                    msg->pose.orientation.y, msg->pose.orientation.z);
 
-        // Solve IK
-        Eigen::VectorXd solution = q_;  // Start from current configuration
-        bool success = solveIK(target_pose, solution);
+    // Solve IK
+    Eigen::VectorXd solution = q_;  // Start from current configuration
+    bool success = solveIK(target_pose, solution);
 
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
 
         if (success) {
             RCLCPP_INFO(this->get_logger(), "IK solved successfully in %ld µs", duration.count());
-            
+
             // Update current joint state with the solution
             q_ = solution;
-            
+
             publishJointTrajectory(solution);
 
             // Verify the solution
@@ -239,132 +263,87 @@ private:
         Eigen::VectorXd q_iter = q_solution;
         double prev_error_norm = std::numeric_limits<double>::max();
         int stagnation_count = 0;
-        const int max_stagnation = 10;  // Allow 10 iterations without improvement
-        const double min_progress = 1e-6;  // Minimum progress to avoid stagnation
+    const int max_stagnation = max_stagnation_;
+    const double min_progress = min_progress_;
+
+        // Build a mask over velocity space for active joints
+        std::vector<uint8_t> vmask(model_.nv, 0);
+        for (size_t j = 0; j < active_joint_indices_.size(); ++j) {
+            size_t joint_idx = active_joint_indices_[j];
+            size_t v_idx = model_.joints[joint_idx].idx_v();
+            int nv = model_.joints[joint_idx].nv();
+            for (int t = 0; t < nv; ++t) {
+                if (v_idx + static_cast<size_t>(t) < vmask.size()) vmask[v_idx + static_cast<size_t>(t)] = 1;
+            }
+        }
 
         for (int i = 0; i < max_iter; ++i) {
             // Update kinematics
             pinocchio::forwardKinematics(model_, data_, q_iter);
             pinocchio::updateFramePlacements(model_, data_);
 
-            // Get current end effector pose
-            pinocchio::SE3 current_pose = data_.oMf[ee_frame_id_];
+            // Current end-effector pose in world
+            const pinocchio::SE3& oMe = data_.oMf[ee_frame_id_];
 
-            // Compute pose error
-            pinocchio::SE3 error_se3 = target_pose.inverse() * current_pose;
-            Eigen::VectorXd error = pinocchio::log6(error_se3).toVector();
+            // Error in LOCAL/body frame: iMd = oMe^{-1} * oMd
+            pinocchio::SE3 iMd = oMe.inverse() * target_pose;
+            Eigen::Matrix<double, 6, 1> err = pinocchio::log6(iMd).toVector();
+            // Apply user-configurable weighting to position/orientation parts
+            err.segment<3>(0) *= pos_weight_;
+            err.segment<3>(3) *= ori_weight_;
 
-            double error_norm = error.norm();
-            
-            // Debug: Print error information for first few iterations
+            double error_norm = err.norm();
             if (i < 5 || i % 100 == 0) {
                 RCLCPP_INFO(this->get_logger(), "Iteration %d: error norm = %.6f", i + 1, error_norm);
-                RCLCPP_INFO(this->get_logger(), "  Position error: [%.6f, %.6f, %.6f]", 
-                           error[0], error[1], error[2]);
-                RCLCPP_INFO(this->get_logger(), "  Orientation error: [%.6f, %.6f, %.6f]", 
-                           error[3], error[4], error[5]);
+                RCLCPP_INFO(this->get_logger(), "  Position error: [%.6f, %.6f, %.6f]", err[0], err[1], err[2]);
+                RCLCPP_INFO(this->get_logger(), "  Orientation error: [%.6f, %.6f, %.6f]", err[3], err[4], err[5]);
             }
-            
+
             if (error_norm < eps) {
                 q_solution = q_iter;
                 RCLCPP_INFO(this->get_logger(), "🎯 IK CONVERGED in %d iterations! Final error: %.6f (tolerance: %.6f)", i + 1, error_norm, eps);
                 return true;
             }
 
-            // Check for stagnation (not making progress)
             if (std::abs(prev_error_norm - error_norm) < min_progress) {
-                stagnation_count++;
-                if (stagnation_count >= max_stagnation) {
+                if (++stagnation_count >= max_stagnation) {
                     RCLCPP_WARN(this->get_logger(), "IK stagnated after %d iterations, error norm: %.6f", i + 1, error_norm);
-                    return false;  // Failed due to stagnation
+                    return false;
                 }
             } else {
-                stagnation_count = 0;  // Reset stagnation counter
+                stagnation_count = 0;
             }
             prev_error_norm = error_norm;
 
-            // Compute Jacobian for the end effector frame
-            Eigen::MatrixXd J = Eigen::MatrixXd::Zero(6, model_.nv);
-            pinocchio::computeFrameJacobian(model_, data_, q_iter, ee_frame_id_, pinocchio::LOCAL_WORLD_ALIGNED, J);
+            // Jacobian in LOCAL frame (matches body-frame error above)
+            Eigen::MatrixXd J(6, model_.nv);
+            pinocchio::computeFrameJacobian(model_, data_, q_iter, ee_frame_id_, pinocchio::LOCAL, J);
 
-            // Debug: Print Jacobian size and some values
             if (i == 0) {
                 RCLCPP_INFO(this->get_logger(), "Jacobian shape: %ld x %ld", J.rows(), J.cols());
-                RCLCPP_INFO(this->get_logger(), "Active joints count: %ld", active_joint_indices_.size());
-                for (size_t j = 0; j < active_joint_indices_.size(); ++j) {
-                    size_t joint_idx = active_joint_indices_[j];
-                    size_t q_idx = model_.joints[joint_idx].idx_q();
-                    size_t v_idx = model_.joints[joint_idx].idx_v();
-                    RCLCPP_INFO(this->get_logger(), "Joint %s (idx %ld) -> q_idx %ld, v_idx %ld", 
-                               model_.names[joint_idx].c_str(), joint_idx, q_idx, v_idx);
-                }
             }
 
-            // Only use active joints (use velocity indices from joint model)
-            Eigen::MatrixXd J_active(6, active_joint_indices_.size());
-            for (size_t j = 0; j < active_joint_indices_.size(); ++j) {
-                size_t joint_idx = active_joint_indices_[j];
-                // Get the velocity index for this joint
-                size_t v_idx = model_.joints[joint_idx].idx_v();
-                if (v_idx < J.cols()) {
-                    J_active.col(j) = J.col(v_idx);
-                } else {
-                    RCLCPP_ERROR(this->get_logger(), "Velocity index %ld out of bounds (Jacobian cols: %ld)", 
-                                v_idx, J.cols());
-                    return false;
-                }
+            // Damped least squares: v = J^T (J J^T + lambda I)^{-1} err
+            Eigen::Matrix<double, 6, 6> JJt = J * J.transpose();
+            JJt.diagonal().array() += ik_damping_;
+            Eigen::Matrix<double, 6, 1> y = JJt.ldlt().solve(err);
+            Eigen::VectorXd v = J.transpose() * y; // size nv
+
+            // Mask velocities for non-active joints
+            for (int k = 0; k < v.size(); ++k) {
+                if (!vmask[static_cast<size_t>(k)]) v[k] = 0.0;
             }
 
-            // Compute pseudo-inverse using SVD with damping
-            Eigen::JacobiSVD<Eigen::MatrixXd> svd(J_active, Eigen::ComputeThinU | Eigen::ComputeThinV);
-            const double svd_threshold = 1e-6;
-            const double damping = 1e-6;  // Add damping for stability
-            
-            Eigen::VectorXd singular_values = svd.singularValues();
-            Eigen::VectorXd singular_values_inv = singular_values;
-
-            for (int k = 0; k < singular_values.size(); ++k) {
-                if (singular_values(k) > svd_threshold) {
-                    singular_values_inv(k) = singular_values(k) / (singular_values(k) * singular_values(k) + damping * damping);
-                } else {
-                    singular_values_inv(k) = 0.0;
-                }
+            // Limit per-joint velocities (safety)
+            const double max_joint_velocity = max_joint_velocity_;
+            for (int k = 0; k < v.size(); ++k) {
+                if (v[k] > max_joint_velocity) v[k] = max_joint_velocity;
+                else if (v[k] < -max_joint_velocity) v[k] = -max_joint_velocity;
             }
 
-            Eigen::MatrixXd J_pinv = svd.matrixV() * singular_values_inv.asDiagonal() * svd.matrixU().transpose();
-
-            // Compute joint velocity with smaller step size
-            Eigen::VectorXd dq_active = -step_size_ * J_pinv * error;
-            
-            // Limit the joint velocity to prevent large jumps
-            const double max_joint_velocity = 0.5;  // rad per iteration
-            for (int k = 0; k < dq_active.size(); ++k) {
-                dq_active[k] = std::max(-max_joint_velocity, std::min(max_joint_velocity, dq_active[k]));
-            }
-
-            // Update only active joints using their configuration indices
-            for (size_t j = 0; j < active_joint_indices_.size(); ++j) {
-                size_t joint_idx = active_joint_indices_[j];
-                // Get the configuration index for this joint
-                size_t q_idx = model_.joints[joint_idx].idx_q();
-                if (q_idx < q_iter.size()) {
-                    q_iter[q_idx] += dq_active[j];
-                }
-            }
-
-            // Apply joint limits (simple clamping) to active joints
-            for (size_t j = 0; j < active_joint_indices_.size(); ++j) {
-                size_t joint_idx = active_joint_indices_[j];
-                size_t q_idx = model_.joints[joint_idx].idx_q();
-                if (q_idx < q_iter.size() && q_idx < model_.lowerPositionLimit.size() && q_idx < model_.upperPositionLimit.size()) {
-                    q_iter[q_idx] = std::max(model_.lowerPositionLimit[q_idx],
-                                           std::min(model_.upperPositionLimit[q_idx], q_iter[q_idx]));
-                }
-            }
-
-            if (i % 100 == 0) {
-                RCLCPP_DEBUG(this->get_logger(), "Iteration %d: error norm = %.6f", i + 1, error_norm);
-            }
+            // Integrate in tangent space
+            Eigen::VectorXd v_dt = v * dt_ * step_size_; // step_size_ acts as extra gain similar to Python's dt scaling
+            q_iter = pinocchio::integrate(model_, q_iter, v_dt);
         }
 
         RCLCPP_WARN(this->get_logger(), "IK failed to converge after %d iterations", max_iter);
@@ -402,7 +381,8 @@ private:
         // Print joint values for active joints
         RCLCPP_INFO(this->get_logger(), "Joint solution:");
         for (auto idx : active_joint_indices_) {
-            RCLCPP_INFO(this->get_logger(), "  %s: %.6f", model_.names[idx].c_str(), q_solution[idx]);
+            size_t q_idx = model_.joints[idx].idx_q();
+            RCLCPP_INFO(this->get_logger(), "  %s: %.6f", model_.names[idx].c_str(), q_solution[q_idx]);
         }
     }
 
@@ -436,7 +416,8 @@ private:
         for (const auto& joint_name : controlled_joints) {
             auto it = joint_name_to_index_.find(joint_name);
             if (it != joint_name_to_index_.end()) {
-                point.positions.push_back(q_solution[it->second]);
+                size_t q_idx = model_.joints[it->second].idx_q();
+                point.positions.push_back(q_solution[q_idx]);
             }
         }
 
@@ -474,6 +455,13 @@ private:
     int max_iterations_;
     double tolerance_;
     double step_size_;
+    double ik_damping_;
+    double dt_;
+    double max_joint_velocity_;
+    double min_progress_;
+    int max_stagnation_;
+    double pos_weight_;
+    double ori_weight_;
 
     // State
     Eigen::VectorXd q_;  // Current joint configuration
@@ -482,6 +470,7 @@ private:
 
     // Joint management
     std::map<std::string, size_t> joint_name_to_index_;
+    std::map<std::string, size_t> joint_name_to_qidx_;
     std::vector<size_t> active_joint_indices_;  // Joints that participate in IK
     std::vector<std::string> excluded_joints_;  // Joints excluded from IK
 };

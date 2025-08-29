@@ -26,7 +26,7 @@ def generate_launch_description():
     # VR scale arguments
     vr_scale_arg = DeclareLaunchArgument(
         'vr_scale',
-        default_value='1.3',
+        default_value='1.2',
         description='VR scale factor'
     )
 
