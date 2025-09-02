@@ -42,11 +42,11 @@ public:
         RCLCPP_INFO(this->get_logger(), "Gripper control: %s", enable_gripper_control_ ? "enabled" : "disabled");
 
         // Subscribers for IK solutions
-        right_ik_solution_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
+        right_ik_solution_sub_ = this->create_subscription<trajectory_msgs::msg::JointTrajectory>(
             "/right_arm_ik_solution", 10,
             std::bind(&FfwArmTrajectoryCommander::rightIKSolutionCallback, this, std::placeholders::_1));
 
-        left_ik_solution_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
+        left_ik_solution_sub_ = this->create_subscription<trajectory_msgs::msg::JointTrajectory>(
             "/left_arm_ik_solution", 10,
             std::bind(&FfwArmTrajectoryCommander::leftIKSolutionCallback, this, std::placeholders::_1));
 
@@ -73,64 +73,72 @@ public:
     }
 
 private:
-    void rightIKSolutionCallback(const sensor_msgs::msg::JointState::SharedPtr msg)
+    void rightIKSolutionCallback(const trajectory_msgs::msg::JointTrajectory::SharedPtr msg)
     {
-        if (msg->name.empty() || msg->position.empty()) {
+        if (msg->joint_names.empty() || msg->points.empty()) {
             RCLCPP_WARN(this->get_logger(), "Received empty right IK solution");
             return;
         }
 
+        // Get the latest trajectory point
+        const auto& point = msg->points.back();
+        
         // Validate joint names and positions have same size
-        if (msg->name.size() != msg->position.size()) {
+        if (msg->joint_names.size() != point.positions.size()) {
             RCLCPP_ERROR(this->get_logger(), "Right IK solution: joint names (%zu) and positions (%zu) size mismatch",
-                        msg->name.size(), msg->position.size());
+                        msg->joint_names.size(), point.positions.size());
             return;
         }
 
         // Check for NaN or infinite values
-        for (const auto& pos : msg->position) {
+        for (const auto& pos : point.positions) {
             if (!std::isfinite(pos)) {
                 RCLCPP_ERROR(this->get_logger(), "Right IK solution contains invalid joint position: %f", pos);
                 return;
             }
         }
 
-        RCLCPP_DEBUG(this->get_logger(), "🎯 Received RIGHT arm IK solution with %zu joints", msg->position.size());
+        RCLCPP_DEBUG(this->get_logger(), "🎯 Received RIGHT arm IK solution with %zu joints", point.positions.size());
 
-        // Store the latest IK solution
-        right_ik_solution_ = *msg;
+        // Convert trajectory to joint state format for internal use
+        right_ik_solution_.name = msg->joint_names;
+        right_ik_solution_.position = point.positions;
         has_right_ik_solution_ = true;
 
         // Create and send joint trajectory
         sendRightArmTrajectory();
     }
 
-    void leftIKSolutionCallback(const sensor_msgs::msg::JointState::SharedPtr msg)
+    void leftIKSolutionCallback(const trajectory_msgs::msg::JointTrajectory::SharedPtr msg)
     {
-        if (msg->name.empty() || msg->position.empty()) {
+        if (msg->joint_names.empty() || msg->points.empty()) {
             RCLCPP_WARN(this->get_logger(), "Received empty left IK solution");
             return;
         }
 
+        // Get the latest trajectory point
+        const auto& point = msg->points.back();
+        
         // Validate joint names and positions have same size
-        if (msg->name.size() != msg->position.size()) {
+        if (msg->joint_names.size() != point.positions.size()) {
             RCLCPP_ERROR(this->get_logger(), "Left IK solution: joint names (%zu) and positions (%zu) size mismatch",
-                        msg->name.size(), msg->position.size());
+                        msg->joint_names.size(), point.positions.size());
             return;
         }
 
         // Check for NaN or infinite values
-        for (const auto& pos : msg->position) {
+        for (const auto& pos : point.positions) {
             if (!std::isfinite(pos)) {
                 RCLCPP_ERROR(this->get_logger(), "Left IK solution contains invalid joint position: %f", pos);
                 return;
             }
         }
 
-        RCLCPP_DEBUG(this->get_logger(), "🎯 Received LEFT arm IK solution with %zu joints", msg->position.size());
+        RCLCPP_DEBUG(this->get_logger(), "🎯 Received LEFT arm IK solution with %zu joints", point.positions.size());
 
-        // Store the latest IK solution
-        left_ik_solution_ = *msg;
+        // Convert trajectory to joint state format for internal use
+        left_ik_solution_.name = msg->joint_names;
+        left_ik_solution_.position = point.positions;
         has_left_ik_solution_ = true;
 
         // Create and send joint trajectory
@@ -308,8 +316,8 @@ private:
     double gripper_pos_open_;
 
     // ROS interfaces
-    rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr right_ik_solution_sub_;
-    rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr left_ik_solution_sub_;
+    rclcpp::Subscription<trajectory_msgs::msg::JointTrajectory>::SharedPtr right_ik_solution_sub_;
+    rclcpp::Subscription<trajectory_msgs::msg::JointTrajectory>::SharedPtr left_ik_solution_sub_;
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr left_squeeze_sub_;
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr right_squeeze_sub_;
 

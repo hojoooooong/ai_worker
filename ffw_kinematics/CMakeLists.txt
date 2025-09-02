@@ -31,6 +31,7 @@ ament_target_dependencies(ffw_arm_ik_solver
   sensor_msgs
   geometry_msgs
   std_msgs
+  trajectory_msgs
   kdl_parser
   urdf
 )

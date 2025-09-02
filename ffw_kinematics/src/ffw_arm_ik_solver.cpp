@@ -3,6 +3,8 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/pose_array.hpp>
 #include <std_msgs/msg/string.hpp>
+#include <trajectory_msgs/msg/joint_trajectory.hpp>
+#include <trajectory_msgs/msg/joint_trajectory_point.hpp>
 
 #include <kdl/chain.hpp>
 #include <kdl/chainfksolverpos_recursive.hpp>
@@ -36,6 +38,12 @@ public:
         this->declare_parameter<std::string>("right_target_pose_topic", "/vr_hand/right_wrist");
         this->declare_parameter<std::string>("left_target_pose_topic", "/vr_hand/left_wrist");
 
+        // Output topic parameters
+        this->declare_parameter<std::string>("right_ik_solution_topic", "/right_arm_ik_solution");
+        this->declare_parameter<std::string>("left_ik_solution_topic", "/left_arm_ik_solution");
+        this->declare_parameter<std::string>("right_current_pose_topic", "/right_current_end_effector_pose");
+        this->declare_parameter<std::string>("left_current_pose_topic", "/left_current_end_effector_pose");
+
         // Coordinate transformation parameters (lift_joint origin from URDF)
         this->declare_parameter<double>("lift_joint_x_offset", 0.0055);
         this->declare_parameter<double>("lift_joint_y_offset", 0.0);
@@ -55,6 +63,11 @@ public:
         left_end_effector_link_ = this->get_parameter("left_end_effector_link").as_string();
         std::string right_target_pose_topic = this->get_parameter("right_target_pose_topic").as_string();
         std::string left_target_pose_topic = this->get_parameter("left_target_pose_topic").as_string();
+
+        std::string right_ik_solution_topic = this->get_parameter("right_ik_solution_topic").as_string();
+        std::string left_ik_solution_topic = this->get_parameter("left_ik_solution_topic").as_string();
+        std::string right_current_pose_topic = this->get_parameter("right_current_pose_topic").as_string();
+        std::string left_current_pose_topic = this->get_parameter("left_current_pose_topic").as_string();
 
         lift_joint_x_offset_ = this->get_parameter("lift_joint_x_offset").as_double();
         lift_joint_y_offset_ = this->get_parameter("lift_joint_y_offset").as_double();
@@ -90,19 +103,19 @@ public:
             left_target_pose_topic, 10,
             std::bind(&FfwArmIKSolver::leftTargetPoseCallback, this, std::placeholders::_1));
 
-        // Publishers for IK solutions (joint positions)
-        right_joint_solution_pub_ = this->create_publisher<sensor_msgs::msg::JointState>(
-            "/right_arm_ik_solution", 10);
+        // Publishers for IK solutions (joint trajectories)
+        right_joint_solution_pub_ = this->create_publisher<trajectory_msgs::msg::JointTrajectory>(
+            right_ik_solution_topic, 10);
 
-        left_joint_solution_pub_ = this->create_publisher<sensor_msgs::msg::JointState>(
-            "/left_arm_ik_solution", 10);
+        left_joint_solution_pub_ = this->create_publisher<trajectory_msgs::msg::JointTrajectory>(
+            left_ik_solution_topic, 10);
 
         // Publishers for current poses (for debugging/visualization)
         right_current_pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(
-            "/right_current_end_effector_pose", 10);
+            right_current_pose_topic, 10);
 
         left_current_pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(
-            "/left_current_end_effector_pose", 10);
+            left_current_pose_topic, 10);
 
         // Timer for publishing current poses at 10Hz
         pose_timer_ = this->create_wall_timer(
@@ -133,6 +146,12 @@ public:
         RCLCPP_INFO(this->get_logger(), "✅ Dual-arm IK solver initialized. Waiting for target poses on:");
         RCLCPP_INFO(this->get_logger(), "   Right arm: %s", right_target_pose_topic.c_str());
         RCLCPP_INFO(this->get_logger(), "   Left arm: %s", left_target_pose_topic.c_str());
+        RCLCPP_INFO(this->get_logger(), "Publishing IK solutions on:");
+        RCLCPP_INFO(this->get_logger(), "   Right arm: %s", right_ik_solution_topic.c_str());
+        RCLCPP_INFO(this->get_logger(), "   Left arm: %s", left_ik_solution_topic.c_str());
+        RCLCPP_INFO(this->get_logger(), "Publishing current poses on:");
+        RCLCPP_INFO(this->get_logger(), "   Right arm: %s", right_current_pose_topic.c_str());
+        RCLCPP_INFO(this->get_logger(), "   Left arm: %s", left_current_pose_topic.c_str());
     }
 
 private:
@@ -547,7 +566,7 @@ private:
         std::vector<double>* current_positions_ptr;
         KDL::JntArray* q_min_ptr;
         KDL::JntArray* q_max_ptr;
-        rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr* publisher_ptr;
+        rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr* publisher_ptr;
 
         if (arm == "right") {
             chain_ptr = &right_chain_;
@@ -645,20 +664,27 @@ private:
 
             RCLCPP_INFO(this->get_logger(), "✅ %s arm IK solution found!", arm.c_str());
 
-            // Create and publish JointState message with the solution
-            auto joint_solution = sensor_msgs::msg::JointState();
-            joint_solution.header.stamp = this->get_clock()->now();
-            joint_solution.header.frame_id = arm + "_arm";
-            joint_solution.name = *joint_names_ptr;
-            joint_solution.position.resize(q_result.rows());
-            joint_solution.velocity.resize(q_result.rows(), 0.0);
-            joint_solution.effort.resize(q_result.rows(), 0.0);
+            // Create and publish JointTrajectory message with the solution
+            auto joint_trajectory = trajectory_msgs::msg::JointTrajectory();
+            // joint_trajectory.header.stamp = this->get_clock()->now();
+            joint_trajectory.header.frame_id = "base_link";
+            joint_trajectory.joint_names = *joint_names_ptr;
+
+            // Create trajectory point
+            auto point = trajectory_msgs::msg::JointTrajectoryPoint();
+            point.positions.resize(q_result.rows());
+            point.velocities.resize(q_result.rows(), 0.0);
+            point.accelerations.resize(q_result.rows(), 0.0);
 
             for (unsigned int i = 0; i < q_result.rows(); i++) {
-                joint_solution.position[i] = q_result(i);
+                point.positions[i] = q_result(i);
             }
 
-            (*publisher_ptr)->publish(joint_solution);
+            // Set time from start (즉시 실행)
+            point.time_from_start = rclcpp::Duration::from_nanoseconds(0);
+            joint_trajectory.points.push_back(point);
+
+            (*publisher_ptr)->publish(joint_trajectory);
 
             // Log joint solution
             std::string solution_log = "🎯 " + arm + " arm joint solution: [";
@@ -703,7 +729,7 @@ private:
         KDL::Frame right_frame;
         if (right_fk_solver_->JntToCart(right_q, right_frame) >= 0) {
             geometry_msgs::msg::PoseStamped right_pose;
-            right_pose.header.stamp = this->get_clock()->now();
+            // right_pose.header.stamp = this->get_clock()->now();
             right_pose.header.frame_id = arm_base_link_;
 
             right_pose.pose.position.x = right_frame.p.x();
@@ -729,7 +755,7 @@ private:
         KDL::Frame left_frame;
         if (left_fk_solver_->JntToCart(left_q, left_frame) >= 0) {
             geometry_msgs::msg::PoseStamped left_pose;
-            left_pose.header.stamp = this->get_clock()->now();
+            // left_pose.header.stamp = this->get_clock()->now();
             left_pose.header.frame_id = arm_base_link_;
 
             left_pose.pose.position.x = left_frame.p.x();
@@ -772,8 +798,8 @@ private:
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr left_target_pose_sub_;
 
     // Publishers for IK solutions
-    rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr right_joint_solution_pub_;
-    rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr left_joint_solution_pub_;
+    rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr right_joint_solution_pub_;
+    rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr left_joint_solution_pub_;
 
     // Publishers for current poses (for debugging/visualization)
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr right_current_pose_pub_;
