@@ -9,10 +9,10 @@
 #include <map>
 #include <algorithm>
 
-class DualArmTrajectoryCommander : public rclcpp::Node
+class FfwArmTrajectoryCommander : public rclcpp::Node
 {
 public:
-    DualArmTrajectoryCommander() : Node("dual_arm_trajectory_commander"),
+    FfwArmTrajectoryCommander() : Node("dual_arm_trajectory_commander"),
                                    left_squeeze_value_(0.0),
                                    right_squeeze_value_(0.0),
                                    has_right_ik_solution_(false),
@@ -33,21 +33,21 @@ public:
         // Subscribers for IK solutions
         right_ik_solution_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
             "/right_arm_ik_solution", 10,
-            std::bind(&DualArmTrajectoryCommander::rightIKSolutionCallback, this, std::placeholders::_1));
+            std::bind(&FfwArmTrajectoryCommander::rightIKSolutionCallback, this, std::placeholders::_1));
 
         left_ik_solution_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
             "/left_arm_ik_solution", 10,
-            std::bind(&DualArmTrajectoryCommander::leftIKSolutionCallback, this, std::placeholders::_1));
+            std::bind(&FfwArmTrajectoryCommander::leftIKSolutionCallback, this, std::placeholders::_1));
 
         // Subscribers for gripper control (VR squeeze values)
         if (enable_gripper_control_) {
             left_squeeze_sub_ = this->create_subscription<std_msgs::msg::Float32>(
                 "/vr_hand/left_squeeze", 10,
-                std::bind(&DualArmTrajectoryCommander::leftSqueezeCallback, this, std::placeholders::_1));
+                std::bind(&FfwArmTrajectoryCommander::leftSqueezeCallback, this, std::placeholders::_1));
 
             right_squeeze_sub_ = this->create_subscription<std_msgs::msg::Float32>(
                 "/vr_hand/right_squeeze", 10,
-                std::bind(&DualArmTrajectoryCommander::rightSqueezeCallback, this, std::placeholders::_1));
+                std::bind(&FfwArmTrajectoryCommander::rightSqueezeCallback, this, std::placeholders::_1));
         }
 
         // Publishers for joint trajectories
@@ -282,7 +282,7 @@ int main(int argc, char** argv)
 {
     rclcpp::init(argc, argv);
 
-    auto node = std::make_shared<DualArmTrajectoryCommander>();
+    auto node = std::make_shared<FfwArmTrajectoryCommander>();
 
     RCLCPP_INFO(node->get_logger(), "🚀 Dual-Arm Trajectory Commander node started");
 

@@ -20,10 +20,10 @@
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
-class DualArmIKSolver : public rclcpp::Node
+class FfwArmIKSolver : public rclcpp::Node
 {
 public:
-    DualArmIKSolver() : Node("dual_arm_ik_solver"),
+    FfwArmIKSolver() : Node("dual_arm_ik_solver"),
                         lift_joint_index_(-1),
                         setup_complete_(false),
                         has_joint_states_(false)
@@ -52,20 +52,20 @@ public:
         // Subscribers
         robot_description_sub_ = this->create_subscription<std_msgs::msg::String>(
             "/robot_description", rclcpp::QoS(1).transient_local(),
-            std::bind(&DualArmIKSolver::robotDescriptionCallback, this, std::placeholders::_1));
+            std::bind(&FfwArmIKSolver::robotDescriptionCallback, this, std::placeholders::_1));
 
         joint_state_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
             "/joint_states", 10,
-            std::bind(&DualArmIKSolver::jointStateCallback, this, std::placeholders::_1));
+            std::bind(&FfwArmIKSolver::jointStateCallback, this, std::placeholders::_1));
 
         // Subscribe to target pose topics for IK solving
         right_target_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
             right_target_pose_topic, 10,
-            std::bind(&DualArmIKSolver::rightTargetPoseCallback, this, std::placeholders::_1));
+            std::bind(&FfwArmIKSolver::rightTargetPoseCallback, this, std::placeholders::_1));
 
         left_target_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
             left_target_pose_topic, 10,
-            std::bind(&DualArmIKSolver::leftTargetPoseCallback, this, std::placeholders::_1));
+            std::bind(&FfwArmIKSolver::leftTargetPoseCallback, this, std::placeholders::_1));
 
         // Publishers for IK solutions (joint positions)
         right_joint_solution_pub_ = this->create_publisher<sensor_msgs::msg::JointState>(
@@ -84,7 +84,7 @@ public:
         // Timer for publishing current poses at 10Hz
         pose_timer_ = this->create_wall_timer(
             std::chrono::milliseconds(100),
-            std::bind(&DualArmIKSolver::publishCurrentPoses, this));
+            std::bind(&FfwArmIKSolver::publishCurrentPoses, this));
 
         // Try to get robot_description from parameter server
         auto param_client = std::make_shared<rclcpp::SyncParametersClient>(this, "/robot_state_publisher");
@@ -206,7 +206,7 @@ private:
         }
     }
 
-    void setupJointLimits(const urdf::Model& model)
+    void setupJointLimits(const urdf::Model& /*model*/)
     {
         // Setup right arm joint limits using hardcoded values
         unsigned int right_num_joints = right_chain_.getNrOfJoints();
@@ -738,7 +738,7 @@ int main(int argc, char** argv)
 {
     rclcpp::init(argc, argv);
 
-    auto node = std::make_shared<DualArmIKSolver>();
+    auto node = std::make_shared<FfwArmIKSolver>();
 
     RCLCPP_INFO(node->get_logger(), "🚀 Dual-Arm IK Solver node started");
 
