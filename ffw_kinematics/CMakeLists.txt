@@ -22,18 +22,23 @@ add_executable(ffw_arm_ik_solver src/ffw_arm_ik_solver.cpp)
 
 target_include_directories(ffw_arm_ik_solver PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
+  $<INSTALL_INTERFACE:include>
+  ${sensor_msgs_INCLUDE_DIRS}
+  ${geometry_msgs_INCLUDE_DIRS}
+  ${trajectory_msgs_INCLUDE_DIRS}
+)
+
 
 target_compile_features(ffw_arm_ik_solver PUBLIC c_std_99 cxx_std_17)
 
-ament_target_dependencies(ffw_arm_ik_solver
-  rclcpp
-  sensor_msgs
-  geometry_msgs
-  std_msgs
-  trajectory_msgs
-  kdl_parser
-  urdf
+target_link_libraries(ffw_arm_ik_solver
+  rclcpp::rclcpp
+  ${sensor_msgs_LIBRARIES}
+  ${geometry_msgs_LIBRARIES}
+  ${std_msgs_LIBRARIES}
+  ${trajectory_msgs_LIBRARIES}
+  kdl_parser::kdl_parser
+  urdf::urdf
 )
 
 # ffw Arm Trajectory Commander executable
@@ -41,15 +46,19 @@ add_executable(ffw_arm_trajectory_commander src/ffw_arm_trajectory_commander.cpp
 
 target_include_directories(ffw_arm_trajectory_commander PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
+  $<INSTALL_INTERFACE:include>
+  ${sensor_msgs_INCLUDE_DIRS}
+  ${geometry_msgs_INCLUDE_DIRS}
+  ${trajectory_msgs_INCLUDE_DIRS}
+)
 
 target_compile_features(ffw_arm_trajectory_commander PUBLIC c_std_99 cxx_std_17)
 
-ament_target_dependencies(ffw_arm_trajectory_commander
-  rclcpp
-  sensor_msgs
-  std_msgs
-  trajectory_msgs
+target_link_libraries(ffw_arm_trajectory_commander
+  rclcpp::rclcpp
+  ${sensor_msgs_LIBRARIES}
+  ${std_msgs_LIBRARIES}
+  ${trajectory_msgs_LIBRARIES}
 )
 
 
