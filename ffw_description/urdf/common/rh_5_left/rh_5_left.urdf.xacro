@@ -3,7 +3,7 @@
    <xacro:macro name="rh_5_left" params="prefix parent *origin">
       <xacro:property name="meshes_file_direction" value="package://ffw_description/meshes/common/rh_5_left/" />
 
-      <joint name="${prefix}joint" type="fixed">
+      <joint name="${prefix}rh_5_left_joint" type="fixed">
          <xacro:insert_block name="origin" />
          <parent link="${parent}"/>
          <child link="${prefix}rh_5_left_base" />

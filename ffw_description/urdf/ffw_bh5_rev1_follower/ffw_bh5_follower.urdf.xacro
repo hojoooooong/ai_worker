@@ -56,7 +56,7 @@
     <origin xyz="0.0055 0 1.4316" rpy="0 0 0" />
   </xacro:ffw_follower_body>
 
-  <xacro:rh_5_left parent="$(arg prefix)arm_l_link7" prefix="$(arg prefix)rh_5_left_">
+  <xacro:rh_5_left parent="$(arg prefix)arm_l_link7" prefix="$(arg prefix)">
     <origin xyz="0 0 -0.078" rpy="0 3.14159265359 0"/>
   </xacro:rh_5_left>
 
@@ -64,7 +64,7 @@
     <origin xyz="0 0 -0.078" rpy="0 3.14159265359 3.14159265359"/>
   </xacro:rh_p12_rn_a> -->
 
-  <xacro:rh_5_right parent="$(arg prefix)arm_r_link7" prefix="$(arg prefix)rh_5_right_">
+  <xacro:rh_5_right parent="$(arg prefix)arm_r_link7" prefix="$(arg prefix)">
     <origin xyz="0 0 -0.078" rpy="0 3.14159265359 0"/>
   </xacro:rh_5_right>
 
