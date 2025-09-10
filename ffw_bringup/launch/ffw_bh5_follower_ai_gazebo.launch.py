@@ -121,21 +121,35 @@ def generate_launch_description():
             '--controller-ros-args',
             '-r /arm_l_controller/joint_trajectory:='
             '/leader/joint_trajectory_command_broadcaster_left/joint_trajectory',
+
             '--controller-ros-args',
             '-r /arm_r_controller/joint_trajectory:='
             '/leader/joint_trajectory_command_broadcaster_right/joint_trajectory',
+
+            '--controller-ros-args',
+            '-r /hand_l_controller/joint_trajectory:='
+            '/leader/joint_trajectory_command_broadcaster_left_hand/joint_trajectory',
+
+            '--controller-ros-args',
+            '-r /hand_r_controller/joint_trajectory:='
+            '/leader/joint_trajectory_command_broadcaster_right_hand/joint_trajectory',
+
             '--controller-ros-args',
             '-r /head_controller/joint_trajectory:='
             '/leader/joystick_controller_left/joint_trajectory',
+
             '--controller-ros-args',
             '-r /lift_controller/joint_trajectory:='
             '/leader/joystick_controller_right/joint_trajectory',
+
             'arm_l_controller',
             'arm_r_controller',
             'head_controller',
             'lift_controller',
             'hand_l_controller',
             'hand_r_controller',
+            'effort_l_controller',
+            'effort_r_controller',
         ],
         parameters=[robot_description],
     )
