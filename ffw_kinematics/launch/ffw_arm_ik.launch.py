@@ -54,6 +54,8 @@ def generate_launch_description():
             'left_end_effector_link': 'arm_l_link7',
             'right_target_pose_topic': '/vr_hand/right_wrist',
             'left_target_pose_topic': '/vr_hand/left_wrist',
+            'right_ik_solution_topic': '/right_arm_ik_solution',
+            'left_ik_solution_topic': '/left_arm_ik_solution',
             'max_joint_step_degrees': LaunchConfiguration('max_joint_step_degrees'),
             'use_hardcoded_joint_limits': LaunchConfiguration('use_hardcoded_joint_limits'),
         }]

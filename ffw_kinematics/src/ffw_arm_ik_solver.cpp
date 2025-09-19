@@ -30,8 +30,8 @@ FfwArmIKSolver::FfwArmIKSolver()
   this->declare_parameter<std::string>("right_target_pose_topic", "/vr_hand/right_wrist");
   this->declare_parameter<std::string>("left_target_pose_topic", "/vr_hand/left_wrist");
 
-  this->declare_parameter<std::string>("right_ik_solution_topic", "/right_arm_ik_solution");
-  this->declare_parameter<std::string>("left_ik_solution_topic", "/left_arm_ik_solution");
+  this->declare_parameter<std::string>("right_ik_solution_topic", "/leader/joint_trajectory_command_broadcaster_right/joint_trajectory");
+  this->declare_parameter<std::string>("left_ik_solution_topic", "/leader/joint_trajectory_command_broadcaster_left/joint_trajectory");
   this->declare_parameter<std::string>("right_current_pose_topic",
     "/right_current_end_effector_pose");
   this->declare_parameter<std::string>("left_current_pose_topic",
@@ -44,8 +44,8 @@ FfwArmIKSolver::FfwArmIKSolver()
 
   // IK solver parameters
   this->declare_parameter<double>("max_joint_step_degrees", 20.0);
-  this->declare_parameter<int>("ik_max_iterations", 10000);
-  this->declare_parameter<double>("ik_tolerance", 1e-3);
+  this->declare_parameter<int>("ik_max_iterations", 1000);
+  this->declare_parameter<double>("ik_tolerance", 1e-2);
 
   // Joint limits parameters (can be overridden if needed)
   this->declare_parameter<bool>("use_hardcoded_joint_limits", true);
