@@ -404,8 +404,8 @@ void FfwRobotManager::update_battery_states()
     if (battery_config.voltage_index > 0 && battery_config.voltage_index < state_interfaces_.size()) {
       auto voltage_opt = state_interfaces_[battery_config.voltage_index].get_optional();
       if (voltage_opt.has_value()) {
-        double voltage = voltage_opt.value() / 1000.0; // Convert mV to V
-        double soc = robot_type_->get_battery_model()->voltage_to_soc(static_cast<uint16_t>(voltage_opt.value()));
+        double voltage = voltage_opt.value();
+        double soc = robot_type_->get_battery_model()->voltage_to_soc(voltage);
         auto battery_state = create_battery_state(voltage, soc);
         publisher->publish(battery_state);
       }

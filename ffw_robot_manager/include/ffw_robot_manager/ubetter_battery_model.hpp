@@ -34,10 +34,10 @@ public:
   UbetterBatteryModel();
   ~UbetterBatteryModel() override = default;
 
-  double voltage_to_soc(uint16_t voltage_mv) const override;
+  double voltage_to_soc(double voltage_v) const override;
   std::string get_model_name() const override;
-  std::pair<uint16_t, uint16_t> get_voltage_range() const override;
-  bool is_voltage_valid(uint16_t voltage_mv) const override;
+  std::pair<double, double> get_voltage_range() const override;
+  bool is_voltage_valid(double voltage_v) const override;
   uint8_t get_power_supply_technology() const override;
 
 private:

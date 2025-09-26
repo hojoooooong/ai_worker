@@ -20,8 +20,10 @@ namespace ffw_robot_manager
 {
 
 // Battery voltage to SOC mapping for ubetter battery
+// Voltage values are in 0.01V units (2940 = 29.40V)
+// Percentage values are in 0.1% units (1000 = 100.0%)
 const uint16_t UbetterBatteryModel::battery_percent_data[BATTERY_DATA_NUMBER][2] =
-{  /* {voltage , % }*/
+{  /* {voltage_0.01V , %_0.1% }*/
   {2940, 1000}, {2841, 908}, {2833, 877},
   {2823,  846}, {2805,  815}, {2784, 784}, {2761, 753},
   {2739,  722}, {2719,  691}, {2700, 660}, {2682, 629},
@@ -36,24 +38,27 @@ UbetterBatteryModel::UbetterBatteryModel()
 {
 }
 
-double UbetterBatteryModel::voltage_to_soc(uint16_t voltage_mv) const
+double UbetterBatteryModel::voltage_to_soc(double voltage_v) const
 {
+  // Convert Volts to 0.01V units for lookup table (e.g., 29.40V -> 2940)
+  uint16_t voltage_units = static_cast<uint16_t>(voltage_v * 100);
+  
   // Handle edge cases first
-  if (voltage_mv >= battery_percent_data[0][0]) {
-    return 100.0; // Above highest voltage (2940mV = 100%)
-  } else if (voltage_mv <= battery_percent_data[BATTERY_DATA_NUMBER - 1][0]) {
-    return 0.0; // Below lowest voltage (2200mV = 0%)
+  if (voltage_units >= battery_percent_data[0][0]) {
+    return 100.0; // Above highest voltage (29.40V = 100%)
+  } else if (voltage_units <= battery_percent_data[BATTERY_DATA_NUMBER - 1][0]) {
+    return 0.0; // Below lowest voltage (22.00V = 0%)
   }
   
   // Find the correct range for interpolation
-  // Data is in descending order: 2940mV -> 2200mV
+  // Data is in descending order: 2940 -> 2200 (29.40V -> 22.00V)
   for (size_t i = 0; i < BATTERY_DATA_NUMBER - 1; ++i) {
-    if (voltage_mv <= battery_percent_data[i][0] && voltage_mv >= battery_percent_data[i + 1][0]) {
+    if (voltage_units <= battery_percent_data[i][0] && voltage_units >= battery_percent_data[i + 1][0]) {
       // Linear interpolation between two points
       double voltage_diff = battery_percent_data[i][0] - battery_percent_data[i + 1][0];
       double soc_diff = battery_percent_data[i][1] - battery_percent_data[i + 1][1];
-      double ratio = (voltage_mv - battery_percent_data[i + 1][0]) / voltage_diff;
-      return (battery_percent_data[i + 1][1] + ratio * soc_diff) / 10.0; // Convert from per mille to percentage
+      double ratio = (voltage_units - battery_percent_data[i + 1][0]) / voltage_diff;
+      return (battery_percent_data[i + 1][1] + ratio * soc_diff) / 10.0; // Convert from 0.1% units to percentage
     }
   }
   
@@ -65,15 +70,15 @@ std::string UbetterBatteryModel::get_model_name() const
   return "ubetter";
 }
 
-std::pair<uint16_t, uint16_t> UbetterBatteryModel::get_voltage_range() const
+std::pair<double, double> UbetterBatteryModel::get_voltage_range() const
 {
-  return {battery_percent_data[BATTERY_DATA_NUMBER - 1][0], battery_percent_data[0][0]}; // {min, max}
+  return {battery_percent_data[BATTERY_DATA_NUMBER - 1][0] / 100.0, battery_percent_data[0][0] / 100.0}; // {min, max} in Volts (22.00V to 29.40V)
 }
 
-bool UbetterBatteryModel::is_voltage_valid(uint16_t voltage_mv) const
+bool UbetterBatteryModel::is_voltage_valid(double voltage_v) const
 {
   auto range = get_voltage_range();
-  return voltage_mv >= range.first && voltage_mv <= range.second;
+  return voltage_v >= range.first && voltage_v <= range.second;
 }
 
 uint8_t UbetterBatteryModel::get_power_supply_technology() const

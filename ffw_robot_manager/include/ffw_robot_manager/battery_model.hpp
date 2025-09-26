@@ -35,11 +35,11 @@ public:
   virtual ~BatteryModel() = default;
 
   /**
-   * @brief Convert voltage in millivolts to SOC percentage
-   * @param voltage_mv Voltage in millivolts
+   * @brief Convert voltage in Volts to SOC percentage
+   * @param voltage_v Voltage in Volts
    * @return SOC percentage (0.0 to 100.0)
    */
-  virtual double voltage_to_soc(uint16_t voltage_mv) const = 0;
+  virtual double voltage_to_soc(double voltage_v) const = 0;
 
   /**
    * @brief Get the battery model name
@@ -49,16 +49,16 @@ public:
 
   /**
    * @brief Get the voltage range for this battery model
-   * @return Pair of (min_voltage_mv, max_voltage_mv)
+   * @return Pair of (min_voltage_v, max_voltage_v)
    */
-  virtual std::pair<uint16_t, uint16_t> get_voltage_range() const = 0;
+  virtual std::pair<double, double> get_voltage_range() const = 0;
 
   /**
    * @brief Check if a voltage is within the valid range for this model
-   * @param voltage_mv Voltage in millivolts
+   * @param voltage_v Voltage in Volts
    * @return True if voltage is within valid range
    */
-  virtual bool is_voltage_valid(uint16_t voltage_mv) const = 0;
+  virtual bool is_voltage_valid(double voltage_v) const = 0;
 
   /**
    * @brief Get the power supply technology for this battery model
