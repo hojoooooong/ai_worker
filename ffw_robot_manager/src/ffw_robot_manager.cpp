@@ -16,7 +16,9 @@
 
 #include "ffw_robot_manager/ffw_robot_manager.hpp"
 #include "ffw_robot_manager/topic_watchdog.hpp"
+#include "ffw_robot_manager/robot_type.hpp"
 #include "dynamixel_interfaces/msg/dynamixel_state.hpp"
+#include "sensor_msgs/msg/battery_state.hpp"
 
 
 namespace ffw_robot_manager
@@ -79,6 +81,9 @@ controller_interface::CallbackReturn FfwRobotManager::on_configure(
   // Setup topic watchdogs
   setup_watchdogs();
 
+  // Setup battery monitoring
+  setup_battery_monitoring();
+
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
@@ -98,6 +103,17 @@ controller_interface::CallbackReturn FfwRobotManager::on_activate(
       found_gpios.insert(prefix);
       if (interface == "Error Code" || interface == "Hardware Error Status") {
         gpio_interface_indices_[prefix][interface] = i;
+      }
+      
+      // Find battery voltage interfaces dynamically
+      if (battery_monitoring_enabled_ && interface == "Present Input Voltage" && robot_type_) {
+        for (auto & battery_config : battery_configurations_) {
+          if (prefix == battery_config.interface_name) {
+            battery_config.voltage_index = i;
+            RCLCPP_INFO(get_node()->get_logger(), "Found %s battery voltage interface at index %zu for %s", 
+                        battery_config.name.c_str(), i, prefix.c_str());
+          }
+        }
       }
     }
   }
@@ -181,6 +197,12 @@ controller_interface::return_type FfwRobotManager::update(
       }
     }
   }
+
+  // Update battery states if monitoring is enabled
+  if (battery_monitoring_enabled_) {
+    update_battery_states();
+  }
+
   return controller_interface::return_type::OK;
 }
 
@@ -326,6 +348,92 @@ void FfwRobotManager::setup_watchdogs()
       set_led_color(255, 0, 0, LedMode::RGB_BLINK);
     }
   );
+}
+
+void FfwRobotManager::setup_battery_monitoring()
+{
+  // Create robot type configuration
+  robot_type_ = create_robot_type(params_.ffw_type);
+  if (!robot_type_) {
+    RCLCPP_ERROR(get_node()->get_logger(), "Unknown robot type: %s", params_.ffw_type.c_str());
+    battery_monitoring_enabled_ = false;
+    return;
+  }
+  
+  // Check if battery monitoring is enabled for this robot type
+  if (robot_type_->is_battery_monitoring_enabled()) {
+    battery_monitoring_enabled_ = true;
+    
+    // Get battery configurations from robot type
+    battery_configurations_ = robot_type_->get_battery_configurations();
+    
+    // Create battery state publishers dynamically
+    battery_publishers_.clear();
+    for (const auto & battery_config : battery_configurations_) {
+      auto publisher = get_node()->create_publisher<sensor_msgs::msg::BatteryState>(
+        battery_config.topic_name, 10);
+      battery_publishers_.push_back(publisher);
+      
+      RCLCPP_INFO(get_node()->get_logger(), "Created battery publisher for %s at %s", 
+                  battery_config.name.c_str(), battery_config.topic_name.c_str());
+    }
+    
+    RCLCPP_INFO(get_node()->get_logger(), "Battery monitoring enabled for %s with %zu batteries and model: %s", 
+                robot_type_->get_type_name().c_str(),
+                battery_configurations_.size(),
+                robot_type_->get_battery_model()->get_model_name().c_str());
+  } else {
+    battery_monitoring_enabled_ = false;
+    RCLCPP_INFO(get_node()->get_logger(), "Battery monitoring disabled for robot type: %s", 
+                robot_type_->get_type_name().c_str());
+  }
+}
+
+void FfwRobotManager::update_battery_states()
+{
+  if (!battery_monitoring_enabled_) {
+    return;
+  }
+
+  // Update all batteries dynamically
+  for (size_t i = 0; i < battery_configurations_.size() && i < battery_publishers_.size(); ++i) {
+    const auto & battery_config = battery_configurations_[i];
+    auto & publisher = battery_publishers_[i];
+    
+    // Check if voltage index is valid
+    if (battery_config.voltage_index > 0 && battery_config.voltage_index < state_interfaces_.size()) {
+      auto voltage_opt = state_interfaces_[battery_config.voltage_index].get_optional();
+      if (voltage_opt.has_value()) {
+        double voltage = voltage_opt.value() / 1000.0; // Convert mV to V
+        double soc = robot_type_->get_battery_model()->voltage_to_soc(static_cast<uint16_t>(voltage_opt.value()));
+        auto battery_state = create_battery_state(voltage, soc);
+        publisher->publish(battery_state);
+      }
+    }
+  }
+}
+
+
+sensor_msgs::msg::BatteryState FfwRobotManager::create_battery_state(double voltage, double soc)
+{
+  sensor_msgs::msg::BatteryState battery_state;
+  battery_state.header.stamp = get_node()->now();
+  battery_state.header.frame_id = "battery";
+  battery_state.voltage = static_cast<float>(voltage); // Voltage in Volts from Dynamixel
+  battery_state.percentage = static_cast<float>(soc / 100.0); // Convert percentage (0-100) to fraction (0-1)
+  battery_state.power_supply_status = sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_UNKNOWN;
+  battery_state.power_supply_health = sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_UNKNOWN;
+  
+  // Set power supply technology based on robot type's battery model
+  if (robot_type_ && robot_type_->get_battery_model()) {
+    battery_state.power_supply_technology = robot_type_->get_battery_model()->get_power_supply_technology();
+  } else {
+    battery_state.power_supply_technology = sensor_msgs::msg::BatteryState::POWER_SUPPLY_TECHNOLOGY_UNKNOWN;
+  }
+  
+  battery_state.present = true;
+  
+  return battery_state;
 }
 
 }  // namespace ffw_robot_manager

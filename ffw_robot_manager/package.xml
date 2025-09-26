@@ -17,6 +17,7 @@
   <depend>dynamixel_hardware_interface</depend>
   <depend>generate_parameter_library</depend>
   <depend>dynamixel_interfaces</depend>
+  <depend>sensor_msgs</depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
   <export>
