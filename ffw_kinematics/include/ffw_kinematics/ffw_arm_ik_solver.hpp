@@ -75,6 +75,14 @@ private:
   double ik_tolerance_;
   bool use_hardcoded_joint_limits_;
 
+  // Low-pass filter parameter (0..1). 0 = hold current, 1 = full target
+  double lpf_alpha_;
+
+  // Hybrid IK parameters
+  bool use_hybrid_ik_;
+  double current_position_weight_;
+  double previous_solution_weight_;
+
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr robot_description_sub_;
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr right_target_pose_sub_;
@@ -136,6 +144,11 @@ private:
 
   int lift_joint_index_;    // Not used in arm-only chain
   double lift_joint_position_;    // Current lift joint position for coordinate transformation
+
+  // Previous IK solutions for hybrid approach
+  KDL::JntArray right_previous_solution_;
+  KDL::JntArray left_previous_solution_;
+  bool has_previous_solution_;
 
   bool setup_complete_;
   bool has_joint_states_;

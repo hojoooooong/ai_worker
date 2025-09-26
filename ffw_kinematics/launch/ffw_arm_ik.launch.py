@@ -41,6 +41,24 @@ def generate_launch_description():
         description='Use hardcoded joint limits instead of URDF limits'
     )
 
+    use_hybrid_ik_arg = DeclareLaunchArgument(
+        'use_hybrid_ik',
+        default_value='true',
+        description='Enable hybrid IK initial guess blending'
+    )
+
+    current_position_weight_arg = DeclareLaunchArgument(
+        'current_position_weight',
+        default_value='0.5',
+        description='Weight for current joint positions in hybrid IK (0..1)'
+    )
+
+    previous_solution_weight_arg = DeclareLaunchArgument(
+        'previous_solution_weight',
+        default_value='0.5',
+        description='Weight for previous IK solution in hybrid IK (0..1)'
+    )
+
     # ffw Arm IK Solver node only
     ffw_arm_ik_solver_node = Node(
         package='ffw_kinematics',
@@ -58,6 +76,9 @@ def generate_launch_description():
             'left_ik_solution_topic': '/left_arm_ik_solution',
             'max_joint_step_degrees': LaunchConfiguration('max_joint_step_degrees'),
             'use_hardcoded_joint_limits': LaunchConfiguration('use_hardcoded_joint_limits'),
+            'use_hybrid_ik': LaunchConfiguration('use_hybrid_ik'),
+            'current_position_weight': LaunchConfiguration('current_position_weight'),
+            'previous_solution_weight': LaunchConfiguration('previous_solution_weight'),
         }]
     )
 
@@ -76,6 +97,9 @@ def generate_launch_description():
         trajectory_duration_arg,
         max_joint_step_degrees_arg,
         use_hardcoded_joint_limits_arg,
+        use_hybrid_ik_arg,
+        current_position_weight_arg,
+        previous_solution_weight_arg,
         ffw_arm_ik_solver_node,
         ffw_arm_trajectory_commander_node,
     ])

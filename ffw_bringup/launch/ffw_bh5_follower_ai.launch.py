@@ -15,6 +15,7 @@
 # limitations under the License.
 #
 # Authors: Sungho Woo, Woojin Wie, Wonho Yun
+import os
 
 from launch import LaunchDescription
 from launch.actions import ExecuteProcess
@@ -40,7 +41,7 @@ def generate_launch_description():
                               description='Enable fake sensor commands.'),
         DeclareLaunchArgument('port_name', default_value='/dev/follower',
                               description='Port name for hardware connection.'),
-        DeclareLaunchArgument('launch_cameras', default_value='true',
+        DeclareLaunchArgument('launch_cameras', default_value='false',
                               description='Whether to launch cameras.'),
         DeclareLaunchArgument('init_position', default_value='true',
                               description='Whether to launch the init_position node.'),
@@ -123,27 +124,21 @@ def generate_launch_description():
             '--controller-ros-args',
             '-r /arm_l_controller/joint_trajectory:='
             '/leader/joint_trajectory_command_broadcaster_left/joint_trajectory',
-
             '--controller-ros-args',
             '-r /arm_r_controller/joint_trajectory:='
             '/leader/joint_trajectory_command_broadcaster_right/joint_trajectory',
-
             '--controller-ros-args',
             '-r /hand_l_controller/joint_trajectory:='
             '/leader/joint_trajectory_command_broadcaster_left_hand/joint_trajectory',
-
             '--controller-ros-args',
             '-r /hand_r_controller/joint_trajectory:='
             '/leader/joint_trajectory_command_broadcaster_right_hand/joint_trajectory',
-
             '--controller-ros-args',
             '-r /head_controller/joint_trajectory:='
             '/leader/joystick_controller_left/joint_trajectory',
-
             '--controller-ros-args',
             '-r /lift_controller/joint_trajectory:='
             '/leader/joystick_controller_right/joint_trajectory',
-
             'arm_l_controller',
             'arm_r_controller',
             'head_controller',
@@ -172,11 +167,11 @@ def generate_launch_description():
             '-p', '50',
             '/effort_l_controller/commands',
             'std_msgs/msg/Float64MultiArray',
-            'data: [100.0, 100.0, 100.0, 100.0,'
-                    '100.0, 100.0, 100.0, 100.0,'
-                    '100.0, 100.0, 100.0, 100.0,'
-                    '100.0, 100.0, 100.0, 100.0,'
-                    '100.0, 100.0, 100.0, 100.0]',
+            'data: [350.0, 350.0, 350.0, 350.0,'
+                    '350.0, 350.0, 350.0, 350.0,'
+                    '350.0, 350.0, 350.0, 350.0,'
+                    '350.0, 350.0, 350.0, 350.0,'
+                    '350.0, 350.0, 350.0, 350.0]',
         ],
     )
 
@@ -189,11 +184,11 @@ def generate_launch_description():
             '-p', '50',
             '/effort_r_controller/commands',
             'std_msgs/msg/Float64MultiArray',
-            'data: [100.0, 100.0, 100.0, 100.0,'
-                    '100.0, 100.0, 100.0, 100.0,'
-                    '100.0, 100.0, 100.0, 100.0,'
-                    '100.0, 100.0, 100.0, 100.0,'
-                    '100.0, 100.0, 100.0, 100.0]',
+            'data: [350.0, 350.0, 350.0, 350.0,'
+                    '350.0, 350.0, 350.0, 350.0,'
+                    '350.0, 350.0, 350.0, 350.0,'
+                    '350.0, 350.0, 350.0, 350.0,'
+                    '350.0, 350.0, 350.0, 350.0]',
         ],
     )
 
@@ -245,19 +240,43 @@ def generate_launch_description():
         name='lift_joint_trajectory_executor',
         parameters=[trajectory_params_file],
         output='screen',
-    ),
+    )
     joint_trajectory_executor_left_hand = Node(
         package='ffw_bringup',
         executable='joint_trajectory_executor',
         name='hand_l_joint_trajectory_executor',
         parameters=[trajectory_params_file],
         output='screen',
-    ),
+    )
     joint_trajectory_executor_right_hand = Node(
         package='ffw_bringup',
         executable='joint_trajectory_executor',
         name='hand_r_joint_trajectory_executor',
         parameters=[trajectory_params_file],
+        output='screen',
+    )
+
+    ffw_arm_ik_solver = Node(
+        package='ffw_kinematics',
+        executable='ffw_arm_ik_solver',
+        output='screen',
+    )
+
+    pedal_launch_dir = PathJoinSubstitution([FindPackageShare('dynamixel_hardware_interface_example_2'), 'launch'])
+    pedal_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([pedal_launch_dir,
+                                                   'hardware.launch.py']))
+    )
+
+    robotis_hand_ik_teleop = Node(
+        package='robotis_hand_ik_teleop',
+        executable='robotis_hand_ik_teleop',
+        output='screen',
+    )
+
+    robotis_hand_teleop = Node(
+        package='robotis_hand_teleop',
+        executable='vr_publisher',
         output='screen',
     )
 
@@ -270,7 +289,7 @@ def generate_launch_description():
                 joint_trajectory_executor_head,
                 joint_trajectory_executor_lift,
                 joint_trajectory_executor_left_hand,
-                joint_trajectory_executor_right_hand
+                joint_trajectory_executor_right_hand,
             ]
         ),
         condition=IfCondition(init_position)
@@ -282,6 +301,11 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(PathJoinSubstitution([bringup_launch_dir,
                                                             'camera.launch.py'])),
         condition=IfCondition(launch_cameras)
+    )
+
+    ffw_arm_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([bringup_launch_dir,
+                                                   'ffw_bh5_ik.launch.py']))
     )
 
     # Camera timers with conditional delay based on init_position
@@ -302,5 +326,10 @@ def generate_launch_description():
             init_position_event_handler,
             camera_timer_20s,
             camera_timer_10s,
+            # ffw_arm_ik_solver,
+            ffw_arm_launch,
+            robotis_hand_ik_teleop,
+            robotis_hand_teleop,
+            pedal_launch,
         ]
     )

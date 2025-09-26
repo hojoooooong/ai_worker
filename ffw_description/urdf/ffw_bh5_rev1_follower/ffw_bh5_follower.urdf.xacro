@@ -17,6 +17,8 @@
 
   <xacro:include filename="$(find ffw_description)/ros2_control/$(arg model)/ffw_bh5_follower.ros2_control.xacro" />
 
+  <xacro:include filename="$(find ffw_description)/ros2_control/$(arg model)/ffw_bh5_follower_left.ros2_control.xacro" />
+
   <xacro:include filename="$(find ffw_description)/gazebo/ffw_bh5_rev1_follower/ffw_bh5_follower.gazebo.xacro" />
 
   <link name="world"/>
@@ -69,6 +71,11 @@
   </xacro:rh_5_right>
 
   <xacro:ffw_bh5_follower_system
+    use_sim="$(arg use_sim)"
+    use_fake_hardware="$(arg use_fake_hardware)"
+    fake_sensor_commands="$(arg fake_sensor_commands)"/>
+
+  <xacro:ffw_bh5_follower_left_system
     use_sim="$(arg use_sim)"
     use_fake_hardware="$(arg use_fake_hardware)"
     fake_sensor_commands="$(arg fake_sensor_commands)"/>

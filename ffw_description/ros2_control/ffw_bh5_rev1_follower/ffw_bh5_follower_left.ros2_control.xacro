@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-  <xacro:macro name="ffw_bh5_follower_system" params="use_sim:=^|false use_fake_hardware:=^|false fake_sensor_commands:=^|false">
-    <ros2_control name="ffw_bh5_follower" type="system" is_async="true">
+  <xacro:macro name="ffw_bh5_follower_left_system" params="use_sim:=^|false use_fake_hardware:=^|false fake_sensor_commands:=^|false">
+    <ros2_control name="ffw_bh5_follower_left" type="system" is_async="true">
       <xacro:if value="$(arg use_sim)">
         <hardware>
           <plugin>gz_ros2_control/GazeboSimSystem</plugin>
@@ -16,73 +16,71 @@
           </xacro:if>
           <xacro:unless value="${use_fake_hardware}">
             <plugin>dynamixel_hardware_interface/DynamixelHardware</plugin>
-            <param name="port_name">/dev/follower</param>
+            <param name="port_name">/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FTA7NLQL-if00-port0</param>
             <param name="baud_rate">4000000</param>
             <param name="dynamixel_model_folder">/param/dxl_model</param>
-            <param name="number_of_joints">29</param>
-            <param name="number_of_transmissions">29</param>
+            <param name="number_of_joints">28</param>
+            <param name="number_of_transmissions">28</param>
             <param name="disable_torque_at_init">true</param>
             <param name="transmission_to_joint_matrix">
-              1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
+              1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.83443026803
             </param>
             <param name="joint_to_transmission_matrix">
-              1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
+              1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.19842249055
             </param>
             <param name="dynamixel_state_pub_msg_name">dynamixel_hardware_interface/dxl_state</param>
             <param name="get_dynamixel_data_srv_name">dynamixel_hardware_interface/get_dxl_data</param>
@@ -93,35 +91,35 @@
           </xacro:unless>
         </hardware>
       </xacro:unless>
-      <joint name="finger_r_joint1">
+      <joint name="finger_l_joint1">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="finger_r_joint2">
+      <joint name="finger_l_joint2">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="finger_r_joint3">
+      <joint name="finger_l_joint3">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="finger_r_joint4">
+      <joint name="finger_l_joint4">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <sensor name="finger_r_sensor1">
+      <sensor name="finger_l_sensor1">
         <state_interface name="Present Pressure 1"/>
         <state_interface name="Present Pressure 2"/>
         <state_interface name="Present Pressure 3"/>
@@ -132,35 +130,35 @@
         <state_interface name="Present Pressure 8"/>
         <state_interface name="Present Pressure 9"/>
       </sensor>
-      <joint name="finger_r_joint5">
+      <joint name="finger_l_joint5">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="finger_r_joint6">
+      <joint name="finger_l_joint6">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="finger_r_joint7">
+      <joint name="finger_l_joint7">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="finger_r_joint8">
+      <joint name="finger_l_joint8">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <sensor name="finger_r_sensor2">
+      <sensor name="finger_l_sensor2">
         <state_interface name="Present Pressure 1"/>
         <state_interface name="Present Pressure 2"/>
         <state_interface name="Present Pressure 3"/>
@@ -171,35 +169,35 @@
         <state_interface name="Present Pressure 8"/>
         <state_interface name="Present Pressure 9"/>
       </sensor>
-      <joint name="finger_r_joint9">
+      <joint name="finger_l_joint9">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="finger_r_joint10">
+      <joint name="finger_l_joint10">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="finger_r_joint11">
+      <joint name="finger_l_joint11">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="finger_r_joint12">
+      <joint name="finger_l_joint12">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <sensor name="finger_r_sensor3">
+      <sensor name="finger_l_sensor3">
         <state_interface name="Present Pressure 1"/>
         <state_interface name="Present Pressure 2"/>
         <state_interface name="Present Pressure 3"/>
@@ -210,35 +208,35 @@
         <state_interface name="Present Pressure 8"/>
         <state_interface name="Present Pressure 9"/>
       </sensor>
-      <joint name="finger_r_joint13">
+      <joint name="finger_l_joint13">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="finger_r_joint14">
+      <joint name="finger_l_joint14">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="finger_r_joint15">
+      <joint name="finger_l_joint15">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="finger_r_joint16">
+      <joint name="finger_l_joint16">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <sensor name="finger_r_sensor4">
+      <sensor name="finger_l_sensor4">
         <state_interface name="Present Pressure 1"/>
         <state_interface name="Present Pressure 2"/>
         <state_interface name="Present Pressure 3"/>
@@ -249,35 +247,35 @@
         <state_interface name="Present Pressure 8"/>
         <state_interface name="Present Pressure 9"/>
       </sensor>
-      <joint name="finger_r_joint17">
+      <joint name="finger_l_joint17">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="finger_r_joint18">
+      <joint name="finger_l_joint18">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="finger_r_joint19">
+      <joint name="finger_l_joint19">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="finger_r_joint20">
+      <joint name="finger_l_joint20">
         <command_interface name="position"/>
         <command_interface name="effort"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <sensor name="finger_r_sensor5">
+      <sensor name="finger_l_sensor5">
         <state_interface name="Present Pressure 1"/>
         <state_interface name="Present Pressure 2"/>
         <state_interface name="Present Pressure 3"/>
@@ -288,88 +286,82 @@
         <state_interface name="Present Pressure 8"/>
         <state_interface name="Present Pressure 9"/>
       </sensor>
-      <joint name="arm_r_joint1">
+      <joint name="arm_l_joint1">
         <command_interface name="position"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="arm_r_joint2">
+      <joint name="arm_l_joint2">
         <command_interface name="position"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="arm_r_joint3">
+      <joint name="arm_l_joint3">
         <command_interface name="position"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="arm_r_joint4">
+      <joint name="arm_l_joint4">
         <command_interface name="position"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="arm_r_joint5">
+      <joint name="arm_l_joint5">
         <command_interface name="position"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="arm_r_joint6">
+      <joint name="arm_l_joint6">
         <command_interface name="position"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="arm_r_joint7">
+      <joint name="arm_l_joint7">
         <command_interface name="position"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="head_joint1">
+      <joint name="lift_joint">
         <command_interface name="position"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <state_interface name="effort"/>
       </joint>
-      <joint name="head_joint2">
-        <command_interface name="position"/>
-        <state_interface name="position"/>
-        <state_interface name="velocity"/>
-        <state_interface name="effort"/>
-      </joint>
-      <gpio name="hand_controller">
+      <gpio name="left_hand_controller">
         <param name="type">controller</param>
-        <param name="ID">110</param>
+        <param name="ID">140</param>
         <param name="Table Sync Enable">1</param>
-        <!-- <param name="SyncTable 1 ID 1">111</param>
-        <param name="SyncTable 1 ID 2">112</param>
-        <param name="SyncTable 1 ID 3">113</param>
-        <param name="SyncTable 1 ID 4">114</param>
+        <!-- <param name="SyncTable 1 ID 1">161</param>
+        <param name="SyncTable 1 ID 2">162</param>
+        <param name="SyncTable 1 ID 3">163</param>
+        <param name="SyncTable 1 ID 4">164</param>
         <param name="SyncTable 1 ID 5">255</param>
-        <param name="SyncTable 2 ID 1">121</param>
-        <param name="SyncTable 2 ID 2">122</param>
-        <param name="SyncTable 2 ID 3">123</param>
-        <param name="SyncTable 2 ID 4">124</param>
+        <param name="SyncTable 2 ID 1">151</param>
+        <param name="SyncTable 2 ID 2">152</param>
+        <param name="SyncTable 2 ID 3">153</param>
+        <param name="SyncTable 2 ID 4">154</param>
         <param name="SyncTable 2 ID 5">255</param>
-        <param name="SyncTable 3 ID 1">131</param>
-        <param name="SyncTable 3 ID 2">132</param>
-        <param name="SyncTable 3 ID 3">133</param>
-        <param name="SyncTable 3 ID 4">134</param>
+        <param name="SyncTable 3 ID 1">141</param>
+        <param name="SyncTable 3 ID 2">142</param>
+        <param name="SyncTable 3 ID 3">143</param>
+        <param name="SyncTable 3 ID 4">144</param>
         <param name="SyncTable 3 ID 5">255</param>
-        <param name="SyncTable 4 ID 1">116</param>
-        <param name="SyncTable 4 ID 2">117</param>
-        <param name="SyncTable 4 ID 3">118</param>
-        <param name="SyncTable 4 ID 4">119</param>
+        <param name="SyncTable 4 ID 1">156</param>
+        <param name="SyncTable 4 ID 2">157</param>
+        <param name="SyncTable 4 ID 3">158</param>
+        <param name="SyncTable 4 ID 4">159</param>
         <param name="SyncTable 4 ID 5">255</param>
-        <param name="SyncTable 5 ID 1">126</param>
-        <param name="SyncTable 5 ID 2">127</param>
-        <param name="SyncTable 5 ID 3">128</param>
-        <param name="SyncTable 5 ID 4">129</param>
+        <param name="SyncTable 5 ID 1">146</param>
+        <param name="SyncTable 5 ID 2">147</param>
+        <param name="SyncTable 5 ID 3">148</param>
+        <param name="SyncTable 5 ID 4">149</param>
         <param name="SyncTable 5 ID 5">255</param>
         <param name="SyncTable 1 Read Address 1">224</param>
         <param name="SyncTable 1 Read Address 2">224</param>
@@ -472,288 +464,52 @@
         <param name="SyncTable 5 Write Size 4">4</param>
         <param name="SyncTable 5 Write Size 5">0</param> -->
       </gpio>
-      <!-- RIGHT HAND -->
-      <gpio name="dxl111">
+      <!-- LEFT HAND -->
+      <gpio name="dxl141">
         <command_interface name="Goal Position"/>
         <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <param name="type">virtual_dxl</param>
-        <param name="ID">111</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">281</param>
-      </gpio>
-      <gpio name="dxl112">
-        <command_interface name="Goal Position"/>
-        <command_interface name="Goal Current"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <param name="type">virtual_dxl</param>
-        <param name="ID">112</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">282</param>
-      </gpio>
-      <gpio name="dxl113">
-        <command_interface name="Goal Position"/>
-        <command_interface name="Goal Current"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <param name="type">virtual_dxl</param>
-        <param name="ID">113</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">283</param>
-      </gpio>
-      <gpio name="dxl114">
-        <command_interface name="Goal Position"/>
-        <command_interface name="Goal Current"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <param name="type">virtual_dxl</param>
-        <param name="ID">114</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">284</param>
-      </gpio>
-      <gpio name="finger_r_sensor1">
-        <state_interface name="Present Pressure 1"/>
-        <state_interface name="Present Pressure 2"/>
-        <state_interface name="Present Pressure 3"/>
-        <state_interface name="Present Pressure 4"/>
-        <state_interface name="Present Pressure 5"/>
-        <state_interface name="Present Pressure 6"/>
-        <state_interface name="Present Pressure 7"/>
-        <state_interface name="Present Pressure 8"/>
-        <state_interface name="Present Pressure 9"/>
-        <param name="type">virtual_sensor</param>
-        <param name="ID">115</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">285</param>
-      </gpio>
-      <gpio name="dxl116">
-        <command_interface name="Goal Position"/>
-        <command_interface name="Goal Current"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <param name="type">virtual_dxl</param>
-        <param name="ID">116</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">276</param>
-      </gpio>
-      <gpio name="dxl117">
-        <command_interface name="Goal Position"/>
-        <command_interface name="Goal Current"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <param name="type">virtual_dxl</param>
-        <param name="ID">117</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">277</param>
-      </gpio>
-      <gpio name="dxl118">
-        <command_interface name="Goal Position"/>
-        <command_interface name="Goal Current"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <param name="type">virtual_dxl</param>
-        <param name="ID">118</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">278</param>
-      </gpio>
-      <gpio name="dxl119">
-        <command_interface name="Goal Position"/>
-        <command_interface name="Goal Current"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <param name="type">virtual_dxl</param>
-        <param name="ID">119</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">279</param>
-      </gpio>
-      <gpio name="finger_r_sensor2">
-        <state_interface name="Present Pressure 1"/>
-        <state_interface name="Present Pressure 2"/>
-        <state_interface name="Present Pressure 3"/>
-        <state_interface name="Present Pressure 4"/>
-        <state_interface name="Present Pressure 5"/>
-        <state_interface name="Present Pressure 6"/>
-        <state_interface name="Present Pressure 7"/>
-        <state_interface name="Present Pressure 8"/>
-        <state_interface name="Present Pressure 9"/>
-        <param name="type">virtual_sensor</param>
-        <param name="ID">120</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">280</param>
-      </gpio>
-      <gpio name="dxl121">
-        <command_interface name="Goal Position"/>
-        <command_interface name="Goal Current"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <param name="type">virtual_dxl</param>
-        <param name="ID">121</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">271</param>
-      </gpio>
-      <gpio name="dxl122">
-        <command_interface name="Goal Position"/>
-        <command_interface name="Goal Current"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <param name="type">virtual_dxl</param>
-        <param name="ID">122</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">272</param>
-      </gpio>
-      <gpio name="dxl123">
-        <command_interface name="Goal Position"/>
-        <command_interface name="Goal Current"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <param name="type">virtual_dxl</param>
-        <param name="ID">123</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">273</param>
-      </gpio>
-      <gpio name="dxl124">
-        <command_interface name="Goal Position"/>
-        <command_interface name="Goal Current"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <param name="type">virtual_dxl</param>
-        <param name="ID">124</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">274</param>
-      </gpio>
-      <gpio name="finger_r_sensor3">
-        <state_interface name="Present Pressure 1"/>
-        <state_interface name="Present Pressure 2"/>
-        <state_interface name="Present Pressure 3"/>
-        <state_interface name="Present Pressure 4"/>
-        <state_interface name="Present Pressure 5"/>
-        <state_interface name="Present Pressure 6"/>
-        <state_interface name="Present Pressure 7"/>
-        <state_interface name="Present Pressure 8"/>
-        <state_interface name="Present Pressure 9"/>
-        <param name="type">virtual_sensor</param>
-        <param name="ID">125</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">275</param>
-      </gpio>
-      <gpio name="dxl126">
-        <command_interface name="Goal Position"/>
-        <command_interface name="Goal Current"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <param name="type">virtual_dxl</param>
-        <param name="ID">126</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">266</param>
-      </gpio>
-      <gpio name="dxl127">
-        <command_interface name="Goal Position"/>
-        <command_interface name="Goal Current"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <param name="type">virtual_dxl</param>
-        <param name="ID">127</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">267</param>
-      </gpio>
-      <gpio name="dxl128">
-        <command_interface name="Goal Position"/>
-        <command_interface name="Goal Current"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <param name="type">virtual_dxl</param>
-        <param name="ID">128</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">268</param>
-      </gpio>
-      <gpio name="dxl129">
-        <command_interface name="Goal Position"/>
-        <command_interface name="Goal Current"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <param name="type">virtual_dxl</param>
-        <param name="ID">129</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">269</param>
-      </gpio>
-      <gpio name="finger_r_sensor4">
-        <state_interface name="Present Pressure 1"/>
-        <state_interface name="Present Pressure 2"/>
-        <state_interface name="Present Pressure 3"/>
-        <state_interface name="Present Pressure 4"/>
-        <state_interface name="Present Pressure 5"/>
-        <state_interface name="Present Pressure 6"/>
-        <state_interface name="Present Pressure 7"/>
-        <state_interface name="Present Pressure 8"/>
-        <state_interface name="Present Pressure 9"/>
-        <param name="type">virtual_sensor</param>
-        <param name="ID">130</param>
-        <param name="comm_id">110</param>
-        <param name="model_num">270</param>
-      </gpio>
-      <gpio name="dxl131">
-        <command_interface name="Goal Position"/>
-        <command_interface name="Goal Current"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <param name="type">virtual_dxl</param>
-        <param name="ID">131</param>
-        <param name="comm_id">110</param>
+        <param name="ID">41</param>
+        <param name="comm_id">140</param>
         <param name="model_num">261</param>
       </gpio>
-      <gpio name="dxl132">
+      <gpio name="dxl142">
         <command_interface name="Goal Position"/>
         <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <param name="type">virtual_dxl</param>
-        <param name="ID">132</param>
-        <param name="comm_id">110</param>
+        <param name="ID">42</param>
+        <param name="comm_id">140</param>
         <param name="model_num">262</param>
       </gpio>
-      <gpio name="dxl133">
+      <gpio name="dxl143">
         <command_interface name="Goal Position"/>
         <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <param name="type">virtual_dxl</param>
-        <param name="ID">133</param>
-        <param name="comm_id">110</param>
+        <param name="ID">43</param>
+        <param name="comm_id">140</param>
         <param name="model_num">263</param>
       </gpio>
-      <gpio name="dxl134">
+      <gpio name="dxl144">
         <command_interface name="Goal Position"/>
         <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <param name="type">virtual_dxl</param>
-        <param name="ID">134</param>
-        <param name="comm_id">110</param>
+        <param name="ID">44</param>
+        <param name="comm_id">140</param>
         <param name="model_num">264</param>
       </gpio>
-      <gpio name="finger_r_sensor5">
+      <gpio name="finger_l_sensor1">
         <state_interface name="Present Pressure 1"/>
         <state_interface name="Present Pressure 2"/>
         <state_interface name="Present Pressure 3"/>
@@ -764,21 +520,256 @@
         <state_interface name="Present Pressure 8"/>
         <state_interface name="Present Pressure 9"/>
         <param name="type">virtual_sensor</param>
-        <param name="ID">135</param>
-        <param name="comm_id">110</param>
+        <param name="ID">45</param>
+        <param name="comm_id">140</param>
         <param name="model_num">265</param>
       </gpio>
-
-      <!-- <gpio name="dxl111_init">
+      <gpio name="dxl146">
+        <command_interface name="Goal Position"/>
+        <command_interface name="Goal Current"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <param name="type">virtual_dxl</param>
+        <param name="ID">46</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">266</param>
+      </gpio>
+      <gpio name="dxl147">
+        <command_interface name="Goal Position"/>
+        <command_interface name="Goal Current"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <param name="type">virtual_dxl</param>
+        <param name="ID">47</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">267</param>
+      </gpio>
+      <gpio name="dxl148">
+        <command_interface name="Goal Position"/>
+        <command_interface name="Goal Current"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <param name="type">virtual_dxl</param>
+        <param name="ID">48</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">268</param>
+      </gpio>
+      <gpio name="dxl149">
+        <command_interface name="Goal Position"/>
+        <command_interface name="Goal Current"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <param name="type">virtual_dxl</param>
+        <param name="ID">49</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">269</param>
+      </gpio>
+      <gpio name="finger_l_sensor2">
+        <state_interface name="Present Pressure 1"/>
+        <state_interface name="Present Pressure 2"/>
+        <state_interface name="Present Pressure 3"/>
+        <state_interface name="Present Pressure 4"/>
+        <state_interface name="Present Pressure 5"/>
+        <state_interface name="Present Pressure 6"/>
+        <state_interface name="Present Pressure 7"/>
+        <state_interface name="Present Pressure 8"/>
+        <state_interface name="Present Pressure 9"/>
+        <param name="type">virtual_sensor</param>
+        <param name="ID">50</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">270</param>
+      </gpio>
+      <gpio name="dxl151">
+        <command_interface name="Goal Position"/>
+        <command_interface name="Goal Current"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <param name="type">virtual_dxl</param>
+        <param name="ID">51</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">271</param>
+      </gpio>
+      <gpio name="dxl152">
+        <command_interface name="Goal Position"/>
+        <command_interface name="Goal Current"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <param name="type">virtual_dxl</param>
+        <param name="ID">52</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">272</param>
+      </gpio>
+      <gpio name="dxl153">
+        <command_interface name="Goal Position"/>
+        <command_interface name="Goal Current"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <param name="type">virtual_dxl</param>
+        <param name="ID">53</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">273</param>
+      </gpio>
+      <gpio name="dxl154">
+        <command_interface name="Goal Position"/>
+        <command_interface name="Goal Current"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <param name="type">virtual_dxl</param>
+        <param name="ID">54</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">274</param>
+      </gpio>
+      <gpio name="finger_l_sensor3">
+        <state_interface name="Present Pressure 1"/>
+        <state_interface name="Present Pressure 2"/>
+        <state_interface name="Present Pressure 3"/>
+        <state_interface name="Present Pressure 4"/>
+        <state_interface name="Present Pressure 5"/>
+        <state_interface name="Present Pressure 6"/>
+        <state_interface name="Present Pressure 7"/>
+        <state_interface name="Present Pressure 8"/>
+        <state_interface name="Present Pressure 9"/>
+        <param name="type">virtual_sensor</param>
+        <param name="ID">55</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">275</param>
+      </gpio>
+      <gpio name="dxl156">
+        <command_interface name="Goal Position"/>
+        <command_interface name="Goal Current"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <param name="type">virtual_dxl</param>
+        <param name="ID">56</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">276</param>
+      </gpio>
+      <gpio name="dxl157">
+        <command_interface name="Goal Position"/>
+        <command_interface name="Goal Current"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <param name="type">virtual_dxl</param>
+        <param name="ID">57</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">277</param>
+      </gpio>
+      <gpio name="dxl158">
+        <command_interface name="Goal Position"/>
+        <command_interface name="Goal Current"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <param name="type">virtual_dxl</param>
+        <param name="ID">58</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">278</param>
+      </gpio>
+      <gpio name="dxl159">
+        <command_interface name="Goal Position"/>
+        <command_interface name="Goal Current"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <param name="type">virtual_dxl</param>
+        <param name="ID">59</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">279</param>
+      </gpio>
+      <gpio name="finger_l_sensor4">
+        <state_interface name="Present Pressure 1"/>
+        <state_interface name="Present Pressure 2"/>
+        <state_interface name="Present Pressure 3"/>
+        <state_interface name="Present Pressure 4"/>
+        <state_interface name="Present Pressure 5"/>
+        <state_interface name="Present Pressure 6"/>
+        <state_interface name="Present Pressure 7"/>
+        <state_interface name="Present Pressure 8"/>
+        <state_interface name="Present Pressure 9"/>
+        <param name="type">virtual_sensor</param>
+        <param name="ID">60</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">280</param>
+      </gpio>
+      <gpio name="dxl161">
+        <command_interface name="Goal Position"/>
+        <command_interface name="Goal Current"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <param name="type">virtual_dxl</param>
+        <param name="ID">61</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">281</param>
+      </gpio>
+      <gpio name="dxl162">
+        <command_interface name="Goal Position"/>
+        <command_interface name="Goal Current"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <param name="type">virtual_dxl</param>
+        <param name="ID">62</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">282</param>
+      </gpio>
+      <gpio name="dxl163">
+        <command_interface name="Goal Position"/>
+        <command_interface name="Goal Current"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <param name="type">virtual_dxl</param>
+        <param name="ID">63</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">283</param>
+      </gpio>
+      <gpio name="dxl164">
+        <command_interface name="Goal Position"/>
+        <command_interface name="Goal Current"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <param name="type">virtual_dxl</param>
+        <param name="ID">64</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">284</param>
+      </gpio>
+      <gpio name="finger_l_sensor5">
+        <state_interface name="Present Pressure 1"/>
+        <state_interface name="Present Pressure 2"/>
+        <state_interface name="Present Pressure 3"/>
+        <state_interface name="Present Pressure 4"/>
+        <state_interface name="Present Pressure 5"/>
+        <state_interface name="Present Pressure 6"/>
+        <state_interface name="Present Pressure 7"/>
+        <state_interface name="Present Pressure 8"/>
+        <state_interface name="Present Pressure 9"/>
+        <param name="type">virtual_sensor</param>
+        <param name="ID">65</param>
+        <param name="comm_id">140</param>
+        <param name="model_num">285</param>
+      </gpio>
+      <!-- <gpio name="dxl141_init">
         <param name="type">controller</param>
-        <param name="ID">111</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">141</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
         <param name="Homing Offset">1024</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
@@ -791,16 +782,16 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl112_init">
+      <gpio name="dxl142_init">
         <param name="type">controller</param>
-        <param name="ID">112</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">142</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
         <param name="Homing Offset">341</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
@@ -813,16 +804,16 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl113_init">
+      <gpio name="dxl143_init">
         <param name="type">controller</param>
-        <param name="ID">113</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">143</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
         <param name="Indirect Address 3">128</param>
@@ -834,16 +825,16 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl114_init">
+      <gpio name="dxl144_init">
         <param name="type">controller</param>
-        <param name="ID">114</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">144</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
         <param name="Indirect Address 3">128</param>
@@ -855,16 +846,16 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl116_init">
+      <gpio name="dxl146_init">
         <param name="type">controller</param>
-        <param name="ID">116</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">146</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
         <param name="Indirect Address 3">128</param>
@@ -876,16 +867,16 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl117_init">
+      <gpio name="dxl147_init">
         <param name="type">controller</param>
-        <param name="ID">117</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">147</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
         <param name="Homing Offset">1024</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
@@ -898,16 +889,16 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl118_init">
+      <gpio name="dxl148_init">
         <param name="type">controller</param>
-        <param name="ID">118</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">148</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
         <param name="Indirect Address 3">128</param>
@@ -919,16 +910,16 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl119_init">
+      <gpio name="dxl149_init">
         <param name="type">controller</param>
-        <param name="ID">119</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">149</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
         <param name="Indirect Address 3">128</param>
@@ -940,17 +931,17 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl121_init">
+      <gpio name="dxl151_init">
         <param name="type">controller</param>
-        <param name="ID">121</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">151</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
-        <param name="Homing Offset">171</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
+        <param name="Homing Offset">-171</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
         <param name="Indirect Address 3">128</param>
@@ -962,16 +953,16 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl122_init">
+      <gpio name="dxl152_init">
         <param name="type">controller</param>
-        <param name="ID">122</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">152</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
         <param name="Homing Offset">1024</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
@@ -984,16 +975,16 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl123_init">
+      <gpio name="dxl153_init">
         <param name="type">controller</param>
-        <param name="ID">123</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">153</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
         <param name="Indirect Address 3">128</param>
@@ -1005,16 +996,16 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl124_init">
+      <gpio name="dxl154_init">
         <param name="type">controller</param>
-        <param name="ID">124</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">154</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
         <param name="Indirect Address 3">128</param>
@@ -1026,17 +1017,17 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl126_init">
+      <gpio name="dxl156_init">
         <param name="type">controller</param>
-        <param name="ID">126</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">156</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
-        <param name="Homing Offset">341</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
+        <param name="Homing Offset">-341</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
         <param name="Indirect Address 3">128</param>
@@ -1048,16 +1039,16 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl127_init">
+      <gpio name="dxl157_init">
         <param name="type">controller</param>
-        <param name="ID">127</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">157</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
         <param name="Homing Offset">1024</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
@@ -1070,16 +1061,16 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl128_init">
+      <gpio name="dxl158_init">
         <param name="type">controller</param>
-        <param name="ID">128</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">158</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
         <param name="Indirect Address 3">128</param>
@@ -1091,16 +1082,16 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl129_init">
+      <gpio name="dxl159_init">
         <param name="type">controller</param>
-        <param name="ID">129</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">159</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
         <param name="Indirect Address 3">128</param>
@@ -1112,17 +1103,17 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl131_init">
+      <gpio name="dxl161_init">
         <param name="type">controller</param>
-        <param name="ID">131</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">161</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
-        <param name="Homing Offset">682</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
+        <param name="Homing Offset">-682</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
         <param name="Indirect Address 3">128</param>
@@ -1134,16 +1125,16 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl132_init">
+      <gpio name="dxl162_init">
         <param name="type">controller</param>
-        <param name="ID">132</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">162</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
         <param name="Homing Offset">1024</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
@@ -1156,16 +1147,16 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl133_init">
+      <gpio name="dxl163_init">
         <param name="type">controller</param>
-        <param name="ID">133</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">163</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
         <param name="Indirect Address 3">128</param>
@@ -1177,16 +1168,16 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio>
-      <gpio name="dxl134_init">
+      <gpio name="dxl164_init">
         <param name="type">controller</param>
-        <param name="ID">134</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position D Gain">5000</param>
-        <param name="Startup Configuration">2</param>
-        <param name="Drive Mode">8</param>
-        <param name="Bus Watchdog">0</param>
-        <param name="Profile Velocity">20</param>
+        <param name="ID">164</param>
+        <param name="Position P Gain">100</param>
+        <param name="Position D Gain">0</param>
+        <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
+        <param name="Startup Configuration">2</param>
+        <param name="Drive Mode">12</param>
+        <param name="Bus Watchdog">0</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
         <param name="Indirect Address 3">128</param>
@@ -1198,34 +1189,10 @@
         <param name="Indirect Address 9">116</param>
         <param name="Indirect Address 10">117</param>
       </gpio> -->
-      <!-- RIGHT ARM -->
-      <gpio name="dxl1">
+      <!-- LEFT ARM -->
+      <gpio name="dxl31">
         <param name="type">dxl</param>
-        <param name="ID">1</param>
-        <command_interface name="Goal Position"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <state_interface name="Error Code"/>
-        <param name="Drive Mode">69</param>
-        <param name="Operating Mode">3</param>
-        <param name="Return Delay Time">0</param>
-        <param name="Velocity Limit">3591</param>
-        <param name="Acceleration Limit">35910</param>
-        <!-- <param name="Profile Velocity">359</param>
-        <param name="Profile Acceleration">359</param> -->
-        <param name="Profile Acceleration Time">250</param>
-        <param name="Profile Time">500</param>
-        <param name="Max Position Limit">262144</param>
-        <param name="Min Position Limit">-262144</param>
-        <param name="Position P Gain">1583185</param>
-        <param name="Velocity P Gain">41387</param>
-        <param name="Velocity I Gain">1565630</param>
-        <param name="Position FF Gain">100</param>
-      </gpio>
-      <gpio name="dxl2">
-        <param name="type">dxl</param>
-        <param name="ID">2</param>
+        <param name="ID">31</param>
         <command_interface name="Goal Position"/>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
@@ -1240,16 +1207,40 @@
         <param name="Profile Acceleration">359</param> -->
         <param name="Profile Acceleration Time">250</param>
         <param name="Profile Time">500</param>
-        <param name="Max Position Limit">0</param>
+        <param name="Max Position Limit">262144</param>
         <param name="Min Position Limit">-262144</param>
         <param name="Position P Gain">1583185</param>
         <param name="Velocity P Gain">41387</param>
         <param name="Velocity I Gain">1565630</param>
         <param name="Position FF Gain">100</param>
       </gpio>
-      <gpio name="dxl3">
+      <gpio name="dxl32">
         <param name="type">dxl</param>
-        <param name="ID">3</param>
+        <param name="ID">32</param>
+        <command_interface name="Goal Position"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <state_interface name="Error Code"/>
+        <param name="Drive Mode">68</param>
+        <param name="Operating Mode">3</param>
+        <param name="Return Delay Time">0</param>
+        <param name="Velocity Limit">3591</param>
+        <param name="Acceleration Limit">35910</param>
+        <!-- <param name="Profile Velocity">359</param>
+        <param name="Profile Acceleration">359</param> -->
+        <param name="Profile Acceleration Time">250</param>
+        <param name="Profile Time">500</param>
+        <param name="Max Position Limit">262144</param>
+        <param name="Min Position Limit">0</param>
+        <param name="Position P Gain">1583185</param>
+        <param name="Velocity P Gain">41387</param>
+        <param name="Velocity I Gain">1565630</param>
+        <param name="Position FF Gain">100</param>
+      </gpio>
+      <gpio name="dxl33">
+        <param name="type">dxl</param>
+        <param name="ID">33</param>
         <command_interface name="Goal Position"/>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
@@ -1271,15 +1262,15 @@
         <param name="Velocity I Gain">1565630</param>
         <param name="Position FF Gain">100</param>
       </gpio>
-      <gpio name="dxl4">
+      <gpio name="dxl34">
         <param name="type">dxl</param>
-        <param name="ID">4</param>
+        <param name="ID">34</param>
         <command_interface name="Goal Position"/>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Error Code"/>
-        <param name="Drive Mode">69</param>
+        <param name="Drive Mode">68</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">6486</param>
@@ -1295,9 +1286,9 @@
         <param name="Velocity I Gain">1585331</param>
         <param name="Position FF Gain">100</param>
       </gpio>
-      <gpio name="dxl5">
+      <gpio name="dxl35">
         <param name="type">dxl</param>
-        <param name="ID">5</param>
+        <param name="ID">35</param>
         <command_interface name="Goal Position"/>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
@@ -1319,15 +1310,15 @@
         <param name="Velocity I Gain">1585331</param>
         <param name="Position FF Gain">100</param>
       </gpio>
-      <gpio name="dxl6">
+      <gpio name="dxl36">
         <param name="type">dxl</param>
-        <param name="ID">6</param>
+        <param name="ID">36</param>
         <command_interface name="Goal Position"/>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Error Code"/>
-        <param name="Drive Mode">69</param>
+        <param name="Drive Mode">68</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">6486</param>
@@ -1343,9 +1334,9 @@
         <param name="Velocity I Gain">1585331</param>
         <param name="Position FF Gain">100</param>
       </gpio>
-      <gpio name="dxl7">
+      <gpio name="dxl37">
         <param name="type">dxl</param>
-        <param name="ID">7</param>
+        <param name="ID">37</param>
         <command_interface name="Goal Position"/>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
@@ -1362,49 +1353,32 @@
         <param name="Max Position Limit">131875</param>
         <param name="Min Position Limit">-151875</param>
       </gpio>
-      <!-- HEAD -->
-      <gpio name="dxl61">
+      <!-- LIFT -->
+      <gpio name="dxl81">
         <param name="type">dxl</param>
-        <param name="ID">61</param>z
+        <param name="ID">81</param>
         <command_interface name="Goal Position"/>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
-        <state_interface name="Hardware Error Status"/>
-        <param name="Drive Mode">1</param>
+        <state_interface name="Error Code"/>
+        <param name="Drive Mode">4</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
-        <param name="Profile Velocity">100</param>
-        <param name="Profile Acceleration">50</param>
-        <param name="Max Position Limit">2500</param>
-        <param name="Min Position Limit">1896</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position I Gain">400</param>
-        <param name="Position D Gain">400</param>
-        <param name="Feedforward 1st Gain">30</param>
-        <param name="Feedforward 2nd Gain">30</param>
+        <param name="Velocity Limit">300</param>
+        <param name="Acceleration Limit">2020</param>
+        <param name="Profile Velocity">300</param>
+        <param name="Profile Acceleration">300</param>
+        <param name="Profile Acceleration Time">250</param>
+        <param name="Profile Time">500</param>
+        <param name="Max Position Limit">0</param>
+        <param name="Min Position Limit">-50000</param>
+        <param name="Position P Gain">1583185</param>
+        <param name="Velocity P Gain">41387</param>
+        <param name="Velocity I Gain">1065630</param>
       </gpio>
-      <gpio name="dxl62">
-        <param name="type">dxl</param>
-        <param name="ID">62</param>
-        <command_interface name="Goal Position"/>
-        <state_interface name="Present Position"/>
-        <state_interface name="Present Velocity"/>
-        <state_interface name="Present Current"/>
-        <state_interface name="Hardware Error Status"/>
-        <param name="Drive Mode">1</param>
-        <param name="Operating Mode">3</param>
-        <param name="Return Delay Time">0</param>
-        <param name="Profile Velocity">100</param>
-        <param name="Profile Acceleration">50</param>
-        <param name="Max Position Limit">2275</param>
-        <param name="Min Position Limit">1820</param>
-        <param name="Position P Gain">800</param>
-        <param name="Position I Gain">200</param>
-        <param name="Position D Gain">200</param>
-        <param name="Feedforward 1st Gain">30</param>
-        <param name="Feedforward 2nd Gain">30</param>
-      </gpio>
+
     </ros2_control>
   </xacro:macro>
 </robot>
+
