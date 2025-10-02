@@ -256,29 +256,29 @@ def generate_launch_description():
         output='screen',
     )
 
-    ffw_arm_ik_solver = Node(
-        package='ffw_kinematics',
-        executable='ffw_arm_ik_solver',
-        output='screen',
-    )
+    # ffw_arm_ik_solver = Node(
+    #     package='ffw_kinematics',
+    #     executable='ffw_arm_ik_solver',
+    #     output='screen',
+    # )
 
-    pedal_launch_dir = PathJoinSubstitution([FindPackageShare('dynamixel_hardware_interface_example_2'), 'launch'])
-    pedal_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(PathJoinSubstitution([pedal_launch_dir,
-                                                   'hardware.launch.py']))
-    )
+    # pedal_launch_dir = PathJoinSubstitution([FindPackageShare('dynamixel_hardware_interface_example_2'), 'launch'])
+    # pedal_launch = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(PathJoinSubstitution([pedal_launch_dir,
+    #                                                'hardware.launch.py']))
+    # )
 
-    robotis_hand_ik_teleop = Node(
-        package='robotis_hand_ik_teleop',
-        executable='robotis_hand_ik_teleop',
-        output='screen',
-    )
+    # robotis_hand_ik_teleop = Node(
+    #     package='robotis_hand_ik_teleop',
+    #     executable='robotis_hand_ik_teleop',
+    #     output='screen',
+    # )
 
-    robotis_hand_teleop = Node(
-        package='robotis_hand_teleop',
-        executable='vr_publisher',
-        output='screen',
-    )
+    # robotis_hand_teleop = Node(
+    #     package='robotis_hand_teleop',
+    #     executable='vr_publisher',
+    #     output='screen',
+    # )
 
     init_position_event_handler = RegisterEventHandler(
         event_handler=OnProcessExit(
@@ -327,9 +327,9 @@ def generate_launch_description():
             camera_timer_20s,
             camera_timer_10s,
             # ffw_arm_ik_solver,
-            ffw_arm_launch,
-            robotis_hand_ik_teleop,
-            robotis_hand_teleop,
-            pedal_launch,
+            # ffw_arm_launch,
+            # robotis_hand_ik_teleop,
+            # robotis_hand_teleop,
+            # pedal_launch,
         ]
     )

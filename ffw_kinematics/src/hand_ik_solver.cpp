@@ -43,14 +43,14 @@ void HandInverseKinematics::robot_description_callback(const std_msgs::msg::Stri
   RCLCPP_INFO(this->get_logger(), "KDL tree created with %d segments", tree_.getNrOfSegments());
 
   // Extract chain from tree
-  if (!tree_.getChain("rh_5_left_base", "finger_end_l_link1", left_thumb_chain_)) {
+  if (!tree_.getChain("hx5_d20_left_base", "finger_end_l_link1", left_thumb_chain_)) {
     RCLCPP_ERROR(this->get_logger(), "Failed to extract left chain from %s to %s",
-    "rh_5_left_base", "finger_end_l_link1");
+    "hx5_d20_left_base", "finger_end_l_link1");
   }
 
-  if (!tree_.getChain("rh_5_right_base", "finger_end_r_link1", right_thumb_chain_)) {
+  if (!tree_.getChain("hx5_d20_right_base", "finger_end_r_link1", right_thumb_chain_)) {
     RCLCPP_ERROR(this->get_logger(), "Failed to extract right chain from %s to %s",
-    "rh_5_right_base", "finger_end_r_link1");
+    "hx5_d20_right_base", "finger_end_r_link1");
   }
 
   RCLCPP_INFO(this->get_logger(), "KDL left chain created with %d joints", left_thumb_chain_.getNrOfJoints());
