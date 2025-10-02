@@ -2,10 +2,10 @@
 Changelog for package ffw
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-1.1.12 (2025-09-04)
+1.1.12 (2025-09-17)
 -------------------
-* Added ffw_kinematics package
-* Contributors: Wonho Yun
+* Updated docker compose file to mount zed resources
+* Contributors: Woojin Wie
 
 1.1.11 (2025-08-13)
 -------------------
