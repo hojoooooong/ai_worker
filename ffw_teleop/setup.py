@@ -1,4 +1,5 @@
 from setuptools import find_packages, setup
+from glob import glob
 
 package_name = 'ffw_teleop'
 authors_info = [
@@ -16,6 +17,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name + '/launch', glob('launch/*.launch.py')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -28,7 +30,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'keyborad_control = ffw_teleop.keyboard_control:main',
+            'keyboard_control = ffw_teleop.keyboard_control:main',
+            'gripper_controller = ffw_teleop.gripper_controller:main',
+            'hand_controller = ffw_teleop.hand_controller:main',
         ],
     },
 )

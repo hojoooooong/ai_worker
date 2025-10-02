@@ -15,10 +15,10 @@
 // Author: Wonho Yun
 
 
-#include "ffw_kinematics/ffw_arm_ik_solver.hpp"
+#include "ffw_kinematics/arm_ik_solver.hpp"
 
 FfwArmIKSolver::FfwArmIKSolver()
-: Node("ffw_arm_ik_solver"),
+: Node("arm_ik_solver"),
   lift_joint_index_(-1),
   setup_complete_(false),
   has_joint_states_(false),

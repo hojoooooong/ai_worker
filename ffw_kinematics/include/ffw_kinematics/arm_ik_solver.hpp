@@ -14,8 +14,8 @@
 //
 // Author: Wonho Yun
 
-#ifndef FFW_KINEMATICS__FFW_ARM_IK_SOLVER_HPP_
-#define FFW_KINEMATICS__FFW_ARM_IK_SOLVER_HPP_
+#ifndef FFW_KINEMATICS__ARM_IK_SOLVER_HPP_
+#define FFW_KINEMATICS__ARM_IK_SOLVER_HPP_
 
 #include <urdf/model.h>
 
@@ -148,10 +148,9 @@ private:
   // Previous IK solutions for hybrid approach
   KDL::JntArray right_previous_solution_;
   KDL::JntArray left_previous_solution_;
-  bool has_previous_solution_;
-
   bool setup_complete_;
   bool has_joint_states_;
+  bool has_previous_solution_;
 };
 
-#endif  // FFW_KINEMATICS__FFW_ARM_IK_SOLVER_HPP_
+#endif  // FFW_KINEMATICS__ARM_IK_SOLVER_HPP_

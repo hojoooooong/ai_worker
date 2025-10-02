@@ -161,15 +161,15 @@ def generate_launch_description():
         output='screen'
     )
 
-    # rviz_config_file = os.path.join(ffw_description_path, 'rviz', 'ffw_bg2.rviz')
+    rviz_config_file = os.path.join(ffw_description_path, 'rviz', 'ffw_bg2.rviz')
 
-    # rviz = Node(
-    #     package='rviz2',
-    #     executable='rviz2',
-    #     name='rviz2',
-    #     output='log',
-    #     arguments=['-d', rviz_config_file],
-    # )
+    rviz = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        output='log',
+        arguments=['-d', rviz_config_file],
+    )
 
     return LaunchDescription([
         *declared_arguments,
@@ -190,5 +190,5 @@ def generate_launch_description():
         gazebo,
         robot_state_pub_node,
         gz_spawn_entity,
-        # rviz,
+        rviz,
     ])
