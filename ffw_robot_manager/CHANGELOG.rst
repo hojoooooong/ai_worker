@@ -2,6 +2,11 @@
 Changelog for package ffw_robot_manager
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.1.14 (2025-10-14)
+-------------------
+* Corrected the battery monitoring feature when exceeding the maximum voltage
+* Contributors: Woojin Wie
+
 1.1.13 (2025-10-14)
 -------------------
 * Added support for battery monitoring for ffw_sg2_rev1

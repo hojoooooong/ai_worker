@@ -51,7 +51,7 @@ double UbetterBatteryModel::voltage_to_soc(double voltage_v) const
 
   // Handle edge cases first using double to avoid premature truncation/casting
   if (voltage_units_d >= battery_percent_data[0][0]) {
-    return 100.0;  // Above highest voltage (29.40V = 100%)
+    return 1.0;  // Above highest voltage (29.40V = 100%)
   } else if (voltage_units_d <= battery_percent_data[BATTERY_DATA_NUMBER - 1][0]) {
     return 0.0;  // Below lowest voltage (22.00V = 0%)
   }
