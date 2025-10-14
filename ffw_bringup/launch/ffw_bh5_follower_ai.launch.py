@@ -314,6 +314,13 @@ def generate_launch_description():
     camera_timer_10s = TimerAction(period=10.0, actions=[camera_launch],
                                    condition=UnlessCondition(init_position))
 
+    # Teleop launch include
+    teleop_launch_dir = PathJoinSubstitution([FindPackageShare('ffw_teleop'), 'launch'])
+    pedal_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([teleop_launch_dir,
+                                                   'pedal_hardware.launch.py']))
+    )
+
     return LaunchDescription(
         declared_arguments + [
             control_node,
@@ -327,9 +334,9 @@ def generate_launch_description():
             camera_timer_20s,
             camera_timer_10s,
             # ffw_arm_ik_solver,
-            # ffw_arm_launch,
+            ffw_arm_launch,
             # robotis_hand_ik_teleop,
             # robotis_hand_teleop,
-            # pedal_launch,
+            pedal_launch,
         ]
     )
