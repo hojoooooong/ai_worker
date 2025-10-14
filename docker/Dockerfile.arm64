@@ -109,10 +109,19 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     vim \
     nano \
+    python3-pip \
+    libnss3-tools \
     && rm -rf /var/lib/apt/lists/*
 
 ENV COLCON_WS=/root/ros2_ws
 WORKDIR ${COLCON_WS}
+
+ARG TARGETARCH
+
+RUN curl -JLO "https://dl.filippo.io/mkcert/latest?for=linux/${TARGETARCH}" \
+    && chmod +x mkcert-v*-linux-${TARGETARCH} \
+    && cp mkcert-v*-linux-${TARGETARCH} /usr/local/bin/mkcert \
+    && mkcert -install
 
 RUN mkdir -p ${COLCON_WS}/src && \
     cd ${COLCON_WS}/src && \
@@ -144,4 +153,20 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc  && \
     echo "alias ffw_sg2_follower_ai='ros2 launch ffw_bringup ffw_sg2_follower_ai.launch.py'" >> ~/.bashrc && \
     echo "alias ffw_bg2_ai='ros2 launch ffw_bringup ffw_bg2_ai.launch.py'" >> ~/.bashrc && \
     echo "alias ffw_sg2_ai='ros2 launch ffw_bringup ffw_sg2_ai.launch.py'" >> ~/.bashrc && \
-    echo "export ROS_DOMAIN_ID=30" >> ~/.bashrc
+    echo "export ROS_DOMAIN_ID=30" >> ~/.bashrc && \
+    echo "alias vr='ros2 launch ffw_vr vr_publisher.launch.py'" >> ~/.bashrc
+
+RUN python3 -m pip config set global.break-system-packages true
+
+RUN pip3 install --no-cache-dir -r ${COLCON_WS}/src/ai_worker/docker/requirements.txt
+
+RUN cd /root && \
+    git clone https://github.com/Woojin-Crive/vuer.git && \
+    cd vuer && \
+    pip3 install -e '.[all]'
+
+RUN chmod +x ${COLCON_WS}/src/ai_worker/docker/gen_cert.sh
+
+EXPOSE 8012
+
+CMD ["/bin/bash", "-c", "source /opt/ros/jazzy/setup.bash && uvicorn minimal:app --host 0.0.0.0 --port 8012"]
