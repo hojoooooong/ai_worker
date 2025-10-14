@@ -411,7 +411,11 @@ void FfwRobotManager::update_battery_states()
       if (voltage_opt.has_value()) {
         double voltage = voltage_opt.value();
         double soc_fraction = robot_type_->get_battery_model()->voltage_to_soc(voltage);
-        auto battery_state = create_battery_state(voltage, soc_fraction);
+        // Use a unique frame_id per battery; prefer explicit name if present
+        const std::string frame_id = !battery_config.name.empty() ?
+          std::string("battery_") + battery_config.name :
+          std::string("battery_") + battery_config.interface_name;
+        auto battery_state = create_battery_state(voltage, soc_fraction, frame_id);
         publisher->publish(battery_state);
       }
     }
@@ -419,11 +423,12 @@ void FfwRobotManager::update_battery_states()
 }
 
 
-sensor_msgs::msg::BatteryState FfwRobotManager::create_battery_state(double voltage, double soc)
+sensor_msgs::msg::BatteryState FfwRobotManager::create_battery_state(
+  double voltage, double soc, const std::string & frame_id)
 {
   sensor_msgs::msg::BatteryState battery_state;
   battery_state.header.stamp = get_node()->now();
-  battery_state.header.frame_id = "battery";
+  battery_state.header.frame_id = frame_id;
   battery_state.voltage = static_cast<float>(voltage);
   battery_state.percentage = static_cast<float>(soc);
   battery_state.power_supply_status = sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_UNKNOWN;

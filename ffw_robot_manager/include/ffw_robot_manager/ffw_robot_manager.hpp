@@ -186,7 +186,8 @@ protected:
   // Battery monitoring methods
   void setup_battery_monitoring();
   void update_battery_states();
-  sensor_msgs::msg::BatteryState create_battery_state(double voltage, double soc);
+  sensor_msgs::msg::BatteryState create_battery_state(
+    double voltage, double soc, const std::string & frame_id);
 };
 }  // namespace ffw_robot_manager
 
