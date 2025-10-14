@@ -8,7 +8,7 @@ if [ $# -lt 1 ]; then
 fi
 
 HOST_IP="$1"
-TV_FOLDER="/root/ros2_ws/src/ai_worker_applications/ffw_vr/ffw_vr"
+TV_FOLDER="/root/ros2_ws/src/ai_worker/ffw_teleop/ffw_teleop"
 
 set -e
 

@@ -170,7 +170,7 @@ RUN cd /root && \
     pip3 install -e '.[all]'
 
 RUN chmod +x /tmp/gen_cert.sh && \
-    cp /tmp/gen_cert.sh ${COLCON_WS}/src/ai_worker/docker/gen_cert.sh
+    cp /tmp/gen_cert.sh ~/
 
 EXPOSE 8012
 
