@@ -26,7 +26,7 @@ std::shared_ptr<BatteryModel> create_battery_model(const std::string & model_nam
     return std::make_shared<UbetterBatteryModel>();
   }
 
-  return nullptr; // Model not found
+  return nullptr;  // Model not found
 }
 
 }  // namespace ffw_robot_manager

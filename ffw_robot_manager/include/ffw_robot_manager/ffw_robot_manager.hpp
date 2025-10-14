@@ -142,10 +142,10 @@ protected:
   // Battery monitoring
   std::vector<rclcpp::Publisher<sensor_msgs::msg::BatteryState>::SharedPtr> battery_publishers_;
   std::vector<BatteryInfo> battery_configurations_;
-  
+
   // Robot type configuration
   std::shared_ptr<RobotType> robot_type_;
-  
+
   bool battery_monitoring_enabled_ = false;
 
   // Disable torque for all Dynamixels

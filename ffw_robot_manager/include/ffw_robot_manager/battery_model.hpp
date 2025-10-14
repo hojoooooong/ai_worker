@@ -19,13 +19,14 @@
 
 #include <string>
 #include <memory>
+#include <utility>
 
 namespace ffw_robot_manager
 {
 
 /**
  * @brief Abstract base class for battery models
- * 
+ *
  * This class defines the interface for different battery models
  * to convert voltage readings to State of Charge (SOC) percentages.
  */

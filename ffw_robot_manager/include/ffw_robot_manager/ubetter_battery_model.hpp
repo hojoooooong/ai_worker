@@ -17,6 +17,8 @@
 #ifndef FFW_ROBOT_MANAGER__UBETTER_BATTERY_MODEL_HPP_
 #define FFW_ROBOT_MANAGER__UBETTER_BATTERY_MODEL_HPP_
 
+#include <string>
+#include <utility>
 #include "ffw_robot_manager/battery_model.hpp"
 
 namespace ffw_robot_manager
@@ -24,7 +26,7 @@ namespace ffw_robot_manager
 
 /**
  * @brief Ubetter battery model implementation
- * 
+ *
  * This class implements the voltage-to-SOC conversion for Ubetter batteries
  * using the provided lookup table with linear interpolation.
  */

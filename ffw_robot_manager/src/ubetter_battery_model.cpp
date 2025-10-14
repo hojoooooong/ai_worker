@@ -25,13 +25,13 @@ namespace ffw_robot_manager
 const uint16_t UbetterBatteryModel::battery_percent_data[BATTERY_DATA_NUMBER][2] =
 {  /* {voltage_0.01V , %_0.1% }*/
   {2940, 1000}, {2841, 908}, {2833, 877},
-  {2823,  846}, {2805,  815}, {2784, 784}, {2761, 753},
-  {2739,  722}, {2719,  691}, {2700, 660}, {2682, 629},
-  {2664,  598}, {2645,  567}, {2626, 536}, {2610, 505},
-  {2583,  474}, {2565,  443}, {2549, 412}, {2534, 381},
-  {2521,  350}, {2507,  319}, {2493, 288}, {2477, 257},
-  {2458,  226}, {2437,  195}, {2420, 164}, {2404, 133},
-  {2372,  102}, {2329,   71}, {2272,  40}, {2200,   0},
+  {2823, 846}, {2805, 815}, {2784, 784}, {2761, 753},
+  {2739, 722}, {2719, 691}, {2700, 660}, {2682, 629},
+  {2664, 598}, {2645, 567}, {2626, 536}, {2610, 505},
+  {2583, 474}, {2565, 443}, {2549, 412}, {2534, 381},
+  {2521, 350}, {2507, 319}, {2493, 288}, {2477, 257},
+  {2458, 226}, {2437, 195}, {2420, 164}, {2404, 133},
+  {2372, 102}, {2329, 71}, {2272, 40}, {2200, 0},
 };
 
 UbetterBatteryModel::UbetterBatteryModel()
@@ -45,24 +45,28 @@ double UbetterBatteryModel::voltage_to_soc(double voltage_v) const
 
   // Handle edge cases first
   if (voltage_units >= battery_percent_data[0][0]) {
-    return 100.0; // Above highest voltage (29.40V = 100%)
+    return 100.0;  // Above highest voltage (29.40V = 100%)
   } else if (voltage_units <= battery_percent_data[BATTERY_DATA_NUMBER - 1][0]) {
-    return 0.0; // Below lowest voltage (22.00V = 0%)
+    return 0.0;  // Below lowest voltage (22.00V = 0%)
   }
 
   // Find the correct range for interpolation
   // Data is in descending order: 2940 -> 2200 (29.40V -> 22.00V)
   for (size_t i = 0; i < BATTERY_DATA_NUMBER - 1; ++i) {
-    if (voltage_units <= battery_percent_data[i][0] && voltage_units >= battery_percent_data[i + 1][0]) {
+    if (voltage_units <= battery_percent_data[i][0] &&
+      voltage_units >= battery_percent_data[i + 1][0])
+    {
       // Linear interpolation between two points
       double voltage_diff = battery_percent_data[i][0] - battery_percent_data[i + 1][0];
       double soc_diff = battery_percent_data[i][1] - battery_percent_data[i + 1][1];
       double ratio = (voltage_units - battery_percent_data[i + 1][0]) / voltage_diff;
-      return (battery_percent_data[i + 1][1] + ratio * soc_diff) / 10.0; // Convert from 0.1% units to percentage
+
+      // Convert from 0.1% units to percentage
+      return (battery_percent_data[i + 1][1] + ratio * soc_diff) / 10.0;
     }
   }
 
-  return 0.0; // Default to 0% if no match
+  return 0.0;  // Default to 0% if no match
 }
 
 std::string UbetterBatteryModel::get_model_name() const
@@ -72,7 +76,9 @@ std::string UbetterBatteryModel::get_model_name() const
 
 std::pair<double, double> UbetterBatteryModel::get_voltage_range() const
 {
-  return {battery_percent_data[BATTERY_DATA_NUMBER - 1][0] / 100.0, battery_percent_data[0][0] / 100.0}; // {min, max} in Volts (22.00V to 29.40V)
+  // {min, max} in Volts (22.00V to 29.40V)
+  return {battery_percent_data[BATTERY_DATA_NUMBER - 1][0] / 100.0,
+    battery_percent_data[0][0] / 100.0};
 }
 
 bool UbetterBatteryModel::is_voltage_valid(double voltage_v) const
@@ -83,7 +89,7 @@ bool UbetterBatteryModel::is_voltage_valid(double voltage_v) const
 
 uint8_t UbetterBatteryModel::get_power_supply_technology() const
 {
-  return 3; // POWER_SUPPLY_TECHNOLOGY_LIPO
+  return 3;  // POWER_SUPPLY_TECHNOLOGY_LIPO
 }
 
 }  // namespace ffw_robot_manager

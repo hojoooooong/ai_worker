@@ -110,7 +110,8 @@ controller_interface::CallbackReturn FfwRobotManager::on_activate(
         for (auto & battery_config : battery_configurations_) {
           if (prefix == battery_config.interface_name) {
             battery_config.voltage_index = i;
-            RCLCPP_INFO(get_node()->get_logger(), "Found %s battery voltage interface at index %zu for %s",
+            RCLCPP_INFO(get_node()->get_logger(),
+                        "Found %s battery voltage interface at index %zu for %s",
                         battery_config.name.c_str(), i, prefix.c_str());
           }
         }
@@ -378,7 +379,8 @@ void FfwRobotManager::setup_battery_monitoring()
                   battery_config.name.c_str(), battery_config.topic_name.c_str());
     }
 
-    RCLCPP_INFO(get_node()->get_logger(), "Battery monitoring enabled for %s with %zu batteries and model: %s",
+    RCLCPP_INFO(get_node()->get_logger(),
+                "Battery monitoring enabled for %s with %zu batteries and model: %s",
                 robot_type_->get_type_name().c_str(),
                 battery_configurations_.size(),
                 robot_type_->get_battery_model()->get_model_name().c_str());
@@ -401,7 +403,9 @@ void FfwRobotManager::update_battery_states()
     auto & publisher = battery_publishers_[i];
 
     // Check if voltage index is valid
-    if (battery_config.voltage_index > 0 && battery_config.voltage_index < state_interfaces_.size()) {
+    if (battery_config.voltage_index > 0 &&
+      battery_config.voltage_index < state_interfaces_.size())
+    {
       auto voltage_opt = state_interfaces_[battery_config.voltage_index].get_optional();
       if (voltage_opt.has_value()) {
         double voltage = voltage_opt.value();
@@ -419,16 +423,19 @@ sensor_msgs::msg::BatteryState FfwRobotManager::create_battery_state(double volt
   sensor_msgs::msg::BatteryState battery_state;
   battery_state.header.stamp = get_node()->now();
   battery_state.header.frame_id = "battery";
-  battery_state.voltage = static_cast<float>(voltage); // Voltage in Volts from Dynamixel
-  battery_state.percentage = static_cast<float>(soc / 100.0); // Convert percentage (0-100) to fraction (0-1)
+  battery_state.voltage = static_cast<float>(voltage);  // Voltage in Volts from Dynamixel
+  // Convert percentage (0-100) to fraction (0-1)
+  battery_state.percentage = static_cast<float>(soc / 100.0);
   battery_state.power_supply_status = sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_UNKNOWN;
   battery_state.power_supply_health = sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_UNKNOWN;
 
   // Set power supply technology based on robot type's battery model
   if (robot_type_ && robot_type_->get_battery_model()) {
-    battery_state.power_supply_technology = robot_type_->get_battery_model()->get_power_supply_technology();
+    battery_state.power_supply_technology =
+      robot_type_->get_battery_model()->get_power_supply_technology();
   } else {
-    battery_state.power_supply_technology = sensor_msgs::msg::BatteryState::POWER_SUPPLY_TECHNOLOGY_UNKNOWN;
+    battery_state.power_supply_technology =
+      sensor_msgs::msg::BatteryState::POWER_SUPPLY_TECHNOLOGY_UNKNOWN;
   }
 
   battery_state.present = true;

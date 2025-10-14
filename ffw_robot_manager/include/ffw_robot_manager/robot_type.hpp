@@ -30,15 +30,15 @@ namespace ffw_robot_manager
  */
 struct BatteryInfo
 {
-  std::string name;           // Battery name (e.g., "left", "right", "main")
-  std::string interface_name; // Dynamixel interface name (e.g., "dxl1", "dxl61")
-  std::string topic_name;     // ROS topic name (e.g., "/ai_worker/hardware/battery/left")
-  size_t voltage_index;       // State interface index for voltage reading
+  std::string name;            // Battery name (e.g., "left", "right", "main")
+  std::string interface_name;  // Dynamixel interface name (e.g., "dxl1", "dxl61")
+  std::string topic_name;      // ROS topic name (e.g., "/ai_worker/hardware/battery/left")
+  size_t voltage_index;        // State interface index for voltage reading
 };
 
 /**
  * @brief Robot type configuration class
- * 
+ *
  * This class defines the configuration for different robot types,
  * including battery monitoring settings and battery models.
  */
