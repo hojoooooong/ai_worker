@@ -44,7 +44,7 @@ std::shared_ptr<BatteryModel> FfwSg2Rev1RobotType::get_battery_model() const
 std::vector<BatteryInfo> FfwSg2Rev1RobotType::get_battery_configurations() const
 {
   std::vector<BatteryInfo> batteries;
-  
+
   // Left battery
   BatteryInfo left_battery;
   left_battery.name = "left";
@@ -52,7 +52,7 @@ std::vector<BatteryInfo> FfwSg2Rev1RobotType::get_battery_configurations() const
   left_battery.topic_name = "ai_worker/battery/left/state";
   left_battery.voltage_index = 0; // Will be set during interface discovery
   batteries.push_back(left_battery);
-  
+
   // Right battery
   BatteryInfo right_battery;
   right_battery.name = "right";
@@ -60,7 +60,7 @@ std::vector<BatteryInfo> FfwSg2Rev1RobotType::get_battery_configurations() const
   right_battery.topic_name = "ai_worker/battery/right/state";
   right_battery.voltage_index = 0; // Will be set during interface discovery
   batteries.push_back(right_battery);
-  
+
   return batteries;
 }
 
@@ -69,7 +69,7 @@ std::shared_ptr<RobotType> create_robot_type(const std::string & type_name)
   if (type_name == "ffw_sg2_rev1") {
     return std::make_shared<FfwSg2Rev1RobotType>();
   }
-  
+
   return nullptr; // Type not found
 }
 

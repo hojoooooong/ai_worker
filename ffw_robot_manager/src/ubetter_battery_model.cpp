@@ -42,14 +42,14 @@ double UbetterBatteryModel::voltage_to_soc(double voltage_v) const
 {
   // Convert Volts to 0.01V units for lookup table (e.g., 29.40V -> 2940)
   uint16_t voltage_units = static_cast<uint16_t>(voltage_v * 100);
-  
+
   // Handle edge cases first
   if (voltage_units >= battery_percent_data[0][0]) {
     return 100.0; // Above highest voltage (29.40V = 100%)
   } else if (voltage_units <= battery_percent_data[BATTERY_DATA_NUMBER - 1][0]) {
     return 0.0; // Below lowest voltage (22.00V = 0%)
   }
-  
+
   // Find the correct range for interpolation
   // Data is in descending order: 2940 -> 2200 (29.40V -> 22.00V)
   for (size_t i = 0; i < BATTERY_DATA_NUMBER - 1; ++i) {
@@ -61,7 +61,7 @@ double UbetterBatteryModel::voltage_to_soc(double voltage_v) const
       return (battery_percent_data[i + 1][1] + ratio * soc_diff) / 10.0; // Convert from 0.1% units to percentage
     }
   }
-  
+
   return 0.0; // Default to 0% if no match
 }
 
