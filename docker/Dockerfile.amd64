@@ -32,6 +32,9 @@ RUN curl -JLO "https://dl.filippo.io/mkcert/latest?for=linux/${TARGETARCH}" \
 ENV COLCON_WS=/root/ros2_ws
 WORKDIR ${COLCON_WS}
 
+# Copy requirements.txt first
+COPY requirements.txt /tmp/requirements.txt
+
 RUN mkdir -p ${COLCON_WS}/src && \
     cd ${COLCON_WS}/src && \
     git clone -b jazzy https://github.com/ROBOTIS-GIT/dynamixel_hardware_interface.git && \
@@ -61,7 +64,7 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc  && \
 
 RUN python3 -m pip config set global.break-system-packages true
 
-RUN pip3 install --no-cache-dir -r ${COLCON_WS}/src/ai_worker/docker/requirements.txt
+RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
 
 RUN cd /root && \
     git clone https://github.com/Woojin-Crive/vuer.git && \
