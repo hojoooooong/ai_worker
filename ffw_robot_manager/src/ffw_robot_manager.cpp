@@ -15,6 +15,7 @@
 // Author: Woojin Wie
 
 #include "ffw_robot_manager/ffw_robot_manager.hpp"
+#include <limits>
 #include "ffw_robot_manager/topic_watchdog.hpp"
 #include "ffw_robot_manager/robot_type.hpp"
 #include "dynamixel_interfaces/msg/dynamixel_state.hpp"
@@ -402,8 +403,8 @@ void FfwRobotManager::update_battery_states()
     const auto & battery_config = battery_configurations_[i];
     auto & publisher = battery_publishers_[i];
 
-    // Check if voltage index is valid
-    if (battery_config.voltage_index > 0 &&
+    // Check if voltage index is valid (allow 0; ignore unset sentinel SIZE_MAX)
+    if (battery_config.voltage_index != std::numeric_limits<size_t>::max() &&
       battery_config.voltage_index < state_interfaces_.size())
     {
       auto voltage_opt = state_interfaces_[battery_config.voltage_index].get_optional();

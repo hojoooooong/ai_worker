@@ -42,14 +42,22 @@ UbetterBatteryModel::UbetterBatteryModel()
 double UbetterBatteryModel::voltage_to_soc(double voltage_v) const
 {
   // Convert Volts to 0.01V units for lookup table (e.g., 29.40V -> 2940)
-  uint16_t voltage_units = static_cast<uint16_t>(voltage_v * 100);
+  const double voltage_units_d = voltage_v * 100.0;
 
-  // Handle edge cases first
-  if (voltage_units >= battery_percent_data[0][0]) {
+  // Negative voltages are invalid, return 0%
+  if (voltage_units_d < 0.0) {
+    return 0.0;
+  }
+
+  // Handle edge cases first using double to avoid premature truncation/casting
+  if (voltage_units_d >= battery_percent_data[0][0]) {
     return 100.0;  // Above highest voltage (29.40V = 100%)
-  } else if (voltage_units <= battery_percent_data[BATTERY_DATA_NUMBER - 1][0]) {
+  } else if (voltage_units_d <= battery_percent_data[BATTERY_DATA_NUMBER - 1][0]) {
     return 0.0;  // Below lowest voltage (22.00V = 0%)
   }
+
+  // Safe to cast after clamping checks
+  const uint16_t voltage_units = static_cast<uint16_t>(voltage_units_d);
 
   // Find the correct range for interpolation
   // Data is in descending order: 2940 -> 2200 (29.40V -> 22.00V)
