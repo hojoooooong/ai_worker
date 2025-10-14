@@ -36,9 +36,9 @@ public:
   virtual ~BatteryModel() = default;
 
   /**
-   * @brief Convert voltage in Volts to SOC percentage
+   * @brief Convert voltage in Volts to SOC fraction
    * @param voltage_v Voltage in Volts
-   * @return SOC percentage (0.0 to 100.0)
+   * @return SOC fraction (0.0 to 1.0)
    */
   virtual double voltage_to_soc(double voltage_v) const = 0;
 

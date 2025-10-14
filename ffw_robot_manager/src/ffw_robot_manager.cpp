@@ -410,8 +410,8 @@ void FfwRobotManager::update_battery_states()
       auto voltage_opt = state_interfaces_[battery_config.voltage_index].get_optional();
       if (voltage_opt.has_value()) {
         double voltage = voltage_opt.value();
-        double soc = robot_type_->get_battery_model()->voltage_to_soc(voltage);
-        auto battery_state = create_battery_state(voltage, soc);
+        double soc_fraction = robot_type_->get_battery_model()->voltage_to_soc(voltage);
+        auto battery_state = create_battery_state(voltage, soc_fraction);
         publisher->publish(battery_state);
       }
     }
@@ -424,9 +424,8 @@ sensor_msgs::msg::BatteryState FfwRobotManager::create_battery_state(double volt
   sensor_msgs::msg::BatteryState battery_state;
   battery_state.header.stamp = get_node()->now();
   battery_state.header.frame_id = "battery";
-  battery_state.voltage = static_cast<float>(voltage);  // Voltage in Volts from Dynamixel
-  // Convert percentage (0-100) to fraction (0-1)
-  battery_state.percentage = static_cast<float>(soc / 100.0);
+  battery_state.voltage = static_cast<float>(voltage);
+  battery_state.percentage = static_cast<float>(soc);
   battery_state.power_supply_status = sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_UNKNOWN;
   battery_state.power_supply_health = sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_UNKNOWN;
 

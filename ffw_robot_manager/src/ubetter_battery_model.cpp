@@ -70,8 +70,8 @@ double UbetterBatteryModel::voltage_to_soc(double voltage_v) const
       double soc_diff = battery_percent_data[i][1] - battery_percent_data[i + 1][1];
       double ratio = (voltage_units - battery_percent_data[i + 1][0]) / voltage_diff;
 
-      // Convert from 0.1% units to percentage
-      return (battery_percent_data[i + 1][1] + ratio * soc_diff) / 10.0;
+      // Convert from 0.1% units to fraction [0.0, 1.0]
+      return (battery_percent_data[i + 1][1] + ratio * soc_diff) / 1000.0;
     }
   }
 
