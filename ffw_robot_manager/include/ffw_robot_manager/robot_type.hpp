@@ -33,6 +33,7 @@ struct BatteryInfo
   std::string name;            // Battery name (e.g., "left", "right", "main")
   std::string interface_name;  // Dynamixel interface name (e.g., "dxl1", "dxl61")
   std::string topic_name;      // ROS topic name (e.g., "/ai_worker/hardware/battery/left")
+  std::string frame_id;        // TF frame id for this battery (e.g., "battery_left")
   size_t voltage_index;        // State interface index for voltage reading
 };
 

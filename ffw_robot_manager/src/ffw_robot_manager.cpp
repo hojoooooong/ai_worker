@@ -411,10 +411,12 @@ void FfwRobotManager::update_battery_states()
       if (voltage_opt.has_value()) {
         double voltage = voltage_opt.value();
         double soc_fraction = robot_type_->get_battery_model()->voltage_to_soc(voltage);
-        // Use a unique frame_id per battery; prefer explicit name if present
-        const std::string frame_id = !battery_config.name.empty() ?
+        // Prefer explicit frame_id from BatteryInfo when provided; otherwise derive
+        const std::string frame_id = !battery_config.frame_id.empty() ?
+          battery_config.frame_id :
+          (!battery_config.name.empty() ?
           std::string("battery_") + battery_config.name :
-          std::string("battery_") + battery_config.interface_name;
+          std::string("battery_") + battery_config.interface_name);
         auto battery_state = create_battery_state(voltage, soc_fraction, frame_id);
         publisher->publish(battery_state);
       }
