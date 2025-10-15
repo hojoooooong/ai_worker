@@ -45,7 +45,7 @@ class VRTrajectoryPublisher(Node):
         self.get_logger().set_level(rclpy.logging.LoggingSeverity.INFO)
 
         # VR publishing control flag
-        self.vr_publishing_enabled = True  # Default: disabled
+        self.vr_publishing_enabled = False  # Default: disabled
 
         # VR Server setup
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -115,20 +115,20 @@ class VRTrajectoryPublisher(Node):
         self.start_vuer_server()
 
         self.get_logger().info('VR Trajectory Publisher node has been started')
-        self.get_logger().info('VR publishing is DISABLED by default. Send Bool message to /vr_control/toggle to enable/disable.')
+        self.get_logger().info('VR publishing is DISABLED by default. Send /vr_control/toggle message (True=enable, False=disable).')
 
     def vr_control_callback(self, msg):
-        """Callback to toggle VR publishing based on external command."""
-        self.vr_publishing_enabled = not self.vr_publishing_enabled
+        """Callback to enable/disable VR publishing based on message content."""
+        new_state = bool(msg.data)  # Read message content
 
-        status = "ENABLED" if self.vr_publishing_enabled else "DISABLED"
-        self.get_logger().info(f'VR publishing toggled: {status}')
+        # Only log if state actually changed
+        if new_state != self.vr_publishing_enabled:
+            self.vr_publishing_enabled = new_state
+            status = "ENABLED" if self.vr_publishing_enabled else "DISABLED"
+            self.get_logger().info(f'VR publishing changed to: {status} (message value: {msg.data})')
 
-        if not self.vr_publishing_enabled:
-            # Reset joint positions to zero when disabled
-            self.left_joint_positions = [0.0] * 20
-            self.right_joint_positions = [0.0] * 20
-            self.get_logger().info('Joint positions reset to zero')
+            if not self.vr_publishing_enabled:
+                self.get_logger().info('VR publishing disabled')
 
     def is_valid_float(self, value):
         """Check if value is valid float (excluding NaN, inf)."""

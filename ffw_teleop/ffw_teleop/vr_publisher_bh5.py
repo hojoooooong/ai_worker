@@ -157,6 +157,9 @@ class VRTrajectoryPublisher(Node):
         self.timer_period = 0.005  # 200 Hz for smooth trajectory generation
         self.timer = self.create_timer(self.timer_period, self.publish_hand_trajectory)
 
+        # Status monitoring timer (every 5 seconds)
+        self.status_timer = self.create_timer(5.0, self.log_status)
+
         # Logging counters
         self.head_log_counter = 0
         self.log_every_n = self.fps
@@ -167,20 +170,42 @@ class VRTrajectoryPublisher(Node):
         self.start_vuer_server()
 
         self.get_logger().info('VR Trajectory Publisher node has been started')
-        self.get_logger().info('VR publishing is DISABLED by default. Send Bool message to /vr_control/toggle to enable/disable.')
+        self.get_logger().info('VR publishing is DISABLED by default. Send /vr_control/toggle message (True=enable, False=disable).')
 
     def vr_control_callback(self, msg):
-        """Callback to toggle VR publishing based on external command."""
-        self.vr_publishing_enabled = not self.vr_publishing_enabled
+        """Callback to enable/disable VR publishing based on message content."""
+        new_state = bool(msg.data)  # Read message content
 
-        status = "ENABLED" if self.vr_publishing_enabled else "DISABLED"
-        self.get_logger().info(f'VR publishing toggled: {status}')
+        # Only log if state actually changed
+        if new_state != self.vr_publishing_enabled:
+            self.vr_publishing_enabled = new_state
+            status = "ENABLED" if self.vr_publishing_enabled else "DISABLED"
+            self.get_logger().info(f'VR publishing changed to: {status} (message value: {msg.data})')
 
-        if not self.vr_publishing_enabled:
-            # Reset joint positions to zero when disabled
-            self.left_joint_positions = [0.0] * 20
-            self.right_joint_positions = [0.0] * 20
-            self.get_logger().info('Joint positions reset to zero')
+            if not self.vr_publishing_enabled:
+                # Reset joint positions to zero when disabled
+                self.left_joint_positions = [0.0] * 20
+                self.right_joint_positions = [0.0] * 20
+                self.get_logger().info('Joint positions reset to zero')
+
+    def log_status(self):
+        """Log current system status for debugging."""
+        vr_status = "ENABLED" if self.vr_publishing_enabled else "DISABLED"
+
+        self.get_logger().info(f'Status: VR={vr_status}')
+
+        # Check if we have hand data
+        left_data_status = "Available" if self.left_hand_data is not None else "None"
+        right_data_status = "Available" if self.right_hand_data is not None else "None"
+
+        self.get_logger().info(f'Hand data: Left={left_data_status}, Right={right_data_status}')
+
+        # Check joint positions
+        if self.left_joint_positions and any(pos != 0.0 for pos in self.left_joint_positions):
+            self.get_logger().info(f'Left joint positions: {self.left_joint_positions[:5]}...')
+        if self.right_joint_positions and any(pos != 0.0 for pos in self.right_joint_positions):
+            self.get_logger().info(f'Right joint positions: {self.right_joint_positions[:5]}...')
+
 
     def is_valid_float(self, value):
         """Check if value is valid float (excluding NaN, inf)."""

@@ -21,6 +21,7 @@ class PedalInputNode(Node):
         self.declare_parameter('pressed_window', 0.1)
         self.declare_parameter('long_press_seconds', 1.0)
         self.declare_parameter('command_publish_rate_hz', 10.0)
+        self.declare_parameter('communication_timeout_seconds', 1.0)
 
         self.desired_position: float = float(self.get_parameter('desired_position').value)
         self.joint_name: str = str(self.get_parameter('joint_name').value)
@@ -28,6 +29,7 @@ class PedalInputNode(Node):
         self.pressed_window: float = float(self.get_parameter('pressed_window').value)
         self.long_press_seconds: float = float(self.get_parameter('long_press_seconds').value)
         self.command_publish_rate_hz: float = float(self.get_parameter('command_publish_rate_hz').value)
+        self.communication_timeout_seconds: float = float(self.get_parameter('communication_timeout_seconds').value)
 
         # Publishers
         # Commands publisher (remap '~/commands' to the controller input topic in launch)
@@ -50,6 +52,10 @@ class PedalInputNode(Node):
         self.pressed_start_time: Optional[rclpy.time.Time] = None
         self.toggle_done_for_current_press: bool = False
 
+        # Communication monitoring
+        self.last_joint_states_time: Optional[rclpy.time.Time] = None
+        self.communication_active = False
+
         # Initial state will be published by the timer
 
     def _publish_command(self) -> None:
@@ -59,6 +65,23 @@ class PedalInputNode(Node):
         self.commands_pub.publish(msg)
 
     def _publish_state(self) -> None:
+        # Check communication timeout
+        now = self.get_clock().now()
+        if self.last_joint_states_time is not None:
+            time_since_last_msg = now - self.last_joint_states_time
+            if time_since_last_msg > Duration(seconds=self.communication_timeout_seconds):
+                if self.communication_active:
+                    self.get_logger().warn(f'Communication timeout detected! No joint_states for {time_since_last_msg.nanoseconds / 1e9:.1f}s')
+                    self.communication_active = False
+                    # Reset state when communication is lost
+                    if self.current_state:
+                        self.get_logger().info('Resetting pedal state due to communication loss')
+                        self.current_state = False
+            else:
+                if not self.communication_active:
+                    self.get_logger().info('Communication restored')
+                    self.communication_active = True
+
         state_msg = Bool()
         state_msg.data = self.current_state
         self.state_pub.publish(state_msg)
@@ -67,6 +90,9 @@ class PedalInputNode(Node):
         return abs(position_value - self.pressed_center) < self.pressed_window
 
     def _on_joint_states(self, msg: JointState) -> None:
+        # Update communication timestamp
+        self.last_joint_states_time = self.get_clock().now()
+
         try:
             idx = msg.name.index(self.joint_name)
         except ValueError:
