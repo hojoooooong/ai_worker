@@ -303,11 +303,6 @@ def generate_launch_description():
         condition=IfCondition(launch_cameras)
     )
 
-    ffw_arm_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(PathJoinSubstitution([bringup_launch_dir,
-                                                   'ffw_bh5_ik.launch.py']))
-    )
-
     # Camera timers with conditional delay based on init_position
     camera_timer_20s = TimerAction(period=20.0, actions=[camera_launch],
                                    condition=IfCondition(init_position))
@@ -319,6 +314,11 @@ def generate_launch_description():
     pedal_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(PathJoinSubstitution([teleop_launch_dir,
                                                    'pedal_hardware.launch.py']))
+    )
+
+    ffw_arm_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([teleop_launch_dir,
+                                                   'hand_teleop.launch.py']))
     )
 
     return LaunchDescription(

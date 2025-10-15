@@ -70,8 +70,8 @@ def generate_launch_description() -> LaunchDescription:
 
         Node(
             package='ffw_kinematics',
-            executable='ffw_arm_ik_solver',
-            name='ffw_arm_ik_solver',
+            executable='arm_ik_solver',
+            name='arm_ik_solver',
             output='screen',
             parameters=[{
                 'base_link': base_link,
