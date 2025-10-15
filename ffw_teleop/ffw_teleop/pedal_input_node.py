@@ -42,13 +42,15 @@ class PedalInputNode(Node):
         period = 1.0 / max(self.command_publish_rate_hz, 0.1)
         self.command_timer = self.create_timer(period, self._publish_command)
 
+        # State publishing timer (same rate as command publishing)
+        self.state_timer = self.create_timer(period, self._publish_state)
+
         # Press/toggle state
         self.current_state = False  # 0 or 1
         self.pressed_start_time: Optional[rclpy.time.Time] = None
         self.toggle_done_for_current_press: bool = False
 
-        # Publish initial state
-        self._publish_state()
+        # Initial state will be published by the timer
 
     def _publish_command(self) -> None:
         msg = Float64MultiArray()
@@ -87,7 +89,6 @@ class PedalInputNode(Node):
                 if held_duration >= Duration(seconds=self.long_press_seconds):
                     # Toggle state once per press-and-hold
                     self.current_state = False if self.current_state == True else True
-                    self._publish_state()
                     self.toggle_done_for_current_press = True
         else:
             # Released: reset tracking for next press
