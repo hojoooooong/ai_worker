@@ -1,7 +1,10 @@
 services:
   ai_worker:
     container_name: ai_worker
-    image: robotis/ai-worker:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.${TARGETARCH:-amd64}
+    # image: robotis/ai-worker:latest
     tty: true
     restart: always
     cap_add:
