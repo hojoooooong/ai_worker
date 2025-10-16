@@ -158,7 +158,8 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc  && \
     echo "alias ffw_bg2_ai='ros2 launch ffw_bringup ffw_bg2_ai.launch.py'" >> ~/.bashrc && \
     echo "alias ffw_sg2_ai='ros2 launch ffw_bringup ffw_sg2_ai.launch.py'" >> ~/.bashrc && \
     echo "export ROS_DOMAIN_ID=30" >> ~/.bashrc && \
-    echo "alias vr='ros2 launch ffw_vr vr_publisher.launch.py'" >> ~/.bashrc
+    echo "alias vr='ros2 launch ffw_vr vr_publisher.launch.py'" >> ~/.bashrc && \
+    echo "alias ffw_bh5_follower_ai='ros2 launch ffw_bringup ffw_bh5_follower_ai.launch.py'" >> ~/.bashrc
 
 RUN python3 -m pip config set global.break-system-packages true
 
