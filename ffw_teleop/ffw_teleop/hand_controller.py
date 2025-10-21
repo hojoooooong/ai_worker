@@ -7,7 +7,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
-class TestPublisher(Node):
+class HandPublisher(Node):
 
     def __init__(self):
         super().__init__('test_publisher')
@@ -61,15 +61,12 @@ class TestPublisher(Node):
             10
         )
 
-        # self.publisher_ = self.create_publisher(JointState, '/joint_states', 10)
-        # self.publisher_ = self.create_publisher(JointTrajectory, '/left_hand_controller/joint_trajectory', 10)
         self.left_hand_publisher_ = self.create_publisher(JointTrajectory, '/leader/joint_trajectory_command_broadcaster_left_hand/joint_trajectory', 10)
         self.right_hand_publisher_ = self.create_publisher(JointTrajectory, '/leader/joint_trajectory_command_broadcaster_right_hand/joint_trajectory', 10)
 
         self.timer_period = 0.005
 
         self.timer = self.create_timer(self.timer_period, self.timer_callback) # JointTrajectory
-        # self.timer = self.create_timer(self.timer_period, self.timer_callback2) # JointState
         self.left_hand_start = False
         self.right_hand_start = False
 
@@ -96,22 +93,6 @@ class TestPublisher(Node):
             right_msg.points.append(right_traj_point)
             self.right_hand_publisher_.publish(right_msg)
 
-    # def timer_callback2(self):
-    #     left_msg = JointState()
-    #     left_msg.header.stamp = self.get_clock().now().to_msg()
-    #     left_msg.name = self.left_joint_names
-    #     temp_left_hand_joints = np.hstack((self.present_left_thumb_joints, self.present_left_finger_joints[4:]))
-    #     left_msg.position = temp_left_hand_joints.tolist()
-    #     # self.left_hand_publisher_.publish(left_msg)
-
-    #     right_msg = JointState()
-    #     right_msg.header.stamp = self.get_clock().now().to_msg()
-    #     right_msg.name = self.right_joint_names
-    #     temp_right_hand_joints = np.hstack((self.present_right_thumb_joints, self.present_right_finger_joints[4:]))
-    #     right_msg.position = temp_right_hand_joints.tolist()
-    #     # self.right_hand_publisher_.publish(right_msg)
-    #     self.publisher_.publish(right_msg)
-
     def left_thumb_callback(self, msg):
         for i in range(len(self.present_left_thumb_joints)):
             idx = self.left_joint_names.index(msg.name[i])
@@ -137,11 +118,11 @@ class TestPublisher(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    test_publisher = TestPublisher()
+    hand_publisher = HandPublisher()
 
-    rclpy.spin(test_publisher)
+    rclpy.spin(hand_publisher)
 
-    test_publisher.destroy_node()
+    hand_publisher.destroy_node()
     rclpy.shutdown()
 
 if __name__ == '__main__':
