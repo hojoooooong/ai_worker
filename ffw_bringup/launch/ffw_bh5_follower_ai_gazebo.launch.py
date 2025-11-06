@@ -190,5 +190,5 @@ def generate_launch_description():
         gazebo,
         robot_state_pub_node,
         gz_spawn_entity,
-        rviz,
+        # rviz,
     ])

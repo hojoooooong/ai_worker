@@ -35,6 +35,7 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <std_msgs/msg/string.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <trajectory_msgs/msg/joint_trajectory.hpp>
 #include <trajectory_msgs/msg/joint_trajectory_point.hpp>
 
@@ -45,6 +46,7 @@ public:
   FfwArmIKSolver();
 
 private:
+  void toggleCallback(const std_msgs::msg::Bool::SharedPtr msg);
   void robotDescriptionCallback(const std_msgs::msg::String::SharedPtr msg);
   void processRobotDescription(const std::string & robot_description);
   void jointStateCallback(const sensor_msgs::msg::JointState::SharedPtr msg);
@@ -61,6 +63,8 @@ private:
   void publishCurrentPoses();
 
 private:
+  bool ik_toggle_;
+
   std::string base_link_;
   std::string arm_base_link_;
   std::string right_end_effector_link_;
@@ -84,6 +88,7 @@ private:
   double previous_solution_weight_;
 
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr robot_description_sub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr toggle_sub_;
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr right_target_pose_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr left_target_pose_sub_;

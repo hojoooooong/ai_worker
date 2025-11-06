@@ -44,7 +44,7 @@ class VRTrajectoryPublisher(Node):
         self.get_logger().set_level(rclpy.logging.LoggingSeverity.INFO)
 
         # VR publishing control flag
-        self.vr_publishing_enabled = False  # Default: disabled
+        self.vr_publishing_enabled = True #False  # Default: disabled
 
         # VR Server setup
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -63,7 +63,7 @@ class VRTrajectoryPublisher(Node):
             queue_len=3
         )
 
-        self.fps = 100
+        self.fps = 30
         self.get_logger().info(f'VR Trajectory server available at: https://{hostname}:8012')
 
         # VR event handlers
@@ -154,7 +154,8 @@ class VRTrajectoryPublisher(Node):
         self.hand_log_counter = 0
 
         # Timer for hand trajectory publishing
-        self.timer_period = 0.005  # 200 Hz for smooth trajectory generation
+        # self.timer_period = 0.005  # 200 Hz for smooth trajectory generation
+        self.timer_period = 0.01  # 100 Hz for smooth trajectory generation
         self.timer = self.create_timer(self.timer_period, self.publish_hand_trajectory)
 
         # Status monitoring timer (every 5 seconds)

@@ -166,7 +166,7 @@ void HandInverseKinematics::solve_ik(const std::shared_ptr<geometry_msgs::msg::P
       RCLCPP_WARN(this->get_logger(), "❌ LEFT IK failed with status : %d", solver_status);
       // RCLCPP_WARN(this->get_logger(), "Solution: %.3f, %.3f, %.3f, %.3f", solution_joint_positions(0), solution_joint_positions(1), solution_joint_positions(2), solution_joint_positions(3));
     } else if (solver_status == -5) {
-      RCLCPP_WARN(this->get_logger(), "⚠️ LEFT IK solved with status : %d", solver_status);
+      // RCLCPP_WARN(this->get_logger(), "⚠️ LEFT IK solved with status : %d", solver_status);
       // RCLCPP_WARN(this->get_logger(), "Solution: %.3f, %.3f, %.3f, %.3f", solution_joint_positions(0), solution_joint_positions(1), solution_joint_positions(2), solution_joint_positions(3));
       auto response = sensor_msgs::msg::JointState();
       response.header.stamp = this->get_clock()->now();
@@ -282,7 +282,7 @@ void HandInverseKinematics::solve_ik_right(const std::shared_ptr<geometry_msgs::
       RCLCPP_WARN(this->get_logger(), "❌ RIGHT IK failed with status : %d", solver_status);
       // RCLCPP_WARN(this->get_logger(), "Solution: %.3f, %.3f, %.3f, %.3f", solution_joint_positions(0), solution_joint_positions(1), solution_joint_positions(2), solution_joint_positions(3));
     } else if (solver_status == -5) {
-      RCLCPP_WARN(this->get_logger(), "⚠️ RIGHT IK solved with status : %d", solver_status);
+      // RCLCPP_WARN(this->get_logger(), "⚠️ RIGHT IK solved with status : %d", solver_status);
       // RCLCPP_WARN(this->get_logger(), "Solution: %.3f, %.3f, %.3f, %.3f", solution_joint_positions(0), solution_joint_positions(1), solution_joint_positions(2), solution_joint_positions(3));
       auto response = sensor_msgs::msg::JointState();
       response.header.stamp = this->get_clock()->now();

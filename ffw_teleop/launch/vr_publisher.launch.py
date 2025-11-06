@@ -34,7 +34,8 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             'fps',
-            default_value='100',
+            # default_value='100',
+            default_value='30',
             description='FPS for VR hand tracking'
         )
     )
@@ -66,7 +67,8 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             'timer_period',
-            default_value='0.005',
+            # default_value='0.005',
+            default_value='0.01',
             description='Timer period for hand trajectory publishing (seconds)'
         )
     )

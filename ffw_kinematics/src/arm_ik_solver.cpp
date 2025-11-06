@@ -96,6 +96,12 @@ FfwArmIKSolver::FfwArmIKSolver()
   RCLCPP_INFO(this->get_logger(), "Right end effector link: %s", right_end_effector_link_.c_str());
   RCLCPP_INFO(this->get_logger(), "Left end effector link: %s", left_end_effector_link_.c_str());
 
+  ik_toggle_ = false;
+
+  toggle_sub_ = this->create_subscription<std_msgs::msg::Bool>(
+    "/teleop_control/toggle", 10,
+    std::bind(&FfwArmIKSolver::toggleCallback, this, std::placeholders::_1));
+
   robot_description_sub_ = this->create_subscription<std_msgs::msg::String>(
     "/robot_description", rclcpp::QoS(1).transient_local(),
     std::bind(&FfwArmIKSolver::robotDescriptionCallback, this, std::placeholders::_1));
@@ -158,6 +164,12 @@ FfwArmIKSolver::FfwArmIKSolver()
   RCLCPP_INFO(this->get_logger(), "Publishing current poses on:");
   RCLCPP_INFO(this->get_logger(), "Right arm: %s", right_current_pose_topic.c_str());
   RCLCPP_INFO(this->get_logger(), "Left arm: %s", left_current_pose_topic.c_str());
+}
+
+void FfwArmIKSolver::toggleCallback(const std_msgs::msg::Bool::SharedPtr msg)
+{
+  RCLCPP_INFO(this->get_logger(), "Received toggle via topic");
+  ik_toggle_ = msg->data;
 }
 
 void FfwArmIKSolver::robotDescriptionCallback(const std_msgs::msg::String::SharedPtr msg)
@@ -782,7 +794,10 @@ void FfwArmIKSolver::solveIK(
     point.time_from_start = rclcpp::Duration::from_nanoseconds(0);
     joint_trajectory.points.push_back(point);
 
-    (*publisher_ptr)->publish(joint_trajectory);
+    if (ik_toggle_) {
+      (*publisher_ptr)->publish(joint_trajectory);
+    }
+    // (*publisher_ptr)->publish(joint_trajectory);
 
     // Log joint solution
     std::string solution_log = "🎯 " + arm + " arm joint solution: [";
