@@ -58,6 +58,14 @@
   <link name="$(arg prefix)lidar_r_link">
   </link>
 
+  <joint name="$(arg prefix)imu_joint" type="fixed">
+    <parent link="$(arg prefix)base_link"/>
+    <child link="$(arg prefix)imu_link"/>
+    <origin xyz="-0.1464 0.0 0.26" rpy="0 0 0"/>
+  </joint>
+  <link name="$(arg prefix)imu_link">
+  </link>
+
   <link name="$(arg prefix)lift_link">
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
