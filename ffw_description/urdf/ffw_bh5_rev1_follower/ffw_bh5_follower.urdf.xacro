@@ -67,6 +67,40 @@
     use_fake_hardware="$(arg use_fake_hardware)"
     fake_sensor_commands="$(arg fake_sensor_commands)"/>
 
+  <joint name="$(arg prefix)gripper_r_joint1" type="revolute">
+      <parent link="$(arg prefix)base_link" />
+      <child link="$(arg prefix)dummy_link1" />
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
+  </joint>
+  <link name="$(arg prefix)dummy_link1">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+        <box size="0.01 0.01 0.01" />
+        </geometry>
+        <material name="red">
+        <color rgba="1.0 0.0 0.0 1"/>
+        </material>
+      </visual>
+  </link>
+
+  <joint name="$(arg prefix)gripper_l_joint1" type="revolute">
+      <parent link="$(arg prefix)base_link" />
+      <child link="$(arg prefix)dummy_link2" />
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
+  </joint>
+  <link name="$(arg prefix)dummy_link2">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+        <box size="0.01 0.01 0.01" />
+        </geometry>
+        <material name="red">
+        <color rgba="1.0 0.0 0.0 1"/>
+        </material>
+      </visual>
+  </link>
+
   <gazebo>
       <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
         <parameters>$(find ffw_bringup)/config/$(arg model)/ffw_bh5_follower_ai_hardware_controller.yaml</parameters>
