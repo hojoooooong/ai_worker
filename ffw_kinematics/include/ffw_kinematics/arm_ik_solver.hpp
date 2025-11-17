@@ -63,7 +63,7 @@ private:
   void publishCurrentPoses();
 
 private:
-  bool ik_toggle_;
+  // bool ik_toggle_;
 
   std::string base_link_;
   std::string arm_base_link_;
@@ -88,7 +88,7 @@ private:
   double previous_solution_weight_;
 
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr robot_description_sub_;
-  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr toggle_sub_;
+  // rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr toggle_sub_;
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr right_target_pose_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr left_target_pose_sub_;
