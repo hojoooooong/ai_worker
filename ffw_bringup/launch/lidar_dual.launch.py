@@ -1,8 +1,20 @@
 #!/usr/bin/env python3
 #
-# Dual lidar launch file for AI Worker
-# Lidar_left: 192.168.6.3 (port 2368)
-# Lidar_right: 192.168.6.4 (port 2369)
+# Copyright 2025 ROBOTIS CO., LTD.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Authors: Sungho Woo, Woojin Wie, Wonho Yun
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -11,7 +23,6 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    frame_id = LaunchConfiguration('frame_id')
     output_topic0 = LaunchConfiguration('output_topic0')
     output_topic1 = LaunchConfiguration('output_topic1')
     inverted = LaunchConfiguration('inverted')
@@ -20,7 +31,7 @@ def generate_launch_description():
     port1 = LaunchConfiguration('port1')
     angle_offset = LaunchConfiguration('angle_offset')
     scanfreq = LaunchConfiguration('scanfreq')
-    filter = LaunchConfiguration('filter')
+    filter_option = LaunchConfiguration('filter_option')
     laser_enable = LaunchConfiguration('laser_enable')
     scan_range_start = LaunchConfiguration('scan_range_start')
     scan_range_stop = LaunchConfiguration('scan_range_stop')
@@ -116,7 +127,7 @@ def generate_launch_description():
             'angle_offset': angle_offset,
             'sensorip': sensorip0,
             'scanfreq': scanfreq,
-            'filter': filter,
+            'filter': filter_option,
             'laser_enable': laser_enable,
             'scan_range_start': scan_range_start,
             'scan_range_stop': scan_range_stop
@@ -136,7 +147,7 @@ def generate_launch_description():
             'angle_offset': angle_offset,
             'sensorip': sensorip1,
             'scanfreq': scanfreq,
-            'filter': filter,
+            'filter': filter_option,
             'laser_enable': laser_enable,
             'scan_range_start': scan_range_start,
             'scan_range_stop': scan_range_stop
