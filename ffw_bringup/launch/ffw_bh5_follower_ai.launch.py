@@ -280,11 +280,11 @@ def generate_launch_description():
     #     output='screen',
     # )
 
-    # preset_hand_controller = Node(
-    #     package='ffw_teleop',
-    #     executable='preset_hand_controller',
-    #     output='screen',
-    # )
+    preset_hand_controller = Node(
+        package='ffw_teleop',
+        executable='preset_hand_controller',
+        output='screen',
+    )
 
     init_position_event_handler = RegisterEventHandler(
         event_handler=OnProcessExit(
@@ -339,8 +339,8 @@ def generate_launch_description():
             init_position_event_handler,
             # camera_timer_20s,
             # camera_timer_10s,
-            ffw_arm_launch,
-            pedal_launch,
-            # preset_hand_controller,
+            # ffw_arm_launch,
+            # pedal_launch,
+            preset_hand_controller,
         ]
     )

@@ -2,6 +2,7 @@ import numpy as np
 
 import rclpy
 from rclpy.node import Node
+from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
 class HandPublisher(Node):
@@ -56,22 +57,30 @@ class HandPublisher(Node):
             "finger_r_joint17", "finger_r_joint18", "finger_r_joint19", "finger_r_joint20"
         ]
 
-        self.left_trigger_subscriber_ = self.create_subscription(
-            JointTrajectory,
-            '/leader/joint_trajectory_command_broadcaster_left/joint_trajectory',
-            self.left_trigger_callback,
-            10
-        )
+        # self.left_trigger_subscriber_ = self.create_subscription(
+        #     JointTrajectory,
+        #     '/leader/joint_trajectory_command_broadcaster_left/joint_trajectory',
+        #     self.left_trigger_callback,
+        #     10
+        # )
 
-        self.right_trigger_subscriber_ = self.create_subscription(
-            JointTrajectory,
-            '/leader/joint_trajectory_command_broadcaster_right/joint_trajectory',
-            self.right_trigger_callback,
+        # self.right_trigger_subscriber_ = self.create_subscription(
+        #     JointTrajectory,
+        #     '/leader/joint_trajectory_command_broadcaster_right/joint_trajectory',
+        #     self.right_trigger_callback,
+        #     10
+        # )
+
+        self.trigger_subscriber_ = self.create_subscription(
+            JointState,
+            '/topic_based_joint_states',
+            self.trigger_callback,
             10
         )
 
         self.left_hand_publisher_ = self.create_publisher(JointTrajectory, '/leader/joint_trajectory_command_broadcaster_left_hand/joint_trajectory', 10)
         self.right_hand_publisher_ = self.create_publisher(JointTrajectory, '/leader/joint_trajectory_command_broadcaster_right_hand/joint_trajectory', 10)
+        self.trigger_publisher_ = self.create_publisher(JointState, '/topic_based_joint_commands', 10)
 
     def left_trigger_callback(self, msg):
         interpolation_value = 0
@@ -102,6 +111,38 @@ class HandPublisher(Node):
         right_traj_point.time_from_start.nanosec = 0
         right_msg.points.append(right_traj_point)
         self.right_hand_publisher_.publish(right_msg)
+
+    def trigger_callback(self, msg):
+        left_interpolation_value = 0
+        right_interpolation_value = 0
+        for i in range(len(msg.name)):
+            if msg.name[i] == 'gripper_l_joint1':
+                left_interpolation_value = self.normalize_value(msg.position[i])
+            elif msg.name[i] == 'gripper_r_joint1':
+                right_interpolation_value = self.normalize_value(msg.position[i])
+
+        left_msg = JointTrajectory()
+        left_msg.joint_names = self.left_joint_names
+        left_traj_point = JointTrajectoryPoint()
+        left_traj_point.positions = (left_interpolation_value*self.left_preset_grasp + (1-left_interpolation_value)*self.left_preset_release).tolist()
+        left_traj_point.time_from_start.sec = 0
+        left_traj_point.time_from_start.nanosec = 0
+        left_msg.points.append(left_traj_point)
+        self.left_hand_publisher_.publish(left_msg)
+
+        right_msg = JointTrajectory()
+        right_msg.joint_names = self.right_joint_names
+        right_traj_point = JointTrajectoryPoint()
+        right_traj_point.positions = (right_interpolation_value*self.right_preset_grasp + (1-right_interpolation_value)*self.right_preset_release).tolist()
+        right_traj_point.time_from_start.sec = 0
+        right_traj_point.time_from_start.nanosec = 0
+        right_msg.points.append(right_traj_point)
+        self.right_hand_publisher_.publish(right_msg)
+
+        trigger_msg = JointState()
+        trigger_msg.name = ['gripper_l_joint1','gripper_r_joint1']
+        trigger_msg.position = [left_interpolation_value, right_interpolation_value]
+        self.trigger_publisher_.publish(trigger_msg)
 
     def normalize_value(self, value):
         min_old = -0.2
