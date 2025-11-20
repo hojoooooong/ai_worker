@@ -31,7 +31,6 @@ def generate_launch_description():
     port1 = LaunchConfiguration('port1')
     angle_offset = LaunchConfiguration('angle_offset')
     scanfreq = LaunchConfiguration('scanfreq')
-    filter_option = LaunchConfiguration('filter_option')
     laser_enable = LaunchConfiguration('laser_enable')
     scan_range_start = LaunchConfiguration('scan_range_start')
     scan_range_stop = LaunchConfiguration('scan_range_stop')
@@ -118,6 +117,8 @@ def generate_launch_description():
         package='lakibeam1',
         name='richbeam_lidar_node_left',
         executable='lakibeam1_scan_node',
+        output='log',
+        arguments=['--ros-args', '--log-level', 'ERROR'],
         parameters=[{
             'frame_id': 'lidar_l_link',
             'output_topic': output_topic0,
@@ -127,17 +128,17 @@ def generate_launch_description():
             'angle_offset': angle_offset,
             'sensorip': sensorip0,
             'scanfreq': scanfreq,
-            'filter': filter_option,
             'laser_enable': laser_enable,
             'scan_range_start': scan_range_start,
             'scan_range_stop': scan_range_stop
-        }],
-        output='screen'
+        }]
     )
     richbeam_lidar_node1 = Node(
         package='lakibeam1',
         name='richbeam_lidar_node_right',
         executable='lakibeam1_scan_node',
+        output='log',
+        arguments=['--ros-args', '--log-level', 'ERROR'],
         parameters=[{
             'frame_id': 'lidar_r_link',
             'output_topic': output_topic1,
@@ -147,12 +148,10 @@ def generate_launch_description():
             'angle_offset': angle_offset,
             'sensorip': sensorip1,
             'scanfreq': scanfreq,
-            'filter': filter_option,
             'laser_enable': laser_enable,
             'scan_range_start': scan_range_start,
             'scan_range_stop': scan_range_stop
-        }],
-        output='screen'
+        }]
     )
 
     ld = LaunchDescription()
