@@ -26,6 +26,8 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 def generate_launch_description():
     bringup_launch_dir = os.path.join(get_package_share_directory('ffw_bringup'), 'launch')
+    laser_scan_merger_launch_dir = os.path.join(get_package_share_directory('laser_scan_merger'), 'launch')
+    dock_pose_estimation_launch_dir = os.path.join(get_package_share_directory('dock_pose_estimation'), 'launch')
 
     follower = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(bringup_launch_dir,
@@ -36,8 +38,23 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(os.path.join(bringup_launch_dir,
                                                    'ffw_lg2_leader_ai.launch.py'))
     )
+    lidar = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(bringup_launch_dir,
+                                                   'lidar_dual.launch.py'))
+    )
+    laser_scan_merger = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(laser_scan_merger_launch_dir,
+                                                   'laser_scan_merger.launch.py'))
+    )
+    dock_pose_estimation = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(dock_pose_estimation_launch_dir,
+                                                   'dock_pose_estimation.launch.py'))
+    )
 
     return LaunchDescription([
         follower,
         TimerAction(period=30.0, actions=[leader]),
+        lidar,
+        laser_scan_merger,
+        dock_pose_estimation,
     ])
