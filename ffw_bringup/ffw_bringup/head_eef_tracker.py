@@ -17,16 +17,17 @@
 # Author: Woojin Wie
 
 import math
+
+from geometry_msgs.msg import Point
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
-from std_msgs.msg import String, ColorRGBA
-from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-from visualization_msgs.msg import Marker, MarkerArray
-from geometry_msgs.msg import Point
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from std_msgs.msg import ColorRGBA, String
 import tf2_ros
 from tf2_ros import TransformException
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from urdf_parser_py.urdf import URDF
+from visualization_msgs.msg import Marker, MarkerArray
 
 
 class HeadEefTracker(Node):
@@ -43,7 +44,10 @@ class HeadEefTracker(Node):
         self.declare_parameter('camera_link', 'zedm_camera_link')
         self.declare_parameter('head_joint1_name', 'head_joint1')
         self.declare_parameter('head_joint2_name', 'head_joint2')
-        self.declare_parameter('joint_trajectory_topic', '/leader/joystick_controller_left/joint_trajectory')
+        self.declare_parameter(
+            'joint_trajectory_topic',
+            '/leader/joystick_controller_left/joint_trajectory'
+        )
         self.declare_parameter('robot_description_topic', '/robot_description')
         self.declare_parameter('visualization_topic', '~/head_target_visualization')
         self.declare_parameter('enable_visualization', True)
@@ -122,7 +126,7 @@ class HeadEefTracker(Node):
         # Timer for periodic updates (will be created after URDF is loaded)
         self.timer = None
 
-        self.get_logger().info(f'Head EEF Tracker initialized')
+        self.get_logger().info('Head EEF Tracker initialized')
         self.get_logger().info(f'  Update rate: {self.update_rate} Hz')
         self.get_logger().info(f'  Target frame: {self.target_frame}')
         self.get_logger().info(f'  EEF L link: {self.eef_l_link}')
@@ -131,10 +135,13 @@ class HeadEefTracker(Node):
         self.get_logger().info(f'  Publishing to: {self.joint_trajectory_topic}')
         if self.enable_visualization:
             self.get_logger().info(f'  Visualization: {self.visualization_topic}')
-        self.get_logger().info(f'  Waiting for robot_description on: {self.robot_description_topic}')
+        self.get_logger().info(
+            f'  Waiting for robot_description on: '
+            f'{self.robot_description_topic}'
+        )
 
     def robot_description_callback(self, msg):
-        """Callback for robot_description topic."""
+        """Handle robot_description topic callback."""
         if self.urdf_loaded:
             return  # Already loaded
 
@@ -151,10 +158,16 @@ class HeadEefTracker(Node):
                 self.get_logger().info(f'  head_joint1 ({self.head_joint1_name}) - PITCH:')
                 self.get_logger().info(f'    Position (xyz): {self.head_joint1_pos}')
                 self.get_logger().info(f'    Axis: {self.head_joint1_axis}')
-                self.get_logger().info(f'    Limits: [{self.head_joint1_limit_lower:.4f}, {self.head_joint1_limit_upper:.4f}]')
+                self.get_logger().info(
+                    f'    Limits: [{self.head_joint1_limit_lower:.4f}, '
+                    f'{self.head_joint1_limit_upper:.4f}]'
+                )
                 self.get_logger().info(f'  head_joint2 ({self.head_joint2_name}) - YAW:')
                 self.get_logger().info(f'    Axis: {self.head_joint2_axis}')
-                self.get_logger().info(f'    Limits: [{self.head_joint2_limit_lower:.4f}, {self.head_joint2_limit_upper:.4f}]')
+                self.get_logger().info(
+                    f'    Limits: [{self.head_joint2_limit_lower:.4f}, '
+                    f'{self.head_joint2_limit_upper:.4f}]'
+                )
                 self.get_logger().info('=' * 60)
 
                 # Create timer now that URDF is loaded
@@ -174,7 +187,10 @@ class HeadEefTracker(Node):
             head_joint2 = self.urdf_robot.joint_map.get(self.head_joint2_name)
 
             if head_joint1 is None or head_joint2 is None:
-                self.get_logger().error(f'Could not find joints: {self.head_joint1_name}, {self.head_joint2_name}')
+                self.get_logger().error(
+                    f'Could not find joints: {self.head_joint1_name}, '
+                    f'{self.head_joint2_name}'
+                )
                 return
 
             # Extract head_joint1 origin position
@@ -219,7 +235,6 @@ class HeadEefTracker(Node):
         except Exception as e:
             self.get_logger().error(f'Error parsing URDF: {e}')
 
-
     def get_transform(self, target_frame, source_frame):
         """Get transform from source_frame to target_frame."""
         try:
@@ -244,8 +259,10 @@ class HeadEefTracker(Node):
             head_joint1_pos: Position of head_joint1 origin in arm_base_link frame (x, y, z)
             debug: If True, log detailed calculation steps
 
-        Returns:
+        Returns
+        -------
             (head_joint1_angle, head_joint2_angle) or (None, None) if invalid
+
         """
         # Calculate vector from head_joint1 origin to target
         dx = target_point[0] - head_joint1_pos[0]
@@ -253,9 +270,15 @@ class HeadEefTracker(Node):
         dz = target_point[2] - head_joint1_pos[2]
 
         if debug:
-            self.get_logger().info(f'  Vector calculation:')
-            self.get_logger().info(f'    Target: ({target_point[0]:.4f}, {target_point[1]:.4f}, {target_point[2]:.4f})')
-            self.get_logger().info(f'    head_joint1_pos: ({head_joint1_pos[0]:.4f}, {head_joint1_pos[1]:.4f}, {head_joint1_pos[2]:.4f})')
+            self.get_logger().info('  Vector calculation:')
+            self.get_logger().info(
+                f'    Target: ({target_point[0]:.4f}, {target_point[1]:.4f}, '
+                f'{target_point[2]:.4f})'
+            )
+            self.get_logger().info(
+                f'    head_joint1_pos: ({head_joint1_pos[0]:.4f}, '
+                f'{head_joint1_pos[1]:.4f}, {head_joint1_pos[2]:.4f})'
+            )
             self.get_logger().info(f'    Vector (dx, dy, dz): ({dx:.4f}, {dy:.4f}, {dz:.4f})')
 
         # Calculate distance in XY plane (for yaw/joint2)
@@ -278,7 +301,10 @@ class HeadEefTracker(Node):
             yaw = 0.0
 
         if debug:
-            self.get_logger().info(f'    Raw yaw (head_joint2): {math.degrees(yaw):.2f}° ({yaw:.4f} rad)')
+            self.get_logger().info(
+                f'    Raw yaw (head_joint2): {math.degrees(yaw):.2f}° '
+                f'({yaw:.4f} rad)'
+            )
 
         # Calculate pitch angle (head_joint1 rotates around Y axis) - PITCH
         # This rotates in the XZ plane
@@ -301,8 +327,14 @@ class HeadEefTracker(Node):
                 pitch = 0.0
 
         if debug:
-            self.get_logger().info(f'    Raw pitch (head_joint1): {math.degrees(pitch_raw):.2f}° ({pitch_raw:.4f} rad)')
-            self.get_logger().info(f'    Inverted pitch: {math.degrees(pitch):.2f}° ({pitch:.4f} rad)')
+            self.get_logger().info(
+                f'    Raw pitch (head_joint1): {math.degrees(pitch_raw):.2f}° '
+                f'({pitch_raw:.4f} rad)'
+            )
+            self.get_logger().info(
+                f'    Inverted pitch: {math.degrees(pitch):.2f}° '
+                f'({pitch:.4f} rad)'
+            )
 
         # Clamp angles to joint limits
         head_joint1_angle = max(
@@ -315,13 +347,25 @@ class HeadEefTracker(Node):
         )
 
         if debug:
-            self.get_logger().info(f'  After clamping:')
-            self.get_logger().info(f'    head_joint1 (pitch): {math.degrees(head_joint1_angle):.2f}° ({head_joint1_angle:.4f} rad)')
-            self.get_logger().info(f'    head_joint2 (yaw): {math.degrees(head_joint2_angle):.2f}° ({head_joint2_angle:.4f} rad)')
+            self.get_logger().info('  After clamping:')
+            self.get_logger().info(
+                f'    head_joint1 (pitch): {math.degrees(head_joint1_angle):.2f}° '
+                f'({head_joint1_angle:.4f} rad)'
+            )
+            self.get_logger().info(
+                f'    head_joint2 (yaw): {math.degrees(head_joint2_angle):.2f}° '
+                f'({head_joint2_angle:.4f} rad)'
+            )
             if head_joint1_angle != pitch:
-                self.get_logger().warn(f'    WARNING: head_joint1 was clamped! Raw: {pitch:.4f}, Clamped: {head_joint1_angle:.4f}')
+                self.get_logger().warn(
+                    f'    WARNING: head_joint1 was clamped! Raw: {pitch:.4f}, '
+                    f'Clamped: {head_joint1_angle:.4f}'
+                )
             if head_joint2_angle != yaw:
-                self.get_logger().warn(f'    WARNING: head_joint2 was clamped! Raw: {yaw:.4f}, Clamped: {head_joint2_angle:.4f}')
+                self.get_logger().warn(
+                    f'    WARNING: head_joint2 was clamped! Raw: {yaw:.4f}, '
+                    f'Clamped: {head_joint2_angle:.4f}'
+                )
 
         return (head_joint1_angle, head_joint2_angle)
 
@@ -337,7 +381,7 @@ class HeadEefTracker(Node):
         marker = Marker()
         marker.header.frame_id = self.target_frame
         marker.header.stamp = now.to_msg()
-        marker.ns = "head_target"
+        marker.ns = 'head_target'
         marker.id = 0
         marker.type = Marker.ARROW
         marker.action = Marker.ADD
@@ -374,7 +418,7 @@ class HeadEefTracker(Node):
         marker = Marker()
         marker.header.frame_id = self.target_frame
         marker.header.stamp = now.to_msg()
-        marker.ns = "head_target"
+        marker.ns = 'head_target'
         marker.id = 1
         marker.type = Marker.SPHERE
         marker.action = Marker.ADD
@@ -403,7 +447,7 @@ class HeadEefTracker(Node):
         marker = Marker()
         marker.header.frame_id = self.target_frame
         marker.header.stamp = now.to_msg()
-        marker.ns = "eef_positions"
+        marker.ns = 'eef_positions'
         marker.id = 2
         marker.type = Marker.SPHERE
         marker.action = Marker.ADD
@@ -431,7 +475,7 @@ class HeadEefTracker(Node):
         marker = Marker()
         marker.header.frame_id = self.target_frame
         marker.header.stamp = now.to_msg()
-        marker.ns = "eef_positions"
+        marker.ns = 'eef_positions'
         marker.id = 3
         marker.type = Marker.SPHERE
         marker.action = Marker.ADD
@@ -473,7 +517,10 @@ class HeadEefTracker(Node):
                 return
             self.debug_counter += 1
             if self.debug_counter % self.debug_log_interval == 0:
-                self.get_logger().warn(f'[Update {self.debug_counter}] Failed to get transforms for end effectors')
+                self.get_logger().warn(
+                    f'[Update {self.debug_counter}] Failed to get transforms '
+                    f'for end effectors'
+                )
             return
 
         # Extract positions
@@ -502,15 +549,29 @@ class HeadEefTracker(Node):
 
         # Debug logging
         self.debug_counter += 1
-        should_debug = (self.debug_counter % self.debug_log_interval == 0) and self.enable_debug_logging
+        should_debug = (
+            (self.debug_counter % self.debug_log_interval == 0) and
+            self.enable_debug_logging
+        )
 
         if should_debug:
             self.get_logger().info('-' * 60)
             self.get_logger().info(f'[Update {self.debug_counter}] Head EEF Tracking:')
-            self.get_logger().info(f'  End Effector Positions (in {self.target_frame}):')
-            self.get_logger().info(f'    {self.eef_l_link}: ({pos_l[0]:.4f}, {pos_l[1]:.4f}, {pos_l[2]:.4f})')
-            self.get_logger().info(f'    {self.eef_r_link}: ({pos_r[0]:.4f}, {pos_r[1]:.4f}, {pos_r[2]:.4f})')
-            self.get_logger().info(f'  Center Point: ({center_x:.4f}, {center_y:.4f}, {center_z:.4f})')
+            self.get_logger().info(
+                f'  End Effector Positions (in {self.target_frame}):'
+            )
+            self.get_logger().info(
+                f'    {self.eef_l_link}: ({pos_l[0]:.4f}, {pos_l[1]:.4f}, '
+                f'{pos_l[2]:.4f})'
+            )
+            self.get_logger().info(
+                f'    {self.eef_r_link}: ({pos_r[0]:.4f}, {pos_r[1]:.4f}, '
+                f'{pos_r[2]:.4f})'
+            )
+            self.get_logger().info(
+                f'  Center Point: ({center_x:.4f}, {center_y:.4f}, '
+                f'{center_z:.4f})'
+            )
 
         # Calculate required head angles
         head_joint1_angle, head_joint2_angle = self.calculate_head_angles(
@@ -541,9 +602,17 @@ class HeadEefTracker(Node):
         )
 
         if should_debug:
-            self.get_logger().info(f'  Published Joint Commands:')
-            self.get_logger().info(f'    {self.head_joint1_name} (PITCH): {math.degrees(head_joint1_angle):.2f}° ({head_joint1_angle:.4f} rad)')
-            self.get_logger().info(f'    {self.head_joint2_name} (YAW): {math.degrees(head_joint2_angle):.2f}° ({head_joint2_angle:.4f} rad)')
+            self.get_logger().info('  Published Joint Commands:')
+            self.get_logger().info(
+                f'    {self.head_joint1_name} (PITCH): '
+                f'{math.degrees(head_joint1_angle):.2f}° '
+                f'({head_joint1_angle:.4f} rad)'
+            )
+            self.get_logger().info(
+                f'    {self.head_joint2_name} (YAW): '
+                f'{math.degrees(head_joint2_angle):.2f}° '
+                f'({head_joint2_angle:.4f} rad)'
+            )
             self.get_logger().info('-' * 60)
 
 
@@ -561,4 +630,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-
