@@ -22,48 +22,6 @@
             <param name="number_of_joints">19</param>
             <param name="number_of_transmissions">19</param>
             <param name="disable_torque_at_init">true</param>
-            <param name="transmission_to_joint_matrix">
-              1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
-            </param>
-            <param name="joint_to_transmission_matrix">
-              1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
-            </param>
             <param name="dynamixel_state_pub_msg_name">dynamixel_hardware_interface/dxl_state</param>
             <param name="get_dynamixel_data_srv_name">dynamixel_hardware_interface/get_dxl_data</param>
             <param name="set_dynamixel_data_srv_name">dynamixel_hardware_interface/set_dxl_data</param>
@@ -196,15 +154,15 @@
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Error Code"/>
-        <param name="Drive Mode">5</param>
+        <param name="Drive Mode">69</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">3591</param>
         <param name="Acceleration Limit">35910</param>
         <param name="Profile Velocity">3591</param>
         <param name="Profile Acceleration">3591</param>
-        <param name="Profile Acceleration Time">250</param>
-        <param name="Profile Time">500</param>
+        <param name="Profile Acceleration Time">750</param>
+        <param name="Profile Time">1500</param>
         <param name="Max Position Limit">262144</param>
         <param name="Min Position Limit">-262144</param>
         <param name="Position P Gain">1583185</param>
@@ -220,15 +178,15 @@
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Error Code"/>
-        <param name="Drive Mode">4</param>
+        <param name="Drive Mode">68</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">3591</param>
         <param name="Acceleration Limit">35910</param>
         <param name="Profile Velocity">3591</param>
         <param name="Profile Acceleration">3591</param>
-        <param name="Profile Acceleration Time">250</param>
-        <param name="Profile Time">500</param>
+        <param name="Profile Acceleration Time">750</param>
+        <param name="Profile Time">1500</param>
         <param name="Max Position Limit">0</param>
         <param name="Min Position Limit">-262144</param>
         <param name="Position P Gain">1583185</param>
@@ -244,15 +202,15 @@
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Error Code"/>
-        <param name="Drive Mode">5</param>
+        <param name="Drive Mode">69</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">3591</param>
         <param name="Acceleration Limit">35910</param>
         <param name="Profile Velocity">3591</param>
         <param name="Profile Acceleration">3591</param>
-        <param name="Profile Acceleration Time">250</param>
-        <param name="Profile Time">500</param>
+        <param name="Profile Acceleration Time">750</param>
+        <param name="Profile Time">1500</param>
         <param name="Max Position Limit">262144</param>
         <param name="Min Position Limit">-262144</param>
         <param name="Position P Gain">1583185</param>
@@ -268,17 +226,17 @@
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Error Code"/>
-        <param name="Drive Mode">5</param>
+        <param name="Drive Mode">69</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">6486</param>
         <param name="Acceleration Limit">35910</param>
         <param name="Profile Velocity">6486</param>
         <param name="Profile Acceleration">3591</param>
-        <param name="Profile Acceleration Time">250</param>
-        <param name="Profile Time">500</param>
-        <param name="Max Position Limit">160199</param>
-        <param name="Min Position Limit">-160199</param>
+        <param name="Profile Acceleration Time">750</param>
+        <param name="Profile Time">1500</param>
+        <param name="Max Position Limit">90000</param>
+        <param name="Min Position Limit">-245000</param>
         <param name="Position P Gain">1583185</param>
         <param name="Velocity P Gain">18184</param>
         <param name="Velocity I Gain">1585331</param>
@@ -292,15 +250,15 @@
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Error Code"/>
-        <param name="Drive Mode">5</param>
+        <param name="Drive Mode">69</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">6486</param>
         <param name="Acceleration Limit">35910</param>
         <param name="Profile Velocity">6486</param>
         <param name="Profile Acceleration">3591</param>
-        <param name="Profile Acceleration Time">250</param>
-        <param name="Profile Time">500</param>
+        <param name="Profile Acceleration Time">750</param>
+        <param name="Profile Time">1500</param>
         <param name="Max Position Limit">262144</param>
         <param name="Min Position Limit">-262144</param>
         <param name="Position P Gain">1583185</param>
@@ -316,15 +274,15 @@
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Error Code"/>
-        <param name="Drive Mode">5</param>
+        <param name="Drive Mode">69</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">6486</param>
         <param name="Acceleration Limit">35910</param>
         <param name="Profile Velocity">6486</param>
         <param name="Profile Acceleration">3591</param>
-        <param name="Profile Acceleration Time">250</param>
-        <param name="Profile Time">500</param>
+        <param name="Profile Acceleration Time">750</param>
+        <param name="Profile Time">1500</param>
         <param name="Max Position Limit">131072</param>
         <param name="Min Position Limit">-131072</param>
         <param name="Position P Gain">1583185</param>
@@ -340,16 +298,16 @@
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Hardware Error Status"/>
-        <param name="Drive Mode">5</param>
+        <param name="Drive Mode">4</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">2920</param>
         <param name="Acceleration Limit">359100</param>
         <param name="Current Limit">1500</param>
-        <param name="Profile Velocity">100</param>
-        <param name="Profile Acceleration">50</param>
+        <param name="Profile Velocity">300</param>
+        <param name="Profile Acceleration">150</param>
         <param name="Max Position Limit">131875</param>
-        <param name="Min Position Limit">-131875</param>
+        <param name="Min Position Limit">-151875</param>
       </gpio>
       <gpio name="dxl8">
         <param name="type">dxl</param>
@@ -373,15 +331,15 @@
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Error Code"/>
-        <param name="Drive Mode">4</param>
+        <param name="Drive Mode">68</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">3591</param>
         <param name="Acceleration Limit">35910</param>
         <param name="Profile Velocity">3591</param>
         <param name="Profile Acceleration">3591</param>
-        <param name="Profile Acceleration Time">250</param>
-        <param name="Profile Time">500</param>
+        <param name="Profile Acceleration Time">750</param>
+        <param name="Profile Time">1500</param>
         <param name="Max Position Limit">262144</param>
         <param name="Min Position Limit">-262144</param>
         <param name="Position P Gain">1583185</param>
@@ -397,15 +355,15 @@
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Error Code"/>
-        <param name="Drive Mode">4</param>
+        <param name="Drive Mode">68</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">3591</param>
         <param name="Acceleration Limit">35910</param>
         <param name="Profile Velocity">3591</param>
         <param name="Profile Acceleration">3591</param>
-        <param name="Profile Acceleration Time">250</param>
-        <param name="Profile Time">500</param>
+        <param name="Profile Acceleration Time">750</param>
+        <param name="Profile Time">1500</param>
         <param name="Max Position Limit">262144</param>
         <param name="Min Position Limit">0</param>
         <param name="Position P Gain">1583185</param>
@@ -421,15 +379,15 @@
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Error Code"/>
-        <param name="Drive Mode">5</param>
+        <param name="Drive Mode">69</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">3591</param>
         <param name="Acceleration Limit">35910</param>
         <param name="Profile Velocity">3591</param>
         <param name="Profile Acceleration">3591</param>
-        <param name="Profile Acceleration Time">250</param>
-        <param name="Profile Time">500</param>
+        <param name="Profile Acceleration Time">750</param>
+        <param name="Profile Time">1500</param>
         <param name="Max Position Limit">262144</param>
         <param name="Min Position Limit">-262144</param>
         <param name="Position P Gain">1583185</param>
@@ -445,17 +403,17 @@
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Error Code"/>
-        <param name="Drive Mode">4</param>
+        <param name="Drive Mode">68</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">6486</param>
         <param name="Acceleration Limit">35910</param>
         <param name="Profile Velocity">6486</param>
         <param name="Profile Acceleration">3591</param>
-        <param name="Profile Acceleration Time">250</param>
-        <param name="Profile Time">500</param>
-        <param name="Max Position Limit">160199</param>
-        <param name="Min Position Limit">-160199</param>
+        <param name="Profile Acceleration Time">750</param>
+        <param name="Profile Time">1500</param>
+        <param name="Max Position Limit">90000</param>
+        <param name="Min Position Limit">-245000</param>
         <param name="Position P Gain">1583185</param>
         <param name="Velocity P Gain">18184</param>
         <param name="Velocity I Gain">1585331</param>
@@ -469,15 +427,15 @@
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Error Code"/>
-        <param name="Drive Mode">5</param>
+        <param name="Drive Mode">69</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">6486</param>
         <param name="Acceleration Limit">35910</param>
         <param name="Profile Velocity">6486</param>
         <param name="Profile Acceleration">3591</param>
-        <param name="Profile Acceleration Time">250</param>
-        <param name="Profile Time">500</param>
+        <param name="Profile Acceleration Time">750</param>
+        <param name="Profile Time">1500</param>
         <param name="Max Position Limit">262144</param>
         <param name="Min Position Limit">-262144</param>
         <param name="Position P Gain">1583185</param>
@@ -493,15 +451,15 @@
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Error Code"/>
-        <param name="Drive Mode">4</param>
+        <param name="Drive Mode">68</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">6486</param>
         <param name="Acceleration Limit">35910</param>
         <param name="Profile Velocity">6486</param>
         <param name="Profile Acceleration">3591</param>
-        <param name="Profile Acceleration Time">250</param>
-        <param name="Profile Time">500</param>
+        <param name="Profile Acceleration Time">750</param>
+        <param name="Profile Time">1500</param>
         <param name="Max Position Limit">131072</param>
         <param name="Min Position Limit">-131072</param>
         <param name="Position P Gain">1583185</param>
@@ -517,16 +475,16 @@
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Hardware Error Status"/>
-        <param name="Drive Mode">5</param>
+        <param name="Drive Mode">4</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">2920</param>
         <param name="Acceleration Limit">359100</param>
         <param name="Current Limit">1500</param>
-        <param name="Profile Velocity">100</param>
-        <param name="Profile Acceleration">50</param>
+        <param name="Profile Velocity">300</param>
+        <param name="Profile Acceleration">150</param>
         <param name="Max Position Limit">131875</param>
-        <param name="Min Position Limit">-131875</param>
+        <param name="Min Position Limit">-151875</param>
       </gpio>
       <gpio name="dxl38">
         <param name="type">dxl</param>
@@ -557,13 +515,19 @@
         <param name="Acceleration Limit">2020</param>
         <param name="Profile Velocity">300</param>
         <param name="Profile Acceleration">300</param>
-        <param name="Profile Acceleration Time">250</param>
-        <param name="Profile Time">500</param>
+        <param name="Profile Acceleration Time">750</param>
+        <param name="Profile Time">1500</param>
         <param name="Max Position Limit">0</param>
         <param name="Min Position Limit">-50000</param>
         <param name="Position P Gain">1583185</param>
         <param name="Velocity P Gain">41387</param>
         <param name="Velocity I Gain">1065630</param>
+        <param name="[unit info]">
+          Present Position,0.00001,m,signed,0.0;
+          Goal Position,0.00001,m,signed,0.0;
+          Present Velocity,0.00087381333,m/s,signed,0.0;
+          Goal Velocity,0.00087381333,m/s,signed,0.0;
+        </param>
       </gpio>
       <!-- HEAD -->
       <gpio name="dxl61">
@@ -577,8 +541,8 @@
         <param name="Drive Mode">5</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
-        <param name="Profile Velocity">100</param>
-        <param name="Profile Acceleration">50</param>
+        <param name="Profile Velocity">300</param>
+        <param name="Profile Acceleration">150</param>
         <param name="Max Position Limit">2500</param>
         <param name="Min Position Limit">1896</param>
         <param name="Position P Gain">1600</param>
@@ -595,13 +559,13 @@
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Hardware Error Status"/>
-        <param name="Drive Mode">4</param>
+        <param name="Drive Mode">5</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
-        <param name="Profile Velocity">100</param>
-        <param name="Profile Acceleration">50</param>
-        <param name="Max Position Limit">2389</param>
-        <param name="Min Position Limit">1707</param>
+        <param name="Profile Velocity">300</param>
+        <param name="Profile Acceleration">150</param>
+        <param name="Max Position Limit">2275</param>
+        <param name="Min Position Limit">1820</param>
         <param name="Position P Gain">1600</param>
         <param name="Position I Gain">400</param>
         <param name="Position D Gain">400</param>

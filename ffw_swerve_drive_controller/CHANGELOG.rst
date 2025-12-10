@@ -2,6 +2,11 @@
 Changelog for package ffw_swerve_drive_controller
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.1.15 (2025-12-09)
+-------------------
+* Updated for new realtime_tools::RealtimePublisher API
+* Contributors: Woojin Wie
+
 1.1.14 (2025-10-14)
 -------------------
 * None

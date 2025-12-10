@@ -391,22 +391,16 @@ CallbackReturn SwerveDriveController::on_configure(
   }
 
   // --- Realtime Odom State Publisher ---
-  rt_odom_state_publisher_->lock();
-  rt_odom_state_publisher_->msg_.header.stamp = get_node()->now();
-  rt_odom_state_publisher_->msg_.header.frame_id = odom_frame_id_;
-  rt_odom_state_publisher_->msg_.child_frame_id = base_frame_id_;
-  rt_odom_state_publisher_->msg_.pose.pose.position.z = 0;
+  odom_msg_.header.frame_id = odom_frame_id_;
+  odom_msg_.child_frame_id = base_frame_id_;
+  odom_msg_.pose.pose.position.z = 0;
 
   constexpr size_t NUM_DIMENSIONS = 6;
-  auto & pose_covariance = rt_odom_state_publisher_->msg_.pose.covariance;
-  auto & twist_covariance = rt_odom_state_publisher_->msg_.twist.covariance;
   for (size_t index = 0; index < NUM_DIMENSIONS; ++index) {
     const size_t diagonal_index = NUM_DIMENSIONS * index + index;
-    pose_covariance[diagonal_index] = pose_covariance_diagonal_[index];
-    twist_covariance[diagonal_index] = twist_covariance_diagonal_[index];
+    odom_msg_.pose.covariance[diagonal_index] = pose_covariance_diagonal_[index];
+    odom_msg_.twist.covariance[diagonal_index] = twist_covariance_diagonal_[index];
   }
-
-  rt_odom_state_publisher_->unlock();
 
   // --- TF State Publisher ---
   try {
@@ -420,13 +414,10 @@ CallbackReturn SwerveDriveController::on_configure(
       e.what());
     return controller_interface::CallbackReturn::ERROR;
   }
-  rt_tf_odom_state_publisher_->lock();
-  rt_tf_odom_state_publisher_->msg_.transforms.resize(1);
-  rt_tf_odom_state_publisher_->msg_.transforms[0].header.stamp = get_node()->now();
-  rt_tf_odom_state_publisher_->msg_.transforms[0].header.frame_id = odom_frame_id_;
-  rt_tf_odom_state_publisher_->msg_.transforms[0].child_frame_id = base_frame_id_;
-  rt_tf_odom_state_publisher_->msg_.transforms[0].transform.translation.z = 0.0;
-  rt_tf_odom_state_publisher_->unlock();
+  tf_msg_.transforms.resize(1);
+  tf_msg_.transforms[0].header.frame_id = odom_frame_id_;
+  tf_msg_.transforms[0].child_frame_id = base_frame_id_;
+  tf_msg_.transforms[0].transform.translation.z = 0.0;
 
   RCLCPP_DEBUG(logger, "Subscribed to %s", cmd_vel_topic_.c_str());
   RCLCPP_DEBUG(logger, "Publishing odometry to ~/odometry");
@@ -438,20 +429,15 @@ CallbackReturn SwerveDriveController::on_configure(
     commanded_joint_state_publisher_);
   RCLCPP_DEBUG(logger, "Publishing joint commands to /joint_commanders");
   // ***** realtime joint commander publisher *****
-  if (rt_commanded_joint_state_publisher_) {
-    rt_commanded_joint_state_publisher_->lock();
-    auto & msg = rt_commanded_joint_state_publisher_->msg_;
-    msg.name.reserve(num_modules_ * 2);
-    msg.position.resize(num_modules_ * 2, std::numeric_limits<double>::quiet_NaN());
-    msg.velocity.resize(num_modules_ * 2, std::numeric_limits<double>::quiet_NaN());
-    // enroll the joint names
-    for (size_t i = 0; i < num_modules_; ++i) {
-      msg.name.push_back(steering_joint_names_[i]);
-    }
-    for (size_t i = 0; i < num_modules_; ++i) {
-      msg.name.push_back(wheel_joint_names_[i]);
-    }
-    rt_commanded_joint_state_publisher_->unlock();
+  joint_state_msg_.name.reserve(num_modules_ * 2);
+  joint_state_msg_.position.resize(num_modules_ * 2, std::numeric_limits<double>::quiet_NaN());
+  joint_state_msg_.velocity.resize(num_modules_ * 2, std::numeric_limits<double>::quiet_NaN());
+  // enroll the joint names
+  for (size_t i = 0; i < num_modules_; ++i) {
+    joint_state_msg_.name.push_back(steering_joint_names_[i]);
+  }
+  for (size_t i = 0; i < num_modules_; ++i) {
+    joint_state_msg_.name.push_back(wheel_joint_names_[i]);
   }
 
   // ***** Visualizer *****
@@ -854,14 +840,11 @@ controller_interface::return_type SwerveDriveController::update(
     previous_commands_.emplace(current_limited_cmd_obj);
 
     // if publish_limited_velocity_ is true, publish the limited velocity
-    if (publish_limited_velocity_ && realtime_limited_velocity_publisher_ &&
-      realtime_limited_velocity_publisher_->trylock())
-    {
-      auto & limited_velocity_msg = realtime_limited_velocity_publisher_->msg_;
-      limited_velocity_msg.linear.x = target_vx_;
-      limited_velocity_msg.linear.y = target_vy_;
-      limited_velocity_msg.angular.z = target_wz_;
-      realtime_limited_velocity_publisher_->unlockAndPublish();
+    if (publish_limited_velocity_ && realtime_limited_velocity_publisher_) {
+      limited_velocity_msg_.linear.x = target_vx_;
+      limited_velocity_msg_.linear.y = target_vy_;
+      limited_velocity_msg_.angular.z = target_wz_;
+      realtime_limited_velocity_publisher_->try_publish(limited_velocity_msg_);
     }
   }
 
@@ -1283,40 +1266,38 @@ controller_interface::return_type SwerveDriveController::update(
   // --- 6. publish odometry message and TF and joint commadns and marker visualization---
   tf2::Quaternion orientation;
   orientation.setRPY(0.0, 0.0, odometry_.getYaw());
-  if (all_states_read && rt_odom_state_publisher_ && rt_odom_state_publisher_->trylock()) {
-    rt_odom_state_publisher_->msg_.header.stamp = time;
-    rt_odom_state_publisher_->msg_.pose.pose.position.x = odometry_.getX();
-    rt_odom_state_publisher_->msg_.pose.pose.position.y = odometry_.getY();
-    rt_odom_state_publisher_->msg_.pose.pose.orientation = tf2::toMsg(orientation);
-    rt_odom_state_publisher_->msg_.twist.twist.linear.x = odometry_.getVx();
-    rt_odom_state_publisher_->msg_.twist.twist.linear.y = odometry_.getVy();
-    rt_odom_state_publisher_->msg_.twist.twist.angular.z = odometry_.getWz();
-    rt_odom_state_publisher_->unlockAndPublish();
+  if (all_states_read && rt_odom_state_publisher_) {
+    odom_msg_.header.stamp = time;
+    odom_msg_.pose.pose.position.x = odometry_.getX();
+    odom_msg_.pose.pose.position.y = odometry_.getY();
+    odom_msg_.pose.pose.orientation = tf2::toMsg(orientation);
+    odom_msg_.twist.twist.linear.x = odometry_.getVx();
+    odom_msg_.twist.twist.linear.y = odometry_.getVy();
+    odom_msg_.twist.twist.angular.z = odometry_.getWz();
+    rt_odom_state_publisher_->try_publish(odom_msg_);
   }
 
   // Publish tf /odom frame
-  if (enable_odom_tf_ && rt_tf_odom_state_publisher_->trylock()) {
-    rt_tf_odom_state_publisher_->msg_.transforms.front().header.stamp = time;
-    rt_tf_odom_state_publisher_->msg_.transforms.front().transform.translation.x = odometry_.getX();
-    rt_tf_odom_state_publisher_->msg_.transforms.front().transform.translation.y = odometry_.getY();
-    rt_tf_odom_state_publisher_->msg_.transforms.front().transform.rotation =
-      tf2::toMsg(orientation);
-    rt_tf_odom_state_publisher_->unlockAndPublish();
+  if (enable_odom_tf_ && rt_tf_odom_state_publisher_) {
+    tf_msg_.transforms[0].header.stamp = time;
+    tf_msg_.transforms[0].transform.translation.x = odometry_.getX();
+    tf_msg_.transforms[0].transform.translation.y = odometry_.getY();
+    tf_msg_.transforms[0].transform.rotation = tf2::toMsg(orientation);
+    rt_tf_odom_state_publisher_->try_publish(tf_msg_);
   }
 
   // Publish joint commands in order to compare the actual joint states
-  if (rt_commanded_joint_state_publisher_ && rt_commanded_joint_state_publisher_->trylock()) {
-    auto & msg = rt_commanded_joint_state_publisher_->msg_;
-    msg.header.stamp = time;
+  if (rt_commanded_joint_state_publisher_) {
+    joint_state_msg_.header.stamp = time;
 
     for (size_t i = 0; i < num_modules_; ++i) {
-      msg.position[i] = final_steering_commands[i];
-      msg.velocity[i] = std::numeric_limits<double>::quiet_NaN();
+      joint_state_msg_.position[i] = final_steering_commands[i];
+      joint_state_msg_.velocity[i] = std::numeric_limits<double>::quiet_NaN();
 
-      msg.position[i + num_modules_] = std::numeric_limits<double>::quiet_NaN();
-      msg.velocity[i + num_modules_] = final_wheel_velocity_commands[i];
+      joint_state_msg_.position[i + num_modules_] = std::numeric_limits<double>::quiet_NaN();
+      joint_state_msg_.velocity[i + num_modules_] = final_wheel_velocity_commands[i];
     }
-    rt_commanded_joint_state_publisher_->unlockAndPublish();
+    rt_commanded_joint_state_publisher_->try_publish(joint_state_msg_);
   }
 
   // publish visualization markers

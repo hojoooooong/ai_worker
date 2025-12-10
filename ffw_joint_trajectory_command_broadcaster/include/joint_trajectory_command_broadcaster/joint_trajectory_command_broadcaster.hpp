@@ -113,6 +113,8 @@ protected:
   std::unordered_map<std::string,
     std::shared_ptr<realtime_tools::RealtimePublisher<trajectory_msgs::msg::JointTrajectory>>>
   realtime_joint_trajectory_publishers_;
+  // RT messages for trajectory (one per group)
+  std::unordered_map<std::string, trajectory_msgs::msg::JointTrajectory> group_traj_msgs_;
 
   // Joint groups configuration
   std::unordered_map<std::string, std::vector<std::string>> group_joint_names_;
