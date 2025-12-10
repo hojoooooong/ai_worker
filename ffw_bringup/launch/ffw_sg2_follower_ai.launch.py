@@ -294,6 +294,20 @@ def generate_launch_description():
     lidar_timer_10s = TimerAction(period=10.0, actions=[lidar_launch],
                                   condition=UnlessCondition(init_position))
 
+    # Laser scan merger launch include
+    laser_scan_merger_launch_dir = PathJoinSubstitution([FindPackageShare('laser_scan_merger'), 'launch'])
+    laser_scan_merger_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([laser_scan_merger_launch_dir,
+                                                            'laser_scan_merger.launch.py']))
+    )
+
+    # Dock pose estimation launch include
+    dock_pose_estimation_launch_dir = PathJoinSubstitution([FindPackageShare('dock_pose_estimation'), 'launch'])
+    dock_pose_estimation_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([dock_pose_estimation_launch_dir,
+                                                          'dock_pose_estimation.launch.py']))
+    )
+
     # Head EEF Tracker node
     head_eef_tracker_node = Node(
         package='ffw_bringup',
@@ -318,6 +332,8 @@ def generate_launch_description():
             camera_timer_10s,
             lidar_timer_20s,
             lidar_timer_10s,
+            laser_scan_merger_launch,
+            dock_pose_estimation_launch,
             head_eef_tracker_node,
         ]
     )
