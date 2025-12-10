@@ -4,7 +4,8 @@ Changelog for package ffw_joint_trajectory_command_broadcaster
 
 1.1.15 (2025-12-09)
 -------------------
-* None
+* Updated for new realtime_tools::RealtimePublisher API
+* Contributors: Woojin Wie
 
 1.1.14 (2025-10-14)
 -------------------

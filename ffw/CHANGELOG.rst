@@ -8,6 +8,7 @@ Changelog for package ffw
 * Added Support for FFW SG2 lakibeam lidar
 * Added head eef tracker feature
 * Fixed deprecated fake_hardware to mock_hardware
+* Updated for new realtime_tools::RealtimePublisher API
 * Contributors: Woojin Wie, Wonho Yun
 
 1.1.14 (2025-10-14)
