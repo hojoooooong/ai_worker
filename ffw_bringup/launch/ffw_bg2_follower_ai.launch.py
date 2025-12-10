@@ -53,7 +53,7 @@ def generate_launch_description():
             description='Initial position file.'),
         DeclareLaunchArgument(
             'ros2_control_type',
-            default_value='ffw_bg2_rev4',
+            default_value='ffw_bg2_follower',
             description='Type of ros2_control',
         ),
     ]
