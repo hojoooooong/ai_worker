@@ -129,10 +129,10 @@ RUN curl -JLO "https://dl.filippo.io/mkcert/latest?for=linux/${TARGETARCH}" \
 
 RUN mkdir -p ${COLCON_WS}/src && \
     cd ${COLCON_WS}/src && \
-    git clone -b feature-hx5-d20 https://github.com/ROBOTIS-GIT/dynamixel_hardware_interface.git && \
+    git clone -b jazzy https://github.com/ROBOTIS-GIT/dynamixel_hardware_interface.git && \
     git clone -b jazzy https://github.com/ROBOTIS-GIT/dynamixel_interfaces.git && \
     git clone -b jazzy https://github.com/ROBOTIS-GIT/DynamixelSDK.git && \
-    git clone -b jazzy https://github.com/ROBOTIS-GIT/ai_worker.git && \
+    git clone -b feature-bh5-preset https://github.com/ROBOTIS-GIT/ai_worker.git && \
     git clone -b jazzy https://github.com/ROBOTIS-GIT/Lakibeam_ROS2_Driver.git && \
     git clone -b jazzy https://github.com/ros2/rmw_zenoh.git && \
     git clone -b r/4.56.4 https://github.com/IntelRealSense/realsense-ros.git && \
