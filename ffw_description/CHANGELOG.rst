@@ -2,6 +2,19 @@
 Changelog for package ffw_description
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.1.15 (2025-12-09)
+-------------------
+* Fixed deprecated fake_hardware to mock_hardware
+* Contributors: Woojin Wie, Wonho Yun
+
+1.1.14 (2025-10-14)
+-------------------
+* None
+
+1.1.13 (2025-10-14)
+-------------------
+* None
+
 1.1.12 (2025-09-17)
 -------------------
 * None

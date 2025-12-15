@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-  <xacro:macro name="ffw_bg2_follower_system" params="use_sim:=^|false use_fake_hardware:=^|false fake_sensor_commands:=^|false">
+  <xacro:macro name="ffw_bg2_follower_system" params="use_sim:=^|false use_mock_hardware:=^|false mock_sensor_commands:=^|false">
     <ros2_control name="ffw_bg2_follower" type="system" is_async="true">
       <xacro:if value="$(arg use_sim)">
         <hardware>
@@ -9,12 +9,12 @@
       </xacro:if>
       <xacro:unless value="$(arg use_sim)">
         <hardware>
-          <xacro:if value="${use_fake_hardware}">
-            <plugin>fake_components/GenericSystem</plugin>
-            <param name="fake_sensor_commands">${fake_sensor_commands}</param>
+          <xacro:if value="${use_mock_hardware}">
+            <plugin>mock_components/GenericSystem</plugin>
+            <param name="mock_sensor_commands">${mock_sensor_commands}</param>
             <param name="state_following_offset">0.0</param>
           </xacro:if>
-          <xacro:unless value="${use_fake_hardware}">
+          <xacro:unless value="${use_mock_hardware}">
             <plugin>dynamixel_hardware_interface/DynamixelHardware</plugin>
             <param name="port_name">/dev/follower</param>
             <param name="baud_rate">4000000</param>
@@ -23,26 +23,46 @@
             <param name="number_of_transmissions">9</param>
             <param name="disable_torque_at_init">true</param>
             <param name="transmission_to_joint_matrix">
-              1, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 1, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 1, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 1, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 1, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 1, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 1, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 1, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 1
+              1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
             </param>
             <param name="joint_to_transmission_matrix">
-              1, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 1, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 1, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 1, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 1, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 1, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 1, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 1, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 1
+              1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
             </param>
             <param name="dynamixel_state_pub_msg_name">dynamixel_hardware_interface/dxl_state</param>
             <param name="get_dynamixel_data_srv_name">dynamixel_hardware_interface/get_dxl_data</param>
@@ -271,6 +291,43 @@
         <param name="Profile Acceleration">150</param>
         <param name="Max Position Limit">131875</param>
         <param name="Min Position Limit">-151875</param>
+      </gpio>
+      <gpio name="dxl38">
+        <param name="type">dxl</param>
+        <param name="ID">38</param>
+        <command_interface name="Goal Position"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <state_interface name="Hardware Error Status"/>
+        <param name="Operating Mode">5</param>
+        <param name="Return Delay Time">0</param>
+        <param name="Profile Velocity">0</param>
+        <param name="Profile Acceleration">0</param>
+      </gpio>
+      <!-- LIFT -->
+      <gpio name="dxl81">
+        <param name="type">dxl</param>
+        <param name="ID">81</param>
+        <command_interface name="Goal Position"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <state_interface name="Error Code"/>
+        <param name="Drive Mode">4</param>
+        <param name="Operating Mode">3</param>
+        <param name="Return Delay Time">0</param>
+        <param name="Velocity Limit">300</param>
+        <param name="Acceleration Limit">2020</param>
+        <param name="Profile Velocity">300</param>
+        <param name="Profile Acceleration">300</param>
+        <param name="Profile Acceleration Time">250</param>
+        <param name="Profile Time">500</param>
+        <param name="Max Position Limit">0</param>
+        <param name="Min Position Limit">-50000</param>
+        <param name="Position P Gain">1583185</param>
+        <param name="Velocity P Gain">41387</param>
+        <param name="Velocity I Gain">1065630</param>
       </gpio>
       <!-- HEAD -->
       <gpio name="dxl61">

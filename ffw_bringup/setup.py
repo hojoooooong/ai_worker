@@ -14,7 +14,7 @@ author_emails = ', '.join(email for _, email in authors_info)
 
 setup(
     name=package_name,
-    version='1.1.12',
+    version='1.1.14',
     packages=find_packages(exclude=['test']),
     data_files=[
         ('share/ament_index/resource_index/packages',
@@ -55,6 +55,7 @@ setup(
     entry_points={
         'console_scripts': [
             'joint_trajectory_executor = ffw_bringup.joint_trajectory_executor:main',
+            'head_eef_tracker = ffw_bringup.head_eef_tracker:main',
         ],
     },
 )
