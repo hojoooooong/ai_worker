@@ -44,7 +44,7 @@ FfwArmIKSolver::FfwArmIKSolver()
   this->declare_parameter<double>("lift_joint_z_offset", 1.6316);
 
   // IK solver parameters
-  this->declare_parameter<double>("max_joint_step_degrees", 30.0);
+  this->declare_parameter<double>("max_joint_step_degrees", 50.0);
   this->declare_parameter<int>("ik_max_iterations", 800);
   this->declare_parameter<double>("ik_tolerance", 1e-2);
 
@@ -54,7 +54,9 @@ FfwArmIKSolver::FfwArmIKSolver()
   this->declare_parameter<double>("previous_solution_weight", 0.5); // Weight for previous IK solution
 
   // Low-pass filter between current state and IK target
-  this->declare_parameter<double>("lpf_alpha", 0.2);
+  this->declare_parameter<double>("lpf_alpha", 0.8);
+
+  this->declare_parameter<double>("max_arm_reach", 0.70);
 
   // Joint limits parameters (can be overridden if needed)
   this->declare_parameter<bool>("use_hardcoded_joint_limits", true);
@@ -87,6 +89,8 @@ FfwArmIKSolver::FfwArmIKSolver()
   lpf_alpha_ = this->get_parameter("lpf_alpha").as_double();
   if (lpf_alpha_ < 0.0) { lpf_alpha_ = 0.0; }
   if (lpf_alpha_ > 1.0) { lpf_alpha_ = 1.0; }
+
+  max_arm_reach_ = this->get_parameter("max_arm_reach").as_double();
 
   use_hardcoded_joint_limits_ = this->get_parameter("use_hardcoded_joint_limits").as_bool();
 
@@ -230,7 +234,7 @@ void FfwArmIKSolver::processRobotDescription(const std::string & robot_descripti
     // Initialize previous solution arrays
     right_previous_solution_.resize(right_chain_.getNrOfJoints());
     left_previous_solution_.resize(left_chain_.getNrOfJoints());
-    
+
     // Initialize with zero positions
     for (unsigned int i = 0; i < right_chain_.getNrOfJoints(); i++) {
       right_previous_solution_(i) = 0.0;
@@ -241,7 +245,7 @@ void FfwArmIKSolver::processRobotDescription(const std::string & robot_descripti
 
     setup_complete_ = true;
     RCLCPP_INFO(this->get_logger(), "🎉 IK solver setup complete!");
-    RCLCPP_INFO(this->get_logger(), "   Hybrid IK: %s (current: %.1f%%, previous: %.1f%%)", 
+    RCLCPP_INFO(this->get_logger(), "   Hybrid IK: %s (current: %.1f%%, previous: %.1f%%)",
                 use_hybrid_ik_ ? "enabled" : "disabled",
                 current_position_weight_ * 100.0, previous_solution_weight_ * 100.0);
   } catch (const std::exception & e) {
@@ -592,6 +596,16 @@ void FfwArmIKSolver::solveIK(
   target_frame.p.y(target_pose.pose.position.y);
   target_frame.p.z(target_pose.pose.position.z);
 
+
+  double dist = target_frame.p.Norm();
+
+  if (dist > max_arm_reach_ + 0.05) {
+    RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+        "⚠️ %s target is out of reach (%.3fm > %.3fm). Clamping.",
+        arm.c_str(), dist, max_arm_reach_);
+  }
+  target_frame.p = target_frame.p * (max_arm_reach_ / dist);
+
   // Convert quaternion to rotation matrix
   KDL::Rotation rot = KDL::Rotation::Quaternion(
             target_pose.pose.orientation.x,
@@ -631,11 +645,11 @@ void FfwArmIKSolver::solveIK(
   // Get initial guess using hybrid approach
   KDL::JntArray q_init(chain_ptr->getNrOfJoints());
   KDL::JntArray * previous_solution_ptr = (arm == "right") ? &right_previous_solution_ : &left_previous_solution_;
-  
+
   if (use_hybrid_ik_ && has_previous_solution_) {
     // Hybrid: weighted combination of current position and previous solution
     for (size_t i = 0; i < current_positions_ptr->size(); i++) {
-      q_init(i) = current_position_weight_ * (*current_positions_ptr)[i] + 
+      q_init(i) = current_position_weight_ * (*current_positions_ptr)[i] +
                   previous_solution_weight_ * (*previous_solution_ptr)(i);
     }
     RCLCPP_DEBUG(this->get_logger(), "Using hybrid initial guess for %s arm (%.1f%% current + %.1f%% previous)",
@@ -687,7 +701,7 @@ void FfwArmIKSolver::solveIK(
       auto initial_duration = end_time - initial_start_time;
       RCLCPP_ERROR(this->get_logger(), "%s arm IK failed with current guess (error: %d, %s), (time: %.3f ms, %.1f Hz), (initial time: %.3f ms, %.1f Hz)",
         arm.c_str(), ik_result, error_msg, duration.seconds() * 1000.0, 1.0 / duration.seconds(), initial_duration.seconds() * 1000.0, 1.0 / initial_duration.seconds());
-      
+
       if (initial_duration.seconds() > 0.03) {
         return;
       }
