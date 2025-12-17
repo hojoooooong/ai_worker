@@ -56,6 +56,8 @@ def generate_launch_description():
 
     lpf_alpha = LaunchConfiguration('lpf_alpha')
 
+    max_arm_reach = LaunchConfiguration('max_arm_reach')
+
     # Create the launch description and populate
     ld = LaunchDescription()
 
@@ -87,6 +89,8 @@ def generate_launch_description():
     ld.add_action(DeclareLaunchArgument('use_hybrid_ik', default_value='true'))
     ld.add_action(DeclareLaunchArgument('current_position_weight', default_value='0.2'))
     ld.add_action(DeclareLaunchArgument('previous_solution_weight', default_value='0.8'))
+
+    ld.add_action(DeclareLaunchArgument('max_arm_reach', default_value='0.70'))
 
     # Joint limits selection
     ld.add_action(DeclareLaunchArgument('use_hardcoded_joint_limits', default_value='true'))
@@ -124,6 +128,8 @@ def generate_launch_description():
             'use_hybrid_ik': use_hybrid_ik,
             'current_position_weight': current_position_weight,
             'previous_solution_weight': previous_solution_weight,
+
+            'max_arm_reach': max_arm_reach,
 
             'use_hardcoded_joint_limits': use_hardcoded_joint_limits,
 
