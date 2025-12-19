@@ -669,72 +669,63 @@ void FfwArmIKSolver::solveIK(
     }
   }
 
+  KDL::JntArray q_current = q_init;
   KDL::JntArray q_result(chain_ptr->getNrOfJoints());
 
   auto initial_start_time = this->get_clock()->now();
 
-  int ik_result = -1;
-
-  while (true) {
+  // Iterate at high level, publishing result at each iteration
+  bool converged = false;
+  for (unsigned int iter = 0; iter < ik_max_iterations_; iter++) {
     auto start_time = this->get_clock()->now();
-    ik_result = (*ik_solver_ptr)->CartToJnt(q_init, target_frame, q_result);
+    
+    // Perform one iteration
+    int ik_result = (*ik_solver_ptr)->CartToJnt(q_current, target_frame, q_result);
     auto end_time = this->get_clock()->now();
     auto duration = end_time - start_time;
-    // RCLCPP_INFO(this->get_logger(), "%s arm IK solver time: %.3f ms, %.1f Hz", arm.c_str(), duration.seconds() * 1000.0, 1.0 / duration.seconds());
 
     if (ik_result < 0) {
       auto error_msg = (*ik_solver_ptr)->strError(ik_result);
-      auto initial_duration = end_time - initial_start_time;
-      RCLCPP_ERROR(this->get_logger(), "%s arm IK failed with current guess (error: %d, %s), (time: %.3f ms, %.1f Hz), (initial time: %.3f ms, %.1f Hz)",
-        arm.c_str(), ik_result, error_msg, duration.seconds() * 1000.0, 1.0 / duration.seconds(), initial_duration.seconds() * 1000.0, 1.0 / initial_duration.seconds());
-      
-      if (initial_duration.seconds() > 0.03) {
-        return;
-      }
-    } else{
-      break;
+      RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+        "%s arm IK iteration %d failed (error: %d, %s)",
+        arm.c_str(), iter, ik_result, error_msg);
+      // Continue with previous result even if this iteration failed
+      // This allows the arm to still move toward the target
     }
-  }
 
-  // If IK failed, try with different initial guesses within limits
-  // if (ik_result < 0) {
-  //   RCLCPP_WARN(this->get_logger(),
-  //     "%s arm IK failed with current guess (error: %d), trying alternatives...", arm.c_str(),
-  //     ik_result);
+    // Check convergence by computing current pose and comparing to target
+    KDL::Frame current_frame;
+    std::unique_ptr<KDL::ChainFkSolverPos_recursive> * fk_solver_ptr = 
+      (arm == "right") ? &right_fk_solver_ : &left_fk_solver_;
+    
+    if ((*fk_solver_ptr)->JntToCart(q_result, current_frame) >= 0) {
+      KDL::Twist error_twist = diff(current_frame, target_frame);
+      double position_error = sqrt(error_twist.vel.x() * error_twist.vel.x() +
+                                   error_twist.vel.y() * error_twist.vel.y() +
+                                   error_twist.vel.z() * error_twist.vel.z());
+      double rotation_error = sqrt(error_twist.rot.x() * error_twist.rot.x() +
+                                   error_twist.rot.y() * error_twist.rot.y() +
+                                   error_twist.rot.z() * error_twist.rot.z());
+      
+      if (position_error < ik_tolerance_ && rotation_error < ik_tolerance_) {
+        converged = true;
+        RCLCPP_DEBUG(this->get_logger(), "%s arm IK converged at iteration %d (pos_err: %.4f, rot_err: %.4f)",
+          arm.c_str(), iter, position_error, rotation_error);
+      }
+    }
 
-  //   // Try with center of joint limits as initial guess
-  //   KDL::JntArray q_center(chain_ptr->getNrOfJoints());
-  //   for (unsigned int i = 0; i < chain_ptr->getNrOfJoints(); i++) {
-  //     q_center(i) = ((*q_min_ptr)(i) + (*q_max_ptr)(i)) / 2.0;
-  //   }
-  //   ik_result = (*ik_solver_ptr)->CartToJnt(q_center, target_frame, q_result);
-
-  //   if (ik_result < 0) {
-  //     // Try with home position (zeros)
-  //     KDL::JntArray q_home(chain_ptr->getNrOfJoints());
-  //     for (unsigned int i = 0; i < q_home.rows(); i++) {
-  //       q_home(i) = 0.0;
-  //     }
-  //     ik_result = (*ik_solver_ptr)->CartToJnt(q_home, target_frame, q_result);
-  //   }
-  // }
-
-  if (ik_result >= 0) {
     // Verify all joints are within limits
     bool all_within_limits = true;
     for (unsigned int i = 0; i < q_result.rows(); i++) {
       if (q_result(i) < (*q_min_ptr)(i) || q_result(i) > (*q_max_ptr)(i)) {
         all_within_limits = false;
-        RCLCPP_WARN(this->get_logger(),
-          "%s arm joint %d solution %.3f is outside limits [%.3f, %.3f]",
-                               arm.c_str(), i, q_result(i), (*q_min_ptr)(i), (*q_max_ptr)(i));
+        // Clamp to limits
+        if (q_result(i) < (*q_min_ptr)(i)) {
+          q_result(i) = (*q_min_ptr)(i);
+        } else {
+          q_result(i) = (*q_max_ptr)(i);
+        }
       }
-    }
-
-    if (!all_within_limits) {
-      RCLCPP_ERROR(this->get_logger(), "❌ %s arm IK solution violates joint limits! Skipping.",
-        arm.c_str());
-      return;
     }
 
     // Apply low-pass filter: blend current position toward IK target
@@ -750,11 +741,9 @@ void FfwArmIKSolver::solveIK(
 
     // Clamp joint movement to max step for safety (applied to filtered values)
     const double max_joint_step = max_joint_step_degrees_ * M_PI / 180.0;
-    bool clamped = false;
     for (unsigned int i = 0; i < q_filtered.rows(); i++) {
       double delta = q_filtered(i) - (*current_positions_ptr)[i];
       if (std::abs(delta) > max_joint_step) {
-        clamped = true;
         if (delta > 0) {
           q_filtered(i) = (*current_positions_ptr)[i] + max_joint_step;
         } else {
@@ -762,25 +751,16 @@ void FfwArmIKSolver::solveIK(
         }
       }
     }
-    if (clamped) {
-      // RCLCPP_WARN(this->get_logger(),
-      //   "⚠️ %s arm joint movement clamped to max %.1f deg per cycle for safety.",
-      //                      arm.c_str(), max_joint_step_degrees_);
-    }
-
-    // RCLCPP_INFO(this->get_logger(), "✅ %s arm IK solution found!", arm.c_str());
 
     // Store solution for next iteration (hybrid approach)
     *previous_solution_ptr = q_filtered;
     has_previous_solution_ = true;
 
-    // Create and publish JointTrajectory message with the solution
+    // Publish result at each iteration
     auto joint_trajectory = trajectory_msgs::msg::JointTrajectory();
-    // joint_trajectory.header.stamp = this->get_clock()->now();
     joint_trajectory.header.frame_id = "base_link";
     joint_trajectory.joint_names = *joint_names_ptr;
 
-    // Create trajectory point
     auto point = trajectory_msgs::msg::JointTrajectoryPoint();
     point.positions.resize(q_filtered.rows());
     point.velocities.resize(q_filtered.rows(), 0.0);
@@ -790,42 +770,32 @@ void FfwArmIKSolver::solveIK(
       point.positions[i] = q_filtered(i);
     }
 
-    // Set time from start (immediate execution)
     point.time_from_start = rclcpp::Duration::from_nanoseconds(0);
     joint_trajectory.points.push_back(point);
-
-    // if (ik_toggle_) {
-    //   (*publisher_ptr)->publish(joint_trajectory);
-    // }
     (*publisher_ptr)->publish(joint_trajectory);
 
-    // Log joint solution
-    std::string solution_log = "🎯 " + arm + " arm joint solution: [";
-    for (size_t i = 0; i < joint_names_ptr->size(); i++) {
-      solution_log += (*joint_names_ptr)[i] + "=" + std::to_string(q_result(i));
-      if (i < joint_names_ptr->size() - 1) {solution_log += ", ";}
-    }
-    solution_log += "]";
-    // RCLCPP_INFO(this->get_logger(), "%s", solution_log.c_str());
+    // Update current position for next iteration
+    q_current = q_result;
 
-  } else {
-    // Provide detailed error information
-    std::string error_msg;
-    switch(ik_result) {
-      case -1: error_msg = "Failed to converge"; break;
-      case -2: error_msg = "Undefined problem"; break;
-      case -3: error_msg = "Degraded solution"; break;
-      default: error_msg = "Unknown error"; break;
+    // Break if converged
+    if (converged) {
+      break;
     }
-    RCLCPP_ERROR(this->get_logger(), "❌ %s arm IK failed: %s (code: %d)", arm.c_str(),
-      error_msg.c_str(), ik_result);
 
-    // Calculate distance for reachability information
-    double distance = sqrt(target_pose.pose.position.x * target_pose.pose.position.x +
-                                  target_pose.pose.position.y * target_pose.pose.position.y +
-                                  target_pose.pose.position.z * target_pose.pose.position.z);
-    RCLCPP_WARN(this->get_logger(), "📐 Target distance from arm_base: %.3f m", distance);
+    // Time limit check
+    auto total_duration = end_time - initial_start_time;
+    if (total_duration.seconds() > 0.03) {
+      RCLCPP_DEBUG(this->get_logger(), "%s arm IK time limit reached at iteration %d",
+        arm.c_str(), iter);
+      break;
+    }
   }
+
+  if (!converged) {
+    RCLCPP_DEBUG(this->get_logger(), "%s arm IK did not fully converge after %d iterations",
+      arm.c_str(), ik_max_iterations_);
+  }
+
 }
 
 void FfwArmIKSolver::publishCurrentPoses()

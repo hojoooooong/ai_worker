@@ -27,7 +27,7 @@
 #include <kdl/chain.hpp>
 #include <kdl/chainfksolverpos_recursive.hpp>
 #include <kdl/chainiksolvervel_pinv.hpp>
-#include <kdl/chainiksolverpos_nr_jl.hpp>
+#include "ffw_kinematics/chainiksolverpos_nr_jl.hpp"
 #include <kdl/frames.hpp>
 #include <kdl_parser/kdl_parser.hpp>
 #include <rclcpp/rclcpp.hpp>

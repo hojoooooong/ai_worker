@@ -17,7 +17,10 @@ find_package(urdf REQUIRED)
 find_package(orocos_kdl REQUIRED)
 
 # ffw Arm IK Solver executable
-add_executable(arm_ik_solver src/arm_ik_solver.cpp)
+add_executable(arm_ik_solver
+  src/arm_ik_solver.cpp
+  src/chainiksolverpos_nr_jl.cpp
+)
 
 target_include_directories(arm_ik_solver PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
