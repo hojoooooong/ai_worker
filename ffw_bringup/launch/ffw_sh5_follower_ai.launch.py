@@ -194,8 +194,6 @@ def generate_launch_description():
         actions=[swerve_drive_spawner],
     )
 
-
-
     delay_rviz_after_joint_state_broadcaster_spawner = RegisterEventHandler(
         event_handler=OnProcessExit(
             target_action=joint_state_broadcaster_spawner,
@@ -350,6 +348,7 @@ def generate_launch_description():
                 joint_trajectory_executor_lift,
                 joint_trajectory_executor_left_hand,
                 joint_trajectory_executor_right_hand,
+                joint_trajectory_executor_swerve_steering
             ]
         ),
         condition=IfCondition(init_position)
@@ -406,12 +405,14 @@ def generate_launch_description():
             robot_controller_spawner,
             delay_left_hand_current_command_process_after_controllers,
             delay_right_hand_current_command_process_after_controllers,
+            swerve_steering_initial_position_spawner,
+            swerve_drive_spawner_direct,
             init_position_event_handler,
             swerve_controller_switch_event_handler,
             # camera_timer_20s,
             # camera_timer_10s,
-            # ffw_arm_launch,
-            # pedal_launch,
-            preset_hand_controller,
+            ffw_arm_launch,
+            pedal_launch,
+            # preset_hand_controller,
         ]
     )
