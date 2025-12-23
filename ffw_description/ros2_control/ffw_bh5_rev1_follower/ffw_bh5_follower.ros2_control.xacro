@@ -538,26 +538,26 @@
         <param name="SyncTable 1 ID 3">113</param>
         <param name="SyncTable 1 ID 4">114</param>
         <param name="SyncTable 1 ID 5">115</param>
-        <param name="SyncTable 2 ID 1">121</param>
-        <param name="SyncTable 2 ID 2">122</param>
-        <param name="SyncTable 2 ID 3">123</param>
-        <param name="SyncTable 2 ID 4">124</param>
-        <param name="SyncTable 2 ID 5">125</param>
-        <param name="SyncTable 3 ID 1">131</param>
-        <param name="SyncTable 3 ID 2">132</param>
-        <param name="SyncTable 3 ID 3">133</param>
-        <param name="SyncTable 3 ID 4">134</param>
-        <param name="SyncTable 3 ID 5">135</param>
-        <param name="SyncTable 4 ID 1">116</param>
-        <param name="SyncTable 4 ID 2">117</param>
-        <param name="SyncTable 4 ID 3">118</param>
-        <param name="SyncTable 4 ID 4">119</param>
-        <param name="SyncTable 4 ID 5">120</param>
-        <param name="SyncTable 5 ID 1">126</param>
-        <param name="SyncTable 5 ID 2">127</param>
-        <param name="SyncTable 5 ID 3">128</param>
-        <param name="SyncTable 5 ID 4">129</param>
-        <param name="SyncTable 5 ID 5">130</param>
+        <param name="SyncTable 2 ID 1">116</param>
+        <param name="SyncTable 2 ID 2">117</param>
+        <param name="SyncTable 2 ID 3">118</param>
+        <param name="SyncTable 2 ID 4">119</param>
+        <param name="SyncTable 2 ID 5">120</param>
+        <param name="SyncTable 3 ID 1">121</param>
+        <param name="SyncTable 3 ID 2">122</param>
+        <param name="SyncTable 3 ID 3">123</param>
+        <param name="SyncTable 3 ID 4">124</param>
+        <param name="SyncTable 3 ID 5">125</param>
+        <param name="SyncTable 4 ID 1">126</param>
+        <param name="SyncTable 4 ID 2">127</param>
+        <param name="SyncTable 4 ID 3">128</param>
+        <param name="SyncTable 4 ID 4">129</param>
+        <param name="SyncTable 4 ID 5">130</param>
+        <param name="SyncTable 5 ID 1">131</param>
+        <param name="SyncTable 5 ID 2">132</param>
+        <param name="SyncTable 5 ID 3">133</param>
+        <param name="SyncTable 5 ID 4">134</param>
+        <param name="SyncTable 5 ID 5">135</param>
         <param name="SyncTable 1 Read Address 1">224</param>
         <param name="SyncTable 1 Read Address 2">224</param>
         <param name="SyncTable 1 Read Address 3">224</param>
@@ -1142,7 +1142,7 @@
         <param name="type">virtual_dxl</param>
         <param name="ID">111</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6021</param>
+        <param name="model_num">6001</param>
       </gpio>
       <gpio name="dxl112">
         <command_interface name="Goal Position"/>
@@ -1153,7 +1153,7 @@
         <param name="type">virtual_dxl</param>
         <param name="ID">112</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6022</param>
+        <param name="model_num">6002</param>
       </gpio>
       <gpio name="dxl113">
         <command_interface name="Goal Position"/>
@@ -1164,7 +1164,7 @@
         <param name="type">virtual_dxl</param>
         <param name="ID">113</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6023</param>
+        <param name="model_num">6003</param>
       </gpio>
       <gpio name="dxl114">
         <command_interface name="Goal Position"/>
@@ -1175,7 +1175,7 @@
         <param name="type">virtual_dxl</param>
         <param name="ID">114</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6024</param>
+        <param name="model_num">6004</param>
       </gpio>
       <gpio name="finger_r_sensor1">
         <state_interface name="Present Pressure 1"/>
@@ -1190,7 +1190,7 @@
         <param name="type">virtual_sensor</param>
         <param name="ID">115</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6025</param>
+        <param name="model_num">6005</param>
       </gpio>
       <gpio name="dxl116">
         <command_interface name="Goal Position"/>
@@ -1201,7 +1201,7 @@
         <param name="type">virtual_dxl</param>
         <param name="ID">116</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6016</param>
+        <param name="model_num">6006</param>
       </gpio>
       <gpio name="dxl117">
         <command_interface name="Goal Position"/>
@@ -1212,7 +1212,7 @@
         <param name="type">virtual_dxl</param>
         <param name="ID">117</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6017</param>
+        <param name="model_num">6007</param>
       </gpio>
       <gpio name="dxl118">
         <command_interface name="Goal Position"/>
@@ -1223,7 +1223,7 @@
         <param name="type">virtual_dxl</param>
         <param name="ID">118</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6018</param>
+        <param name="model_num">6008</param>
       </gpio>
       <gpio name="dxl119">
         <command_interface name="Goal Position"/>
@@ -1234,7 +1234,7 @@
         <param name="type">virtual_dxl</param>
         <param name="ID">119</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6019</param>
+        <param name="model_num">6009</param>
       </gpio>
       <gpio name="finger_r_sensor2">
         <state_interface name="Present Pressure 1"/>
@@ -1249,7 +1249,7 @@
         <param name="type">virtual_sensor</param>
         <param name="ID">120</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6020</param>
+        <param name="model_num">6010</param>
       </gpio>
       <gpio name="dxl121">
         <command_interface name="Goal Position"/>
@@ -1319,7 +1319,7 @@
         <param name="type">virtual_dxl</param>
         <param name="ID">126</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6006</param>
+        <param name="model_num">6016</param>
       </gpio>
       <gpio name="dxl127">
         <command_interface name="Goal Position"/>
@@ -1330,7 +1330,7 @@
         <param name="type">virtual_dxl</param>
         <param name="ID">127</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6007</param>
+        <param name="model_num">6017</param>
       </gpio>
       <gpio name="dxl128">
         <command_interface name="Goal Position"/>
@@ -1341,7 +1341,7 @@
         <param name="type">virtual_dxl</param>
         <param name="ID">128</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6008</param>
+        <param name="model_num">6018</param>
       </gpio>
       <gpio name="dxl129">
         <command_interface name="Goal Position"/>
@@ -1352,7 +1352,7 @@
         <param name="type">virtual_dxl</param>
         <param name="ID">129</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6009</param>
+        <param name="model_num">6019</param>
       </gpio>
       <gpio name="finger_r_sensor4">
         <state_interface name="Present Pressure 1"/>
@@ -1367,7 +1367,7 @@
         <param name="type">virtual_sensor</param>
         <param name="ID">130</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6010</param>
+        <param name="model_num">6020</param>
       </gpio>
       <gpio name="dxl131">
         <command_interface name="Goal Position"/>
@@ -1378,7 +1378,7 @@
         <param name="type">virtual_dxl</param>
         <param name="ID">131</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6001</param>
+        <param name="model_num">6021</param>
       </gpio>
       <gpio name="dxl132">
         <command_interface name="Goal Position"/>
@@ -1389,7 +1389,7 @@
         <param name="type">virtual_dxl</param>
         <param name="ID">132</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6002</param>
+        <param name="model_num">6022</param>
       </gpio>
       <gpio name="dxl133">
         <command_interface name="Goal Position"/>
@@ -1400,7 +1400,7 @@
         <param name="type">virtual_dxl</param>
         <param name="ID">133</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6003</param>
+        <param name="model_num">6023</param>
       </gpio>
       <gpio name="dxl134">
         <command_interface name="Goal Position"/>
@@ -1411,7 +1411,7 @@
         <param name="type">virtual_dxl</param>
         <param name="ID">134</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6004</param>
+        <param name="model_num">6024</param>
       </gpio>
       <gpio name="finger_r_sensor5">
         <state_interface name="Present Pressure 1"/>
@@ -1426,7 +1426,7 @@
         <param name="type">virtual_sensor</param>
         <param name="ID">135</param>
         <param name="comm_id">110</param>
-        <param name="model_num">6005</param>
+        <param name="model_num">6025</param>
       </gpio>
 
       <!-- RIGHT ARM -->
@@ -1589,31 +1589,31 @@
         <param name="Reboot">1</param>
         <param name="Table Sync Enable">0</param>
         <param name="Bus Watchdog">100</param>
-        <param name="SyncTable 1 ID 1">161</param>
-        <param name="SyncTable 1 ID 2">162</param>
-        <param name="SyncTable 1 ID 3">163</param>
-        <param name="SyncTable 1 ID 4">164</param>
-        <param name="SyncTable 1 ID 5">165</param>
-        <param name="SyncTable 2 ID 1">151</param>
-        <param name="SyncTable 2 ID 2">152</param>
-        <param name="SyncTable 2 ID 3">153</param>
-        <param name="SyncTable 2 ID 4">154</param>
-        <param name="SyncTable 2 ID 5">155</param>
-        <param name="SyncTable 3 ID 1">141</param>
-        <param name="SyncTable 3 ID 2">142</param>
-        <param name="SyncTable 3 ID 3">143</param>
-        <param name="SyncTable 3 ID 4">144</param>
-        <param name="SyncTable 3 ID 5">145</param>
+        <param name="SyncTable 1 ID 1">141</param>
+        <param name="SyncTable 1 ID 2">142</param>
+        <param name="SyncTable 1 ID 3">143</param>
+        <param name="SyncTable 1 ID 4">144</param>
+        <param name="SyncTable 1 ID 5">145</param>
+        <param name="SyncTable 2 ID 1">146</param>
+        <param name="SyncTable 2 ID 2">147</param>
+        <param name="SyncTable 2 ID 3">148</param>
+        <param name="SyncTable 2 ID 4">149</param>
+        <param name="SyncTable 2 ID 5">150</param>
+        <param name="SyncTable 3 ID 1">151</param>
+        <param name="SyncTable 3 ID 2">152</param>
+        <param name="SyncTable 3 ID 3">153</param>
+        <param name="SyncTable 3 ID 4">154</param>
+        <param name="SyncTable 3 ID 5">155</param>
         <param name="SyncTable 4 ID 1">156</param>
         <param name="SyncTable 4 ID 2">157</param>
         <param name="SyncTable 4 ID 3">158</param>
         <param name="SyncTable 4 ID 4">159</param>
         <param name="SyncTable 4 ID 5">160</param>
-        <param name="SyncTable 5 ID 1">146</param>
-        <param name="SyncTable 5 ID 2">147</param>
-        <param name="SyncTable 5 ID 3">148</param>
-        <param name="SyncTable 5 ID 4">149</param>
-        <param name="SyncTable 5 ID 5">150</param>
+        <param name="SyncTable 5 ID 1">161</param>
+        <param name="SyncTable 5 ID 2">162</param>
+        <param name="SyncTable 5 ID 3">163</param>
+        <param name="SyncTable 5 ID 4">164</param>
+        <param name="SyncTable 5 ID 5">165</param>
         <param name="SyncTable 1 Read Address 1">224</param>
         <param name="SyncTable 1 Read Address 2">224</param>
         <param name="SyncTable 1 Read Address 3">224</param>
