@@ -45,7 +45,7 @@ def generate_launch_description():
                               description='Whether to launch the init_position node.'),
         DeclareLaunchArgument('model', default_value='ffw_bg2_rev4_follower',
                               description='Robot model name.'),
-        DeclareLaunchArgument('use_head_eef_tracker', default_value='false',
+        DeclareLaunchArgument('use_head_eef_tracker', default_value='true',
                               description='Whether to launch the head EEF tracker node.'),
         DeclareLaunchArgument(
             'init_position_file',
@@ -206,7 +206,7 @@ def generate_launch_description():
             on_exit=[
                 joint_trajectory_executor_left,
                 joint_trajectory_executor_right,
-                joint_trajectory_executor_head,
+                # joint_trajectory_executor_head,
                 joint_trajectory_executor_lift
             ]
         ),
