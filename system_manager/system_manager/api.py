@@ -1,0 +1,735 @@
+"""FastAPI application for system_manager unified REST API."""
+
+import logging
+from contextlib import asynccontextmanager
+from typing import Optional
+
+import docker
+from fastapi import FastAPI, HTTPException, status
+from fastapi.responses import JSONResponse
+
+from system_manager.agent_client import AgentClient, AgentClientPool
+from system_manager.config import load_config
+from system_manager.docker_client import DockerClient
+from system_manager.models import (
+    ContainerListResponse,
+    ContainerInfo,
+    DockerContainerActionRequest,
+    DockerContainerActionResponse,
+    DockerContainerInfo,
+    DockerContainerListResponse,
+    DockerContainerLogsResponse,
+    DockerContainerStatus,
+    ErrorResponse,
+    ServiceActionRequest,
+    ServiceControlResponse,
+    ServiceInfo,
+    ServiceListResponse,
+    ServiceStatusResponse,
+    SystemConfig,
+)
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+# Global state
+_config: Optional[SystemConfig] = None
+_client_pool: Optional[AgentClientPool] = None
+_docker_client: Optional[DockerClient] = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for FastAPI app.
+
+    Loads configuration and initializes agent client pool and Docker client on startup.
+    Cleans up on shutdown.
+    """
+    global _config, _client_pool, _docker_client
+
+    # Startup
+    logger.info("Starting system_manager...")
+    try:
+        _config = load_config()
+        _client_pool = AgentClientPool(_config)
+        
+        # Initialize Docker client (optional - may fail if socket not available)
+        try:
+            _docker_client = DockerClient()
+            logger.info("Docker client initialized successfully")
+        except Exception as e:
+            logger.warning(f"Docker client initialization failed (Docker operations will be unavailable): {e}")
+            _docker_client = None
+        
+        logger.info("System manager initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize system_manager: {e}")
+        raise
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down system_manager...")
+    if _client_pool:
+        _client_pool.close_all()
+    if _docker_client:
+        _docker_client.close()
+    logger.info("System manager shut down")
+
+
+app = FastAPI(
+    title="System Manager API",
+    description="""
+    Unified REST API for managing ROS2-based robot containers using s6-overlay.
+    
+    This API provides a centralized control plane to manage services across multiple
+    robot containers. Each container runs an agent that exposes s6-overlay service
+    management via Unix Domain Sockets.
+    
+    ## Features
+    
+    * List all managed containers
+    * List services within each container
+    * Get real-time service status
+    * Control services (start, stop, restart)
+    * Docker container management (list, status, control, logs)
+    
+    ## Documentation
+    
+    * **Swagger UI**: Available at `/docs` (interactive API testing)
+    * **ReDoc**: Available at `/redoc` (alternative documentation)
+    * **OpenAPI Schema**: Available at `/openapi.json`
+    """,
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    tags_metadata=[
+        {
+            "name": "root",
+            "description": "Root endpoint and API information",
+        },
+        {
+            "name": "containers",
+            "description": "Operations related to container management. List and inspect containers.",
+        },
+        {
+            "name": "services",
+            "description": "Operations related to service management. List services, check status, and control services (start/stop/restart).",
+        },
+        {
+            "name": "docker",
+            "description": "Docker container management operations. List containers, get status, control containers, and view logs.",
+        },
+    ],
+)
+
+
+def get_config() -> SystemConfig:
+    """Get loaded configuration.
+
+    Returns:
+        SystemConfig instance.
+
+    Raises:
+        HTTPException: If configuration is not loaded.
+    """
+    if _config is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Configuration not loaded",
+        )
+    return _config
+
+
+def get_client_pool() -> AgentClientPool:
+    """Get agent client pool.
+
+    Returns:
+        AgentClientPool instance.
+
+    Raises:
+        HTTPException: If client pool is not initialized.
+    """
+    if _client_pool is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Agent client pool not initialized",
+        )
+    return _client_pool
+
+
+def get_docker_client() -> DockerClient:
+    """Get Docker client.
+
+    Returns:
+        DockerClient instance.
+
+    Raises:
+        HTTPException: If Docker client is not available.
+    """
+    if _docker_client is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Docker client not available. Ensure Docker socket is mounted.",
+        )
+    return _docker_client
+
+
+def get_agent_client(container_name: str) -> AgentClient:
+    """Get agent client for a container.
+
+    Args:
+        container_name: Name of the container.
+
+    Returns:
+        AgentClient instance.
+
+    Raises:
+        HTTPException: If container not found or client unavailable.
+    """
+    config = get_config()
+    if container_name not in config.containers:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Container '{container_name}' not found",
+        )
+
+    client_pool = get_client_pool()
+    client = client_pool.get_client(container_name)
+    if client is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Agent client for container '{container_name}' not available",
+        )
+    return client
+
+
+@app.get(
+    "/",
+    tags=["root"],
+    summary="API Information",
+    description="Get API information and links to documentation",
+    response_description="API metadata and documentation links",
+)
+async def root():
+    """Root endpoint with API information and documentation links.
+    
+    Returns:
+        API metadata including version and links to interactive documentation.
+    """
+    return {
+        "message": "System Manager API",
+        "version": "0.1.0",
+        "docs": {
+            "swagger_ui": "/docs",
+            "redoc": "/redoc",
+            "openapi_schema": "/openapi.json",
+        },
+        "description": "Unified REST API for managing ROS2-based robot containers",
+    }
+
+
+@app.get(
+    "/containers",
+    response_model=ContainerListResponse,
+    tags=["containers"],
+    summary="List all known containers",
+    description="Retrieve a list of all containers configured in the system manager",
+    response_description="List of containers with their names and socket paths",
+)
+async def list_containers() -> ContainerListResponse:
+    """Get list of all known containers from configuration.
+    
+    Returns a list of all containers that are configured in the system manager's
+    configuration file. Each container entry includes its name and the path to
+    its agent's Unix Domain Socket.
+    
+    Returns:
+        ContainerListResponse containing a list of ContainerInfo objects.
+        
+    Example Response:
+        ```json
+        {
+          "containers": [
+            {
+              "name": "ai_worker",
+              "socket_path": "/agents/ai_worker/s6_agent.sock"
+            }
+          ]
+        }
+        ```
+    """
+    config = get_config()
+    containers = [
+        ContainerInfo(name=name, socket_path=container_config.socket_path)
+        for name, container_config in config.containers.items()
+    ]
+    return ContainerListResponse(containers=containers)
+
+
+@app.get(
+    "/containers/{container}/services",
+    response_model=ServiceListResponse,
+    tags=["services"],
+    summary="List services for a container",
+    description="Get a list of all services available in a specific container",
+    response_description="List of services with their IDs and labels",
+)
+async def list_services(container: str) -> ServiceListResponse:
+    """Get list of services for a specific container.
+
+    Services are discovered dynamically from the agent. The config may contain
+    optional labels for better display names, but services come from the agent.
+    
+    Args:
+        container: Name of the container (e.g., "ai_worker")
+        
+    Returns:
+        ServiceListResponse containing the container name and list of services.
+        
+    Raises:
+        HTTPException: 404 if container not found, 503 if agent is unavailable.
+        
+    Example Response:
+        ```json
+        {
+          "container": "ai_worker",
+          "services": [
+            {
+              "id": "ffw_bg2_follower_ai",
+              "label": "FFW BG2 Follower AI"
+            },
+            {
+              "id": "s6-agent",
+              "label": "s6-agent"
+            }
+          ]
+        }
+        ```
+    """
+    config = get_config()
+    if container not in config.containers:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Container '{container}' not found",
+        )
+
+    container_config = config.containers[container]
+
+    # Get services from agent (source of truth)
+    try:
+        client = get_agent_client(container)
+        agent_response = client.get_services()
+        agent_services = agent_response.get("services", [])
+
+        # Create a map of service labels from config (optional metadata)
+        label_map = {svc.id: svc.label for svc in container_config.services}
+
+        # Build service list from agent, using labels from config if available
+        services = [
+            ServiceInfo(id=service_id, label=label_map.get(service_id, service_id))
+            for service_id in agent_services
+        ]
+
+    except Exception as e:
+        logger.error(f"Failed to get services from agent for container '{container}': {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to communicate with agent: {str(e)}",
+        )
+
+    return ServiceListResponse(container=container, services=services)
+
+
+@app.get(
+    "/containers/{container}/services/{service}/status",
+    response_model=ServiceStatusResponse,
+    tags=["services"],
+    summary="Get status of a service",
+    description="Retrieve the current status of a specific service in a container",
+    response_description="Service status including running state, PID, and uptime",
+)
+async def get_service_status(container: str, service: str) -> ServiceStatusResponse:
+    """Get status of a specific service in a container.
+
+    Calls the agent's /services/{name}/status endpoint and wraps the response
+    with container/service metadata. Returns detailed information about the
+    service's current state.
+    
+    Args:
+        container: Name of the container (e.g., "ai_worker")
+        service: Service ID (e.g., "ai_worker_bringup")
+        
+    Returns:
+        ServiceStatusResponse with service status information.
+        
+    Raises:
+        HTTPException: 404 if container/service not found, 503 if agent unavailable.
+        
+    Example Response:
+        ```json
+        {
+          "container": "ai_worker",
+          "service": "ai_worker_bringup",
+          "service_label": "AI Worker Bringup",
+          "name": "ai_worker_bringup",
+          "raw": "up (pid 1234) 10 seconds",
+          "is_up": true,
+          "pid": 1234,
+          "uptime_seconds": 10
+        }
+        ```
+    """
+    config = get_config()
+    if container not in config.containers:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Container '{container}' not found",
+        )
+
+    container_config = config.containers[container]
+
+    # Find service label from config (optional metadata)
+    service_label: Optional[str] = None
+    for svc_info in container_config.services:
+        if svc_info.id == service:
+            service_label = svc_info.label
+            break
+    # If not in config, use service name as label
+    if service_label is None:
+        service_label = service
+
+    # Get status from agent
+    try:
+        client = get_agent_client(container)
+        agent_response = client.get_service_status(service)
+    except Exception as e:
+        logger.error(f"Failed to get service status from agent: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to communicate with agent: {str(e)}",
+        )
+
+    # Wrap agent response with container/service metadata
+    return ServiceStatusResponse(
+        container=container,
+        service=service,
+        service_label=service_label,
+        name=agent_response.get("name", service),
+        raw=agent_response.get("raw", ""),
+        is_up=agent_response.get("is_up", False),
+        pid=agent_response.get("pid"),
+        uptime_seconds=agent_response.get("uptime_seconds"),
+    )
+
+
+@app.post(
+    "/containers/{container}/services/{service}",
+    response_model=ServiceControlResponse,
+    tags=["services"],
+    summary="Control a service (start/stop/restart)",
+    description="Start, stop, or restart a service in a container",
+    response_description="Confirmation of the action performed",
+)
+async def control_service(
+    container: str,
+    service: str,
+    request: ServiceActionRequest,
+) -> ServiceControlResponse:
+    """Control a service (start, stop, or restart).
+
+    Forwards the action to the agent's /services/{name} endpoint. This allows
+    you to control s6-overlay services running inside the container.
+    
+    Args:
+        container: Name of the container (e.g., "ai_worker")
+        service: Service ID (e.g., "ai_worker_bringup")
+        request: ServiceActionRequest with action ("up", "down", or "restart")
+        
+    Returns:
+        ServiceControlResponse confirming the action was performed.
+        
+    Raises:
+        HTTPException: 404 if container/service not found, 503 if agent unavailable.
+        
+    Example Request:
+        ```json
+        {
+          "action": "restart"
+        }
+        ```
+        
+    Example Response:
+        ```json
+        {
+          "container": "ai_worker",
+          "service": "ai_worker_bringup",
+          "action": "restart",
+          "result": "ok"
+        }
+        ```
+    """
+    config = get_config()
+    if container not in config.containers:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Container '{container}' not found",
+        )
+
+    # Forward to agent
+    try:
+        client = get_agent_client(container)
+        agent_response = client.control_service(service, request.action)
+        logger.info(f"Successfully executed action '{request.action}' on service '{service}' in container '{container}'")
+    except Exception as e:
+        logger.error(f"Failed to control service via agent: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to communicate with agent: {str(e)}",
+        )
+
+    return ServiceControlResponse(
+        container=container,
+        service=service,
+        action=request.action,
+        result=agent_response.get("result", "ok"),
+    )
+
+
+# Docker Container Management Endpoints
+
+
+@app.get(
+    "/docker/containers",
+    response_model=DockerContainerListResponse,
+    tags=["docker"],
+    summary="List all Docker containers",
+    description="Retrieve a list of all Docker containers on the system",
+    response_description="List of Docker containers with basic information",
+)
+async def list_docker_containers(all: bool = False) -> DockerContainerListResponse:
+    """Get list of all Docker containers.
+
+    Args:
+        all: If True, include stopped containers. Defaults to False (only running).
+
+    Returns:
+        DockerContainerListResponse containing a list of DockerContainerInfo objects.
+
+    Raises:
+        HTTPException: 503 if Docker client is unavailable.
+
+    Example Response:
+        ```json
+        {
+          "containers": [
+            {
+              "id": "abc123def456",
+              "name": "ai_worker",
+              "status": "running",
+              "image": "robotis/ai-worker:latest",
+              "created": "2024-01-01T00:00:00Z"
+            }
+          ]
+        }
+        ```
+    """
+    try:
+        docker_client = get_docker_client()
+        containers = docker_client.list_containers(all=all)
+        return DockerContainerListResponse(
+            containers=[DockerContainerInfo(**container) for container in containers]
+        )
+    except Exception as e:
+        logger.error(f"Failed to list Docker containers: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to list containers: {str(e)}",
+        )
+
+
+@app.get(
+    "/docker/containers/{name}/status",
+    response_model=DockerContainerStatus,
+    tags=["docker"],
+    summary="Get Docker container status",
+    description="Retrieve detailed status information for a specific Docker container",
+    response_description="Detailed container status including state, timestamps, and exit codes",
+)
+async def get_docker_container_status(name: str) -> DockerContainerStatus:
+    """Get detailed status of a Docker container.
+
+    Args:
+        name: Container name or ID.
+
+    Returns:
+        DockerContainerStatus with detailed container information.
+
+    Raises:
+        HTTPException: 404 if container not found, 503 if Docker client unavailable.
+
+    Example Response:
+        ```json
+        {
+          "id": "abc123def456",
+          "name": "ai_worker",
+          "status": "running",
+          "state": "running",
+          "running": true,
+          "restarting": false,
+          "paused": false,
+          "image": "robotis/ai-worker:latest",
+          "created": "2024-01-01T00:00:00Z",
+          "started_at": "2024-01-01T01:00:00Z",
+          "finished_at": null,
+          "exit_code": null
+        }
+        ```
+    """
+    try:
+        docker_client = get_docker_client()
+        status_info = docker_client.get_container_status(name)
+        return DockerContainerStatus(**status_info)
+    except docker.errors.NotFound:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Docker container '{name}' not found",
+        )
+    except Exception as e:
+        logger.error(f"Failed to get container status for '{name}': {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to get container status: {str(e)}",
+        )
+
+
+@app.post(
+    "/docker/containers/{name}",
+    response_model=DockerContainerActionResponse,
+    tags=["docker"],
+    summary="Control a Docker container",
+    description="Start, stop, or restart a Docker container",
+    response_description="Confirmation of the action performed",
+)
+async def control_docker_container(
+    name: str, request: DockerContainerActionRequest
+) -> DockerContainerActionResponse:
+    """Control a Docker container (start, stop, or restart).
+
+    Args:
+        name: Container name or ID.
+        request: DockerContainerActionRequest with action and optional timeout.
+
+    Returns:
+        DockerContainerActionResponse confirming the action was performed.
+
+    Raises:
+        HTTPException: 404 if container not found, 503 if Docker client unavailable.
+
+    Example Request:
+        ```json
+        {
+          "action": "restart",
+          "timeout": 10
+        }
+        ```
+
+    Example Response:
+        ```json
+        {
+          "name": "ai_worker",
+          "action": "restart",
+          "result": "ok"
+        }
+        ```
+    """
+    try:
+        docker_client = get_docker_client()
+
+        if request.action == "start":
+            result = docker_client.start_container(name)
+        elif request.action == "stop":
+            result = docker_client.stop_container(name, timeout=request.timeout or 10)
+        elif request.action == "restart":
+            result = docker_client.restart_container(name, timeout=request.timeout or 10)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid action: {request.action}",
+            )
+
+        return DockerContainerActionResponse(**result)
+    except docker.errors.NotFound:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Docker container '{name}' not found",
+        )
+    except Exception as e:
+        logger.error(f"Failed to control container '{name}': {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to control container: {str(e)}",
+        )
+
+
+@app.get(
+    "/docker/containers/{name}/logs",
+    response_model=DockerContainerLogsResponse,
+    tags=["docker"],
+    summary="Get Docker container logs",
+    description="Retrieve logs from a Docker container",
+    response_description="Container logs with metadata",
+)
+async def get_docker_container_logs(name: str, tail: int = 100) -> DockerContainerLogsResponse:
+    """Get logs from a Docker container.
+
+    Args:
+        name: Container name or ID.
+        tail: Number of log lines to return from the end. Defaults to 100.
+
+    Returns:
+        DockerContainerLogsResponse containing the logs.
+
+    Raises:
+        HTTPException: 404 if container not found, 503 if Docker client unavailable.
+
+    Example Response:
+        ```json
+        {
+          "container": "ai_worker",
+          "logs": "2024-01-01T01:00:00Z Starting service...\n...",
+          "tail": 100
+        }
+        ```
+    """
+    try:
+        docker_client = get_docker_client()
+        logs = docker_client.get_container_logs(name, tail=tail)
+        return DockerContainerLogsResponse(container=name, logs=logs, tail=tail)
+    except docker.errors.NotFound:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Docker container '{name}' not found",
+        )
+    except Exception as e:
+        logger.error(f"Failed to get logs for container '{name}': {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to get container logs: {str(e)}",
+        )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc: HTTPException):
+    """Custom exception handler for HTTP exceptions."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=ErrorResponse(error=exc.detail or "Unknown error").model_dump(),
+    )
+

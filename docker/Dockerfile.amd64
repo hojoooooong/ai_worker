@@ -143,7 +143,6 @@ RUN mkdir -p /var/log/ffw_bg2_follower_ai && \
     chmod 02755 /var/log/ffw_sg2_follower_ai
 
 # Add services to the user bundle so they start at container boot
-# Note: ffw_bg2_follower_ai-pipeline and ffw_lg2_leader_ai-pipeline are NOT in the user bundle - they must be started manually
 RUN mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d && \
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/s6-agent
 

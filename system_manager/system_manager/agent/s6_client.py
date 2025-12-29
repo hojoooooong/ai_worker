@@ -1,0 +1,162 @@
+"""Helper functions to interact with s6-overlay services."""
+
+import logging
+import re
+import subprocess
+from pathlib import Path
+from typing import Optional
+
+from system_manager.agent.models import ServiceStatus
+
+logger = logging.getLogger(__name__)
+
+# Default s6 service directory
+S6_SERVICE_DIR = Path("/run/service")
+
+
+def list_services() -> list[str]:
+    """List all available s6 services.
+
+    Returns:
+        List of service names found in /run/service.
+
+    Raises:
+        OSError: If /run/service directory cannot be accessed.
+    """
+    try:
+        if not S6_SERVICE_DIR.exists():
+            logger.warning(f"Service directory {S6_SERVICE_DIR} does not exist")
+            return []
+
+        services = []
+        for item in S6_SERVICE_DIR.iterdir():
+            if item.is_dir():
+                # Check if it looks like an s6 service directory
+                # s6 services typically have a 'run' file
+                if (item / "run").exists() or (item / "type").exists():
+                    services.append(item.name)
+
+        logger.debug(f"Found {len(services)} services: {services}")
+        return sorted(services)
+
+    except OSError as e:
+        logger.error(f"Failed to list services: {e}")
+        raise
+
+
+def get_service_status(name: str) -> ServiceStatus:
+    """Get status of an s6 service.
+
+    Args:
+        name: Service name.
+
+    Returns:
+        ServiceStatus object with parsed status information.
+
+    Raises:
+        FileNotFoundError: If service does not exist.
+        subprocess.CalledProcessError: If s6-svstat command fails.
+    """
+    service_path = S6_SERVICE_DIR / name
+
+    if not service_path.exists():
+        raise FileNotFoundError(f"Service '{name}' not found at {service_path}")
+
+    try:
+        # Call s6-svstat to get service status
+        result = subprocess.check_output(
+            ["s6-svstat", str(service_path)],
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=5,
+        )
+
+        raw_output = result.strip()
+        logger.debug(f"Service '{name}' status: {raw_output}")
+
+        # Parse the output
+        # Example formats:
+        # "up (pid 1234) 10 seconds"
+        # "down 5 seconds"
+        # "up (pid 1234) 0 seconds"
+        is_up = raw_output.startswith("up")
+        pid: Optional[int] = None
+        uptime_seconds: Optional[int] = None
+
+        if is_up:
+            # Extract PID: "up (pid 1234) 10 seconds"
+            pid_match = re.search(r"\(pid\s+(\d+)\)", raw_output)
+            if pid_match:
+                pid = int(pid_match.group(1))
+
+            # Extract uptime: "10 seconds" or "0 seconds"
+            uptime_match = re.search(r"(\d+)\s+seconds", raw_output)
+            if uptime_match:
+                uptime_seconds = int(uptime_match.group(1))
+        else:
+            # For down services, might have: "down 5 seconds"
+            uptime_match = re.search(r"(\d+)\s+seconds", raw_output)
+            if uptime_match:
+                uptime_seconds = int(uptime_match.group(1))
+
+        return ServiceStatus(
+            name=name,
+            raw=raw_output,
+            is_up=is_up,
+            pid=pid,
+            uptime_seconds=uptime_seconds,
+        )
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to get status for service '{name}': {e}")
+        raise
+    except subprocess.TimeoutExpired:
+        logger.error(f"Timeout getting status for service '{name}'")
+        raise
+
+
+def control_service(name: str, action: str) -> None:
+    """Control an s6 service (start, stop, or restart).
+
+    Args:
+        name: Service name.
+        action: Action to perform ('up', 'down', or 'restart').
+
+    Raises:
+        FileNotFoundError: If service does not exist.
+        ValueError: If action is invalid.
+        subprocess.CalledProcessError: If s6-svc command fails.
+    """
+    service_path = S6_SERVICE_DIR / name
+
+    if not service_path.exists():
+        raise FileNotFoundError(f"Service '{name}' not found at {service_path}")
+
+    # Map actions to s6-svc flags
+    action_map = {
+        "up": "-u",
+        "down": "-d",
+        "restart": "-r",
+    }
+
+    if action not in action_map:
+        raise ValueError(f"Invalid action: {action}. Must be one of: {list(action_map.keys())}")
+
+    flag = action_map[action]
+
+    try:
+        # Execute s6-svc command
+        subprocess.check_output(
+            ["s6-svc", flag, str(service_path)],
+            stderr=subprocess.STDOUT,
+            timeout=10,
+        )
+        logger.info(f"Successfully executed action '{action}' on service '{name}'")
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to {action} service '{name}': {e}")
+        raise
+    except subprocess.TimeoutExpired:
+        logger.error(f"Timeout executing action '{action}' on service '{name}'")
+        raise
+
