@@ -1,0 +1,35 @@
+#!/command/with-contenv bash
+# FFW BG2 Follower AI service run script
+# This script launches the ROS2 bringup for FFW BG2 Follower AI
+
+set -e
+
+# Set ROS_DOMAIN_ID if not already set (default to 30)
+export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-30}
+export ROS_DISTRO=${ROS_DISTRO:-jazzy}
+export COLCON_WS=${COLCON_WS:-/root/ros2_ws}
+
+# Enable s6-overlay debug logging (set S6_VERBOSITY=1 for more verbose output)
+export S6_VERBOSITY=${S6_VERBOSITY:-1}
+
+echo "[ffw_bg2_follower_ai] Starting service..."
+echo "[ffw_bg2_follower_ai] ROS_DOMAIN_ID=${ROS_DOMAIN_ID}"
+echo "[ffw_bg2_follower_ai] ROS_DISTRO=${ROS_DISTRO}"
+echo "[ffw_bg2_follower_ai] COLCON_WS=${COLCON_WS}"
+echo "[ffw_bg2_follower_ai] PID: $$"
+
+# Record process group ID so the finish script can target the whole group
+PGID=$(ps -o pgid= -p $$ | tr -d ' ')
+echo "[ffw_bg2_follower_ai] Process group: ${PGID}"
+echo "${PGID}" > /run/ffw_bg2_follower_ai.pgid || true
+
+# Source ROS2 environment
+source /opt/ros/${ROS_DISTRO}/setup.bash
+source ${COLCON_WS}/install/setup.bash
+
+echo "[ffw_bg2_follower_ai] Launching ROS2 bringup..."
+# Launch the ROS2 bringup
+# Using 'exec' ensures ros2 launch becomes PID 1 of this service,
+# which allows s6 to properly signal it and its children
+exec ros2 launch ffw_bringup ffw_bg2_follower_ai.launch.py use_mock_hardware:=true launch_cameras:=false
+

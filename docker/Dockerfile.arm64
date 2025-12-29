@@ -62,6 +62,16 @@ RUN cp -r /opt/venv/lib/python3.12/site-packages/pyrealsense2 /usr/local/lib/pyt
 FROM robotis/ros:jazzy-ros-base-torch2.7.0-cuda12.8.0 AS ai-worker
 
 ARG TARGETARCH
+ARG S6_OVERLAY_VERSION=3.2.1.0
+
+ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp
+RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz
+ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-x86_64.tar.xz /tmp
+RUN tar -C / -Jxpf /tmp/s6-overlay-x86_64.tar.xz
+
+RUN apt-get update && \
+    apt-get install -y xz-utils && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN echo 'export PATH=/opt/venv/bin:$PATH' >> /root/.bashrc && \
     echo 'export PYTHONPATH=/opt/venv/lib/python3.12/site-packages:$PYTHONPATH' >> /root/.bashrc && \
@@ -102,13 +112,14 @@ RUN apt-get update -y && \
     rm -rf /var/lib/apt/lists/* && \
     ln -sf /usr/lib/aarch64-linux-gnu/tegra/libv4l2.so.0 /usr/lib/aarch64-linux-gnu/libv4l2.so
 
-# Install realsense dependencies
+# Install realsense dependencies and Python packages for agent
 RUN apt-get update && apt-get install -y \
     libusb-1.0-0-dev \
     libglfw3-dev \
     ffmpeg \
     vim \
     nano \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
 ENV COLCON_WS=/root/ros2_ws
@@ -145,5 +156,31 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc  && \
     echo "alias ffw_bg2_follower_ai='ros2 launch ffw_bringup ffw_bg2_follower_ai.launch.py'" >> ~/.bashrc && \
     echo "alias ffw_sg2_follower_ai='ros2 launch ffw_bringup ffw_sg2_follower_ai.launch.py'" >> ~/.bashrc && \
     echo "alias ffw_bg2_ai='ros2 launch ffw_bringup ffw_bg2_ai.launch.py'" >> ~/.bashrc && \
-    echo "alias ffw_sg2_ai='ros2 launch ffw_bringup ffw_sg2_ai.launch.py'" >> ~/.bashrc && \
-    echo "export ROS_DOMAIN_ID=30" >> ~/.bashrc
+    echo "alias ffw_sg2_ai='ros2 launch ffw_bringup ffw_sg2_ai.launch.py'" >> ~/.bashrc
+
+# Create directory for agent Unix Domain Socket
+# The agent will create /var/run/agent/s6_agent.sock
+RUN mkdir -p /var/run/agent && \
+    chmod 777 /var/run/agent
+
+# Copy system_manager package (contains both system_manager and agent modules)
+COPY system_manager /opt/system_manager
+ENV PYTHONPATH=/opt/system_manager:${PYTHONPATH}
+
+RUN pip install --no-cache-dir -r /opt/system_manager/requirements.txt
+
+# New-style s6-rc services (recommended in s6-overlay v3 docs)
+# Define services under /etc/s6-overlay/s6-rc.d and add them to the user bundle.
+
+# Agent service (longrun)
+COPY docker/s6-agent /etc/s6-overlay/s6-rc.d/s6-agent
+
+# ROS2 ffw_bg2_follower_ai service (longrun)
+COPY docker/s6-services/ffw_bg2_follower_ai /etc/s6-overlay/s6-rc.d/ffw_bg2_follower_ai
+
+# Add services to the user bundle so they start at container boot
+RUN mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d && \
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/s6-agent
+
+# Set s6-overlay as entrypoint
+ENTRYPOINT ["/init"]

@@ -12,10 +12,10 @@ services:
       memlock: 8428281856
     network_mode: host
     ipc: host
-    pid: host
     environment:
      - DISPLAY=${DISPLAY}
      - QT_X11_NO_MITSHM=1
+     - ROS_DOMAIN_ID=30
     volumes:
       - /dev:/dev
       - /dev/shm:/dev/shm
@@ -25,5 +25,7 @@ services:
       - /tmp/.docker.xauth:/tmp/.docker.xauth:rw
       - ./workspace:/workspace
       - ../:/root/ros2_ws/src/ai_worker/
+      - ./agent_sockets/ai_worker:/var/run/agent
+      - ./s6-agent:/etc/s6-overlay/s6-rc.d/s6-agent
+      - ./s6-services/ffw_bg2_follower_ai:/etc/s6-overlay/s6-rc.d/ffw_bg2_follower_ai
     privileged: true
-    command: bash
