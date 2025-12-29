@@ -32,12 +32,12 @@
         - arm_l_joint7
         - gripper_l_joint1
       left_offsets:
+        - 0.4
         - 0.0
         - 0.0
+        - -0.2
         - 0.0
-        - 0.0
-        - 0.0
-        - 0.0
+        - 0.4
         - 0.0
         - 0.3
       right_joints:
@@ -50,12 +50,12 @@
         - arm_r_joint7
         - gripper_r_joint1
       right_offsets:
+        - 0.4
         - 0.0
         - 0.0
+        - -0.2
         - 0.0
-        - 0.0
-        - 0.0
-        - 0.0
+        - 0.4
         - 0.0
         - 0.3
       trigger_threshold: -0.5
@@ -104,7 +104,7 @@
       sensorxel_r_joy_controlled_joints:
         - lift_joint
       joint_states_topic: "/joint_states"
-      sensorxel_l_joy_joint_trajectory_topic: "/leader/joystick_controller_left/joint_trajectory"
+      sensorxel_l_joy_joint_trajectory_topic: "/leader/joystick_controller_left/joint_trajectory1"
       sensorxel_r_joy_joint_trajectory_topic: "/leader/joystick_controller_right/joint_trajectory"
       sensorxel_l_joy_jog_scale: 0.06
       sensorxel_r_joy_jog_scale: 0.01
