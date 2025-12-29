@@ -67,6 +67,18 @@ def generate_launch_description():
         package='controller_manager',
         executable='spawner',
         arguments=[
+            '--controller-ros-args',
+            '-r /arm_l_controller/joint_trajectory:='
+            '/leader/joint_trajectory_command_broadcaster_left/joint_trajectory',
+            '--controller-ros-args',
+            '-r /arm_r_controller/joint_trajectory:='
+            '/leader/joint_trajectory_command_broadcaster_right/joint_trajectory',
+            '--controller-ros-args',
+            '-r /leader/joystick_controller_left/joint_trajectory:='
+            '/dummy_leader/joystick_controller_left/joint_trajectory',
+            '--controller-ros-args',
+            '-r /leader/joystick_controller_right/joint_trajectory:='
+            '/dummy_leader/joystick_controller_right/joint_trajectory',
             'joint_trajectory_command_broadcaster',
             'spring_actuator_controller_left',
             'spring_actuator_controller_right',
