@@ -29,7 +29,7 @@ import rclpy
 from rclpy.node import Node
 from scipy.spatial.transform import Rotation as R
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-from vuer import Vuer
+from vuer import Vuer, VuerSession
 from vuer.schemas import Hands
 from std_msgs.msg import Bool
 
@@ -44,7 +44,7 @@ class VRTrajectoryPublisher(Node):
         self.get_logger().set_level(rclpy.logging.LoggingSeverity.INFO)
 
         # VR publishing control flag
-        self.vr_publishing_enabled = True  # Default: disabled
+        self.vr_publishing_enabled = True #False  # Default: disabled
 
         # VR Server setup
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -67,8 +67,9 @@ class VRTrajectoryPublisher(Node):
         self.get_logger().info(f'VR Trajectory server available at: https://{hostname}:8012')
 
         # VR event handlers
-        self.vuer.add_handler('HAND_MOVE')(self.on_hand_move)
-        self.vuer.add_handler('CAMERA_MOVE')(self.on_camera_move)
+        # self.vuer.add_handler('HAND_MOVE')(self.on_hand_move)
+        # self.vuer.add_handler('CAMERA_MOVE')(self.on_camera_move)
+        self.vuer.add_handler("CONTROLLER_MOVE")(self.on_controller_move)
 
         # Hand joint configuration
         self.left_joint_names = [
@@ -675,6 +676,37 @@ class VRTrajectoryPublisher(Node):
 
         except Exception as e:
             self.get_logger().error(f'Error in hand move event: {e}')
+
+    async def on_controller_move(self, event, session: VuerSession):
+        """Handle controller movement events (gamepad trigger)."""
+        try:
+            if not self.vr_publishing_enabled:
+                return
+
+            # Check if leftState exists in event value
+            if not isinstance(event.value, dict) or 'leftState' not in event.value:
+                return
+
+            left_state = event.value.get('leftState', {})
+            bstate = left_state.get('triggerValue', 0.0)
+
+            # Only trigger vibration when trigger is pressed (value > 0.5)
+            if bstate > 0.5:
+                from vuer.schemas import MotionControllers
+                session.upsert(
+                    MotionControllers(
+                        key='motion-controller',
+                        left=True,
+                        right=True,
+                        pulseLeftStrength=bstate,
+                        pulseLeftDuration=100,
+                        pulseLeftHash=f'{self.get_clock().now().to_msg().sec}_{bstate:.2f}',
+                    ),
+                )
+                self.get_logger().debug(f'Gamepad trigger activated: {bstate:.2f}')
+
+        except Exception as e:
+            self.get_logger().error(f'Error in controller move event: {e}')
 
     def __del__(self):
         try:

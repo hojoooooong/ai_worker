@@ -2,7 +2,7 @@
 
 # Get the directory where the script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-CONTAINER_NAME="ai_worker"
+CONTAINER_NAME="ai_worker-pyroki"
 
 # Function to display help
 show_help() {

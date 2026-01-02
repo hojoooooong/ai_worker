@@ -1,6 +1,6 @@
 services:
   ai_worker:
-    container_name: ai_worker
+    container_name: ai_worker-pyroki
     image: robotis/ai-worker:bh5-v2
     tty: true
     restart: always

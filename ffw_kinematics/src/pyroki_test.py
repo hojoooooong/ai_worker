@@ -23,11 +23,15 @@ This node receives robot description from ROS 2 topic and solves IK for both arm
 
 import io
 import math
+import sys
 import contextlib
-import os
 from typing import Optional
 
 import numpy as np
+import jax
+import jax.numpy as jnp
+import jaxlie
+import jaxls
 import pyroki as pk
 import rclpy
 from rclpy.node import Node
@@ -38,8 +42,113 @@ from std_msgs.msg import String
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from ament_index_python.packages import get_package_share_directory
 import yourdfpy
+import os
 
-from ffw_kinematics_pyroki.examples.pyroki_snippets import solve_ik_with_multiple_targets
+
+def solve_ik_with_multiple_targets(
+    robot: pk.Robot,
+    target_link_names: list[str],
+    target_wxyzs: np.ndarray,
+    target_positions: np.ndarray,
+    initial_cfg: Optional[np.ndarray] = None,
+) -> np.ndarray:
+    """
+    Solve inverse kinematics for multiple target links simultaneously.
+
+    Args:
+        robot: PyROKI Robot object
+        target_link_names: List of target link names
+        target_wxyzs: Target orientations in wxyz format (numpy array, shape (N, 4))
+        target_positions: Target positions (numpy array, shape (N, 3))
+        initial_cfg: Initial joint configuration (optional)
+
+    Returns:
+        Joint configuration solution (numpy array, shape (num_actuated_joints,))
+    """
+    assert len(target_link_names) == len(target_wxyzs) == len(target_positions)
+    assert target_wxyzs.shape[1] == 4 and target_positions.shape[1] == 3
+
+    # Get target link indices
+    target_link_indices = [robot.links.names.index(name) for name in target_link_names]
+    target_link_indices_jax = jnp.array(target_link_indices)
+
+    # Convert to JAX arrays
+    target_wxyzs_jax = jnp.array(target_wxyzs)
+    target_positions_jax = jnp.array(target_positions)
+
+    # Use initial configuration if provided, otherwise use zeros
+    # This ensures we always pass a valid array to the JAX function
+    if initial_cfg is not None:
+        initial_cfg_jax = jnp.array(initial_cfg)
+    else:
+        initial_cfg_jax = jnp.zeros(robot.joints.num_actuated_joints)
+
+    # Solve IK
+    cfg = _solve_ik_multiple_targets_jax(
+        robot, target_link_indices_jax, target_wxyzs_jax, target_positions_jax, initial_cfg_jax
+    )
+
+    assert cfg.shape == (robot.joints.num_actuated_joints,)
+    return np.array(cfg)
+
+
+@jax.jit
+def _solve_ik_multiple_targets_jax(
+    robot: pk.Robot,
+    target_link_indices: jax.Array,
+    target_wxyzs: jax.Array,
+    target_positions: jax.Array,
+    initial_cfg: jax.Array,  # Now always provided (zeros if None in outer function)
+) -> jax.Array:
+    """JAX-compiled IK solver for multiple targets."""
+    # Create joint variable - joint_var_cls takes an index, not initial value
+    joint_var = robot.joint_var_cls(0)
+
+    # Create cost factors for each target
+    factors = []
+
+    # Add pose cost for each target link
+    for i in range(len(target_link_indices)):
+        target_se3 = jaxlie.SE3.from_rotation_and_translation(
+            jaxlie.SO3(target_wxyzs[i]), target_positions[i]
+        )
+        factors.append(
+            pk.costs.pose_cost_analytic_jac(
+                robot,
+                joint_var,
+                target_se3,
+                target_link_indices[i],
+                pos_weight=50.0,
+                ori_weight=10.0,
+            )
+        )
+
+    # Add joint limit cost
+    factors.append(
+        pk.costs.limit_cost(
+            robot,
+            joint_var,
+            weight=10000.0,
+        )
+    )
+
+    # Create problem
+    problem = jaxls.LeastSquaresProblem(factors, [joint_var])
+    analyzed = problem.analyze()
+
+    # Solve least squares problem with initial values
+    # initial_cfg is always provided (zeros if None in outer function)
+    sol = analyzed.solve(
+        verbose=False,
+        linear_solver="dense_cholesky",
+        trust_region=jaxls.TrustRegionConfig(lambda_initial=1.0),
+        initial_vals=jaxls.VarValues.make(
+            [joint_var.with_value(initial_cfg)]
+        ),
+    )
+
+    result = sol[joint_var]
+    return result
 
 
 class BimanualIKSolver(Node):
@@ -134,9 +243,6 @@ class BimanualIKSolver(Node):
         self.get_logger().info(f'Right arm: {right_target_pose_topic}')
         self.get_logger().info(f'Left arm: {left_target_pose_topic}')
 
-
-
-
     def robot_description_callback(self, msg: String):
         """Callback for robot_description topic."""
         self.get_logger().info('Received robot_description via topic')
@@ -197,12 +303,8 @@ class BimanualIKSolver(Node):
                 self.get_logger().error(f"Error: Target link '{self.right_end_effector_link_}' not found!")
                 return
 
-            # Store actuated joint names from robot
-            # Use robot.joints.actuated_names if available, otherwise use first num_actuated
-            if hasattr(self.robot.joints, 'actuated_names'):
-                self.joint_names_ = list(self.robot.joints.actuated_names)
-            else:
-                self.joint_names_ = list(self.robot.joints.names[:self.robot.joints.num_actuated_joints])
+            # Store joint names from robot
+            self.joint_names_ = list(self.robot.joints.names[:self.robot.joints.num_actuated_joints])
 
             # Extract arm-specific joint names and indices
             self.extract_arm_joint_info()
@@ -214,10 +316,6 @@ class BimanualIKSolver(Node):
             self.get_logger().error(f'Exception during robot description processing: {e}')
             import traceback
             self.get_logger().error(f'Traceback: {traceback.format_exc()}')
-
-
-
-
 
     def extract_arm_joint_info(self):
         """Extract joint names and indices for left and right arms."""
@@ -233,7 +331,10 @@ class BimanualIKSolver(Node):
             joint_name = f'arm_l_joint{i}'
             if joint_name in all_joint_names:
                 idx = all_joint_names.index(joint_name)
-                self.get_logger().info(f'📋 Left: {joint_name} at index {idx}')
+                is_actuated = idx < num_actuated
+                self.get_logger().info(f'📋 Left: {joint_name} at index {idx}, actuated: {is_actuated}')
+                # Include all joints, even if beyond num_actuated
+                # We'll handle this when extracting from solution
                 left_joint_pairs.append((joint_name, idx))
             else:
                 self.get_logger().warn(f'⚠️ Left: {joint_name} not found in robot joints!')
@@ -244,7 +345,10 @@ class BimanualIKSolver(Node):
             joint_name = f'arm_r_joint{i}'
             if joint_name in all_joint_names:
                 idx = all_joint_names.index(joint_name)
-                self.get_logger().info(f'📋 Right: {joint_name} at index {idx}')
+                is_actuated = idx < num_actuated
+                self.get_logger().info(f'📋 Right: {joint_name} at index {idx}, actuated: {is_actuated}')
+                # Include all joints, even if beyond num_actuated
+                # We'll handle this when extracting from solution
                 right_joint_pairs.append((joint_name, idx))
             else:
                 self.get_logger().warn(f'⚠️ Right: {joint_name} not found in robot joints!')
@@ -278,34 +382,51 @@ class BimanualIKSolver(Node):
             if i < len(msg.position):
                 self.current_joint_positions_dict_[joint_name] = msg.position[i]
 
+        # Debug: Log once to verify all arm joints are in joint_states
+        if hasattr(self, 'right_joint_names_') and len(self.right_joint_names_) > 0:
+            if not hasattr(self, '_checked_missing_joints'):
+                self._checked_missing_joints = True
+                missing_right = [name for name in self.right_joint_names_ if name not in self.current_joint_positions_dict_]
+                missing_left = [name for name in self.left_joint_names_ if name not in self.current_joint_positions_dict_]
+                if missing_right:
+                    available_arm_r = [name for name in self.current_joint_positions_dict_.keys() if name.startswith('arm_r_')]
+                    self.get_logger().warn(
+                        f'⚠️ Right arm joints NOT in joint_states: {missing_right}. '
+                        f'Available arm_r_* joints: {available_arm_r}')
+                if missing_left:
+                    available_arm_l = [name for name in self.current_joint_positions_dict_.keys() if name.startswith('arm_l_')]
+                    self.get_logger().warn(
+                        f'⚠️ Left arm joints NOT in joint_states: {missing_left}. '
+                        f'Available arm_l_* joints: {available_arm_l}')
+                if not missing_right and not missing_left:
+                    self.get_logger().info('✅ All arm joints found in joint_states')
+
+        # Debug: Log once which right arm joints are missing from joint_states
+        if hasattr(self, 'right_joint_names_') and len(self.right_joint_names_) > 0:
+            if not hasattr(self, '_checked_missing_joints'):
+                self._checked_missing_joints = True
+                missing_right = [name for name in self.right_joint_names_ if name not in self.current_joint_positions_dict_]
+                if missing_right:
+                    available_arm_r = [name for name in self.current_joint_positions_dict_.keys() if name.startswith('arm_r_')]
+                    self.get_logger().warn(
+                        f'⚠️ Right arm joints NOT in joint_states: {missing_right}. '
+                        f'Available arm_r_* joints: {available_arm_r}')
+
         # Extract current joint positions for actuated joints (for IK initial guess)
-        # IMPORTANT: We need to map from robot.joints.names indices to actuated indices
         num_actuated = self.robot.joints.num_actuated_joints
         self.current_joint_positions_ = np.zeros(num_actuated)
 
-        # Create mapping from robot.joints.names index to actuated index
-        all_joint_names = list(self.robot.joints.names)
-        actuated_indices = []  # Indices in robot.joints.names for actuated joints
-        for i in range(num_actuated):
-            actuated_indices.append(i)
-
-        # Now fill initial_cfg using the actual indices in robot.joints.names
-        for actuated_idx, joint_name in enumerate(self.joint_names_):
-            # Find this joint in robot.joints.names to get its actual index
-            if joint_name in all_joint_names:
-                robot_idx = all_joint_names.index(joint_name)
-                # Now get value from joint_states using the joint name
-                if joint_name in msg.name:
-                    msg_idx = msg.name.index(joint_name)
-                    self.current_joint_positions_[actuated_idx] = msg.position[msg_idx]
-                else:
-                    # Only warn once per missing joint
-                    if joint_name not in self.warned_missing_joints_:
-                        self.warned_missing_joints_.add(joint_name)
-                        self.get_logger().debug(
-                            f'Joint {joint_name} not found in joint_states (using 0.0 as default)')
+        for i, joint_name in enumerate(self.joint_names_):
+            if joint_name in msg.name:
+                idx = msg.name.index(joint_name)
+                self.current_joint_positions_[i] = msg.position[idx]
             else:
-                self.get_logger().warn(f'Joint {joint_name} not found in robot.joints.names!')
+                # Only warn once per missing joint (many joints like cameras/lidars are fixed)
+                if joint_name not in self.warned_missing_joints_:
+                    self.warned_missing_joints_.add(joint_name)
+                    self.get_logger().debug(
+                        f'Joint {joint_name} not found in joint_states (using 0.0 as default)')
+                # Use 0.0 as default for missing joints (fine for fixed joints)
 
     def right_target_pose_callback(self, msg: PoseStamped):
         """Callback for right arm target pose."""
@@ -395,24 +516,29 @@ class BimanualIKSolver(Node):
             # Solve IK for both arms simultaneously
             self.get_logger().info('🔍 Solving bimanual IK...')
 
-            # Debug: Log initial_cfg for right arm joints
-            self.get_logger().info('🔍 Initial cfg for right arm joints:')
-            for name, robot_idx in zip(self.right_joint_names_, self.right_joint_indices_):
-                # Find this joint in self.joint_names_ to get actuated index
-                if name in self.joint_names_:
-                    actuated_idx = self.joint_names_.index(name)
-                    if actuated_idx < len(initial_cfg):
-                        self.get_logger().info(f'  {name} (robot_idx {robot_idx}, actuated_idx {actuated_idx}): {initial_cfg[actuated_idx]:.4f}')
-                    else:
-                        self.get_logger().warn(f'  {name} actuated_idx {actuated_idx} >= len(initial_cfg)={len(initial_cfg)}')
-                else:
-                    self.get_logger().warn(f'  {name} not in actuated joints!')
+            # Debug: Log target information
+            left_link_idx = self.robot.links.names.index(self.left_end_effector_link_)
+            right_link_idx = self.robot.links.names.index(self.right_end_effector_link_)
+            self.get_logger().info(
+                f'🔍 Target links: left={self.left_end_effector_link_} (idx {left_link_idx}), '
+                f'right={self.right_end_effector_link_} (idx {right_link_idx})'
+            )
+            self.get_logger().info(
+                f'🔍 Left target: pos={target_position_left}, wxyz={target_wxyz_left}'
+            )
+            self.get_logger().info(
+                f'🔍 Right target: pos={target_position_right}, wxyz={target_wxyz_right}'
+            )
+            self.get_logger().info(
+                f'🔍 Initial cfg shape: {initial_cfg.shape}, range: [{initial_cfg.min():.4f}, {initial_cfg.max():.4f}]'
+            )
 
             solution = solve_ik_with_multiple_targets(
                 robot=self.robot,
                 target_link_names=[self.left_end_effector_link_, self.right_end_effector_link_],
                 target_wxyzs=np.array([target_wxyz_left, target_wxyz_right]),
-                target_positions=np.array([target_position_left, target_position_right])
+                target_positions=np.array([target_position_left, target_position_right]),
+                initial_cfg=initial_cfg
             )
 
             if solution is None or len(solution) != self.robot.joints.num_actuated_joints:
@@ -421,80 +547,100 @@ class BimanualIKSolver(Node):
 
             self.get_logger().info('✅ Bimanual IK solution computed successfully')
 
-            # Debug: Log solution for right arm joints
-            self.get_logger().info('🔍 Solution for right arm joints:')
-            for name, robot_idx in zip(self.right_joint_names_, self.right_joint_indices_):
-                # Find this joint in self.joint_names_ to get actuated index
-                if name in self.joint_names_:
-                    actuated_idx = self.joint_names_.index(name)
-                    if actuated_idx < len(solution):
-                        self.get_logger().info(f'  {name} (robot_idx {robot_idx}, actuated_idx {actuated_idx}): {solution[actuated_idx]:.4f}')
-                    else:
-                        val = self.current_joint_positions_dict_.get(name, 0.0)
-                        self.get_logger().info(f'  {name} (robot_idx {robot_idx}, not in solution): {val:.4f} from joint_states')
-                else:
-                    val = self.current_joint_positions_dict_.get(name, 0.0)
-                    self.get_logger().info(f'  {name} (robot_idx {robot_idx}, not actuated): {val:.4f} from joint_states')
+            # Debug: Log joint indices and solution info
+            num_actuated = self.robot.joints.num_actuated_joints
+            self.get_logger().info(f'🔍 Right arm joints: {list(zip(self.right_joint_names_, self.right_joint_indices_))}')
+            self.get_logger().info(f'🔍 Left arm joints: {list(zip(self.left_joint_names_, self.left_joint_indices_))}')
+            self.get_logger().info(f'🔍 Solution shape: {solution.shape}, num_actuated: {num_actuated}')
+            self.get_logger().info(f'🔍 Solution range: [{solution.min():.4f}, {solution.max():.4f}]')
+
+            # Debug: Check actual solution values at right arm indices
+            self.get_logger().info(f'🔍 Solution values at right arm indices:')
+            for name, idx in zip(self.right_joint_names_, self.right_joint_indices_):
+                if idx < num_actuated:
+                    self.get_logger().info(f'  solution[{idx}] = {solution[idx]:.4f} for {name}')
+
+            # Check which right arm joints are actuated
+            right_actuated = [idx < num_actuated for idx in self.right_joint_indices_]
+            left_actuated = [idx < num_actuated for idx in self.left_joint_indices_]
+            self.get_logger().info(f'🔍 Right arm actuated flags: {right_actuated}')
+            self.get_logger().info(f'🔍 Left arm actuated flags: {left_actuated}')
+
+            # Debug: Check PyROKI's joint ordering
+            actuated_joint_names = list(self.robot.joints.names[:num_actuated])
+            self.get_logger().info(f'🔍 PyROKI actuated joint names (first 25): {actuated_joint_names}')
+            # Check where right arm joints are in the actuated list
+            for name in self.right_joint_names_:
+                if name in actuated_joint_names:
+                    actual_idx = actuated_joint_names.index(name)
+                    self.get_logger().info(f'  {name} is at index {actual_idx} in actuated list (we think it\'s at {self.right_joint_indices_[self.right_joint_names_.index(name)]})')
 
             # Extract arm-specific joints from solution
+            # Note: solution only contains num_actuated_joints, so we need to handle joints beyond that
+            num_actuated = self.robot.joints.num_actuated_joints
+
             # Extract right arm solution
             right_arm_solution = []
-            for i, robot_idx in enumerate(self.right_joint_indices_):
+            for i, idx in enumerate(self.right_joint_indices_):
                 joint_name = self.right_joint_names_[i]
-                # Check if this joint is in actuated list
-                if joint_name in self.joint_names_:
-                    actuated_idx = self.joint_names_.index(joint_name)
-                    # Joint is actuated - get value from IK solution
-                    if actuated_idx < len(solution):
-                        val = solution[actuated_idx]
-                        right_arm_solution.append(val)
-                    else:
-                        self.get_logger().error(f'Right arm joint {joint_name} actuated_idx {actuated_idx} >= solution length {len(solution)}')
-                        right_arm_solution.append(0.0)
+                if idx < num_actuated:
+                    # Joint is in actuated range - get value from IK solution
+                    val = solution[idx]
+                    right_arm_solution.append(val)
+                    self.get_logger().debug(f'  Right {joint_name} (idx {idx}): {val:.4f} from IK solution')
                 else:
-                    # Joint beyond actuated range - use current position from joint_states
+                    # Joint beyond actuated range - MUST use current position from joint_states
+                    # PyROKI doesn't solve these joints, so we keep their current positions
                     if joint_name in self.current_joint_positions_dict_:
                         val = self.current_joint_positions_dict_[joint_name]
                         right_arm_solution.append(val)
+                        self.get_logger().debug(f'  Right {joint_name} (idx {idx}): {val:.4f} from joint_states')
                     else:
-                        self.get_logger().warn(
-                            f'Right arm joint {joint_name} (robot_idx {robot_idx}) not in joint_states. Using 0.0')
+                        # This should not happen - joint_states should have all arm joints
+                        available_arm_r = [name for name in self.current_joint_positions_dict_.keys() if name.startswith('arm_r_')]
+                        self.get_logger().error(
+                            f'❌ Right arm joint {joint_name} (idx {idx}) NOT in joint_states! '
+                            f'Available arm_r_*: {available_arm_r}. Using 0.0')
                         right_arm_solution.append(0.0)
 
             # Extract left arm solution
             left_arm_solution = []
-            for i, robot_idx in enumerate(self.left_joint_indices_):
+            for i, idx in enumerate(self.left_joint_indices_):
                 joint_name = self.left_joint_names_[i]
-                # Check if this joint is in actuated list
-                if joint_name in self.joint_names_:
-                    actuated_idx = self.joint_names_.index(joint_name)
-                    if actuated_idx < len(solution):
-                        val = solution[actuated_idx]
-                        left_arm_solution.append(val)
-                    else:
-                        self.get_logger().error(f'Left arm joint {joint_name} actuated_idx {actuated_idx} >= solution length {len(solution)}')
-                        left_arm_solution.append(0.0)
+                if idx < num_actuated:
+                    val = solution[idx]
+                    left_arm_solution.append(val)
                 else:
-                    # Joint beyond actuated range - use current position from joint_states
+                    # Joint beyond actuated range - use current position from joint_states if available
                     if joint_name in self.current_joint_positions_dict_:
                         val = self.current_joint_positions_dict_[joint_name]
                         left_arm_solution.append(val)
                     else:
-                        self.get_logger().warn(
-                            f'Left arm joint {joint_name} (robot_idx {robot_idx}) not in joint_states. Using 0.0')
+                        # This should not happen - joint_states should have all arm joints
+                        available_arm_l = [name for name in self.current_joint_positions_dict_.keys() if name.startswith('arm_l_')]
+                        self.get_logger().error(
+                            f'❌ Left arm joint {joint_name} (idx {idx}) NOT in joint_states! '
+                            f'Available arm_l_*: {available_arm_l}. Using 0.0')
                         left_arm_solution.append(0.0)
 
             right_arm_solution = np.array(right_arm_solution)
             left_arm_solution = np.array(left_arm_solution)
 
-            # Debug: Log final right arm solution
-            self.get_logger().info('🔍 Final right arm solution:')
-            for name, val in zip(self.right_joint_names_, right_arm_solution):
-                self.get_logger().info(f'  {name}: {val:.4f}')
+            # Debug: Log what values we got for right arm
+            self.get_logger().info(f'🔍 Right arm solution breakdown:')
+            for i, (name, idx) in enumerate(zip(self.right_joint_names_, self.right_joint_indices_)):
+                source = 'IK solution' if idx < num_actuated else 'joint_states'
+                val_in_dict = self.current_joint_positions_dict_.get(name, 'N/A')
+                self.get_logger().info(
+                    f'  {name} (idx {idx}): {right_arm_solution[i]:.4f} from {source} '
+                    f'(dict has: {val_in_dict})')
 
             # Publish solutions for both arms
             self.publish_joint_trajectory(right_arm_solution, self.right_joint_names_, self.right_joint_solution_pub_, 'right')
+            print(f'Right arm solution: {right_arm_solution}')
             self.publish_joint_trajectory(left_arm_solution, self.left_joint_names_, self.left_joint_solution_pub_, 'left')
+            print(f'Left arm solution: {left_arm_solution}')
+            print('--------------------------------')
 
         except Exception as e:
             import traceback
@@ -506,6 +652,7 @@ class BimanualIKSolver(Node):
         joint_trajectory = JointTrajectory()
         joint_trajectory.header.frame_id = 'base_link'
         # Don't set header.stamp - let it default to zero to avoid timing issues
+        # The controller will interpret time_from_start relative to when it receives the message
         joint_trajectory.joint_names = joint_names
 
         # Create trajectory point
@@ -529,3 +676,8 @@ def main(args=None):
     node = BimanualIKSolver()
     rclpy.spin(node)
     rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+

@@ -41,7 +41,7 @@ FfwArmIKSolver::FfwArmIKSolver()
   // Coordinate transformation parameters (lift_joint origin from URDF)
   this->declare_parameter<double>("lift_joint_x_offset", 0.0055);
   this->declare_parameter<double>("lift_joint_y_offset", 0.0);
-  this->declare_parameter<double>("lift_joint_z_offset", 1.6316);
+  this->declare_parameter<double>("lift_joint_z_offset", 1.4316);
 
   // IK solver parameters
   this->declare_parameter<double>("max_joint_step_degrees", 30.0);
@@ -50,11 +50,11 @@ FfwArmIKSolver::FfwArmIKSolver()
 
   // Hybrid IK parameters
   this->declare_parameter<bool>("use_hybrid_ik", true);
-  this->declare_parameter<double>("current_position_weight", 0.5);  // Weight for current robot position
-  this->declare_parameter<double>("previous_solution_weight", 0.5); // Weight for previous IK solution
+  this->declare_parameter<double>("current_position_weight", 0.0);  // Weight for current robot position
+  this->declare_parameter<double>("previous_solution_weight", 1.0); // Weight for previous IK solution
 
   // Low-pass filter between current state and IK target
-  this->declare_parameter<double>("lpf_alpha", 0.2);
+  this->declare_parameter<double>("lpf_alpha", 1.0);
 
   // Joint limits parameters (can be overridden if needed)
   this->declare_parameter<bool>("use_hardcoded_joint_limits", true);
@@ -230,7 +230,7 @@ void FfwArmIKSolver::processRobotDescription(const std::string & robot_descripti
     // Initialize previous solution arrays
     right_previous_solution_.resize(right_chain_.getNrOfJoints());
     left_previous_solution_.resize(left_chain_.getNrOfJoints());
-    
+
     // Initialize with zero positions
     for (unsigned int i = 0; i < right_chain_.getNrOfJoints(); i++) {
       right_previous_solution_(i) = 0.0;
@@ -241,7 +241,7 @@ void FfwArmIKSolver::processRobotDescription(const std::string & robot_descripti
 
     setup_complete_ = true;
     RCLCPP_INFO(this->get_logger(), "🎉 IK solver setup complete!");
-    RCLCPP_INFO(this->get_logger(), "   Hybrid IK: %s (current: %.1f%%, previous: %.1f%%)", 
+    RCLCPP_INFO(this->get_logger(), "   Hybrid IK: %s (current: %.1f%%, previous: %.1f%%)",
                 use_hybrid_ik_ ? "enabled" : "disabled",
                 current_position_weight_ * 100.0, previous_solution_weight_ * 100.0);
   } catch (const std::exception & e) {
@@ -631,11 +631,11 @@ void FfwArmIKSolver::solveIK(
   // Get initial guess using hybrid approach
   KDL::JntArray q_init(chain_ptr->getNrOfJoints());
   KDL::JntArray * previous_solution_ptr = (arm == "right") ? &right_previous_solution_ : &left_previous_solution_;
-  
+
   if (use_hybrid_ik_ && has_previous_solution_) {
     // Hybrid: weighted combination of current position and previous solution
     for (size_t i = 0; i < current_positions_ptr->size(); i++) {
-      q_init(i) = current_position_weight_ * (*current_positions_ptr)[i] + 
+      q_init(i) = current_position_weight_ * (*current_positions_ptr)[i] +
                   previous_solution_weight_ * (*previous_solution_ptr)(i);
     }
     RCLCPP_DEBUG(this->get_logger(), "Using hybrid initial guess for %s arm (%.1f%% current + %.1f%% previous)",
@@ -674,13 +674,38 @@ void FfwArmIKSolver::solveIK(
 
   auto initial_start_time = this->get_clock()->now();
 
-  // Iterate at high level, publishing result at each iteration
+  // Iterate at high level, publishing result only when getting closer to target
   bool converged = false;
+  double previous_total_error = std::numeric_limits<double>::max();
+  bool first_iteration = true;
+  const double min_improvement_threshold = ik_tolerance_ * 0.1; // Minimum improvement to publish
+  std::unique_ptr<KDL::ChainFkSolverPos_recursive> * fk_solver_ptr =
+    (arm == "right") ? &right_fk_solver_ : &left_fk_solver_;
+
   for (unsigned int iter = 0; iter < ik_max_iterations_; iter++) {
     auto start_time = this->get_clock()->now();
-    
-    // Perform one iteration
-    int ik_result = (*ik_solver_ptr)->CartToJnt(q_current, target_frame, q_result);
+
+    // Compute current error before step
+    KDL::Frame current_frame_before;
+    double error_before = std::numeric_limits<double>::max();
+    if ((*fk_solver_ptr)->JntToCart(q_current, current_frame_before) >= 0) {
+      KDL::Twist error_twist_before = diff(current_frame_before, target_frame);
+      double pos_err_before = sqrt(error_twist_before.vel.x() * error_twist_before.vel.x() +
+                                   error_twist_before.vel.y() * error_twist_before.vel.y() +
+                                   error_twist_before.vel.z() * error_twist_before.vel.z());
+      double rot_err_before = sqrt(error_twist_before.rot.x() * error_twist_before.rot.x() +
+                                   error_twist_before.rot.y() * error_twist_before.rot.y() +
+                                   error_twist_before.rot.z() * error_twist_before.rot.z());
+      error_before = pos_err_before + rot_err_before;
+      if (first_iteration) {
+        previous_total_error = error_before;
+        first_iteration = false;
+      }
+    }
+
+    // Perform one iteration to get step direction
+    KDL::JntArray q_step_direction(chain_ptr->getNrOfJoints());
+    int ik_result = (*ik_solver_ptr)->CartToJnt(q_current, target_frame, q_step_direction);
     auto end_time = this->get_clock()->now();
     auto duration = end_time - start_time;
 
@@ -689,24 +714,119 @@ void FfwArmIKSolver::solveIK(
       RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
         "%s arm IK iteration %d failed (error: %d, %s)",
         arm.c_str(), iter, ik_result, error_msg);
-      // Continue with previous result even if this iteration failed
-      // This allows the arm to still move toward the target
+      // Skip this iteration if IK failed
+      continue;
     }
 
-    // Check convergence by computing current pose and comparing to target
-    KDL::Frame current_frame;
-    std::unique_ptr<KDL::ChainFkSolverPos_recursive> * fk_solver_ptr = 
-      (arm == "right") ? &right_fk_solver_ : &left_fk_solver_;
+    // Compute step direction (delta)
+    KDL::JntArray delta_q(chain_ptr->getNrOfJoints());
+    for (unsigned int i = 0; i < delta_q.rows(); i++) {
+      delta_q(i) = q_step_direction(i) - q_current(i);
+    }
+
+    // Line search: find step size that reduces error
+    // Start with full step, reduce if error doesn't decrease
+    double step_size = 1.0;
+    const double step_reduction = 0.5; // Reduce step by half each time
+    const int max_line_search_iter = 8; // Maximum line search iterations
+    const double armijo_c = 0.1; // Armijo condition constant (sufficient decrease)
     
+    KDL::JntArray q_result(chain_ptr->getNrOfJoints());
+    double best_error = error_before;
+    double best_step_size = 0.0;
+    bool found_good_step = false;
+
+    for (int ls_iter = 0; ls_iter < max_line_search_iter; ls_iter++) {
+      // Compute candidate step: q_current + step_size * delta_q
+      for (unsigned int i = 0; i < q_result.rows(); i++) {
+        q_result(i) = q_current(i) + step_size * delta_q(i);
+      }
+
+      // Apply joint limits to candidate
+      for (unsigned int i = 0; i < q_result.rows(); i++) {
+        if (q_result(i) < (*q_min_ptr)(i)) {
+          q_result(i) = (*q_min_ptr)(i);
+        } else if (q_result(i) > (*q_max_ptr)(i)) {
+          q_result(i) = (*q_max_ptr)(i);
+        }
+      }
+
+      // Check error at candidate position
+      KDL::Frame candidate_frame;
+      if ((*fk_solver_ptr)->JntToCart(q_result, candidate_frame) >= 0) {
+        KDL::Twist error_twist = diff(candidate_frame, target_frame);
+        double pos_err = sqrt(error_twist.vel.x() * error_twist.vel.x() +
+                             error_twist.vel.y() * error_twist.vel.y() +
+                             error_twist.vel.z() * error_twist.vel.z());
+        double rot_err = sqrt(error_twist.rot.x() * error_twist.rot.x() +
+                             error_twist.rot.y() * error_twist.rot.y() +
+                             error_twist.rot.z() * error_twist.rot.z());
+        double total_error = pos_err + rot_err;
+
+        // Armijo condition: error reduction should be proportional to step size
+        double expected_reduction = step_size * armijo_c * error_before;
+        double actual_reduction = error_before - total_error;
+
+        if (total_error < best_error) {
+          best_error = total_error;
+          best_step_size = step_size;
+          found_good_step = true;
+        }
+
+        // Accept step if it satisfies Armijo condition (sufficient decrease)
+        if (actual_reduction >= expected_reduction && total_error < error_before) {
+          // Good step found, use it
+          break;
+        }
+      }
+
+      // Reduce step size and try again
+      step_size *= step_reduction;
+      if (step_size < 1e-6) {
+        // Step size too small, give up
+        break;
+      }
+    }
+
+    // Use best step found, or original if no improvement
+    if (found_good_step && best_step_size > 0.0) {
+      for (unsigned int i = 0; i < q_result.rows(); i++) {
+        q_result(i) = q_current(i) + best_step_size * delta_q(i);
+      }
+      // Apply joint limits
+      for (unsigned int i = 0; i < q_result.rows(); i++) {
+        if (q_result(i) < (*q_min_ptr)(i)) {
+          q_result(i) = (*q_min_ptr)(i);
+        } else if (q_result(i) > (*q_max_ptr)(i)) {
+          q_result(i) = (*q_max_ptr)(i);
+        }
+      }
+    } else {
+      // No good step found, keep current position
+      q_result = q_current;
+      RCLCPP_DEBUG(this->get_logger(), "%s arm IK iteration %d: no good step found, keeping current position",
+        arm.c_str(), iter);
+      continue;
+    }
+
+    // Check convergence with final result
+    KDL::Frame current_frame;
+    double position_error = std::numeric_limits<double>::max();
+    double rotation_error = std::numeric_limits<double>::max();
+    double total_error = std::numeric_limits<double>::max();
+    bool error_computed = false;
+
     if ((*fk_solver_ptr)->JntToCart(q_result, current_frame) >= 0) {
       KDL::Twist error_twist = diff(current_frame, target_frame);
-      double position_error = sqrt(error_twist.vel.x() * error_twist.vel.x() +
-                                   error_twist.vel.y() * error_twist.vel.y() +
-                                   error_twist.vel.z() * error_twist.vel.z());
-      double rotation_error = sqrt(error_twist.rot.x() * error_twist.rot.x() +
-                                   error_twist.rot.y() * error_twist.rot.y() +
-                                   error_twist.rot.z() * error_twist.rot.z());
-      
+      position_error = sqrt(error_twist.vel.x() * error_twist.vel.x() +
+                            error_twist.vel.y() * error_twist.vel.y() +
+                            error_twist.vel.z() * error_twist.vel.z());
+      rotation_error = sqrt(error_twist.rot.x() * error_twist.rot.x() +
+                            error_twist.rot.y() * error_twist.rot.y() +
+                            error_twist.rot.z() * error_twist.rot.z());
+      total_error = position_error + rotation_error;
+      error_computed = true;
+
       if (position_error < ik_tolerance_ && rotation_error < ik_tolerance_) {
         converged = true;
         RCLCPP_DEBUG(this->get_logger(), "%s arm IK converged at iteration %d (pos_err: %.4f, rot_err: %.4f)",
@@ -756,26 +876,53 @@ void FfwArmIKSolver::solveIK(
     *previous_solution_ptr = q_filtered;
     has_previous_solution_ = true;
 
-    // Publish result at each iteration
-    auto joint_trajectory = trajectory_msgs::msg::JointTrajectory();
-    joint_trajectory.header.frame_id = "base_link";
-    joint_trajectory.joint_names = *joint_names_ptr;
-
-    auto point = trajectory_msgs::msg::JointTrajectoryPoint();
-    point.positions.resize(q_filtered.rows());
-    point.velocities.resize(q_filtered.rows(), 0.0);
-    point.accelerations.resize(q_filtered.rows(), 0.0);
-
-    for (unsigned int i = 0; i < q_filtered.rows(); i++) {
-      point.positions[i] = q_filtered(i);
+    // Line search already ensures error decreases, so we can accept the step
+    bool should_publish = false;
+    bool should_update = false;
+    
+    if (error_computed) {
+      double error_improvement = previous_total_error - total_error;
+      // Accept step if error decreased (line search ensures this)
+      if (total_error < previous_total_error || converged) {
+        should_update = true;
+        should_publish = true;
+        previous_total_error = total_error;
+        RCLCPP_INFO(this->get_logger(), "%s arm IK iteration %d: error improved by %.4f (total: %.4f, step_size: %.3f)",
+          arm.c_str(), iter, error_improvement, total_error, best_step_size);
+      }
+    } else {
+      // If we can't compute error, don't update (safety)
+      RCLCPP_DEBUG(this->get_logger(), "%s arm IK iteration %d: cannot compute error, skipping",
+        arm.c_str(), iter);
     }
 
-    point.time_from_start = rclcpp::Duration::from_nanoseconds(0);
-    joint_trajectory.points.push_back(point);
-    (*publisher_ptr)->publish(joint_trajectory);
+    if (should_publish) {
+      // Publish result when getting closer to target
+      auto joint_trajectory = trajectory_msgs::msg::JointTrajectory();
+      joint_trajectory.header.frame_id = "base_link";
+      joint_trajectory.joint_names = *joint_names_ptr;
 
-    // Update current position for next iteration
-    q_current = q_result;
+      auto point = trajectory_msgs::msg::JointTrajectoryPoint();
+      point.positions.resize(q_filtered.rows());
+      point.velocities.resize(q_filtered.rows(), 0.0);
+      point.accelerations.resize(q_filtered.rows(), 0.0);
+
+      for (unsigned int i = 0; i < q_filtered.rows(); i++) {
+        point.positions[i] = q_filtered(i);
+      }
+
+      point.time_from_start = rclcpp::Duration::from_nanoseconds(0);
+      joint_trajectory.points.push_back(point);
+      (*publisher_ptr)->publish(joint_trajectory);
+    }
+
+    // Only update current position for next iteration if step was accepted
+    if (should_update) {
+      q_current = q_result;
+    } else {
+      // Keep previous q_current, don't update (reject bad step)
+      // This prevents divergence
+    }
 
     // Break if converged
     if (converged) {

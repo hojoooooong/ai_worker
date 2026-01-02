@@ -60,10 +60,20 @@ RUN cd /root && \
     cd vuer && \
     pip3 install -e '.[all]'
 
+# Install tqdm and numpy with --ignore-installed to override Debian packages
+RUN pip3 install --ignore-installed --no-deps tqdm && \
+    pip3 install --ignore-installed numpy
+
+RUN cd /root && \
+    git clone https://github.com/chungmin99/pyroki.git && \
+    cd pyroki && \
+    pip3 install -e .
+
 RUN chmod +x /tmp/gen_cert.sh && \
     cp /tmp/gen_cert.sh ~/
 
 EXPOSE 8012
+EXPOSE 8080
 
 CMD ["/bin/bash", "-c", "source /opt/ros/jazzy/setup.bash && uvicorn minimal:app --host 0.0.0.0 --port 8012"]
 
