@@ -533,9 +533,10 @@ void FfwArmIKSolver::rightTargetPoseCallback(const geometry_msgs::msg::PoseStamp
   geometry_msgs::msg::PoseStamped arm_base_pose = *msg;
 
   // Transform: base_link -> arm_base_link using configured offsets
+  // Note: lift_joint_position_ is not used to make IK independent of lift height
   arm_base_pose.pose.position.x -= lift_joint_x_offset_;
   arm_base_pose.pose.position.y -= lift_joint_y_offset_;
-  arm_base_pose.pose.position.z -= (lift_joint_z_offset_ + lift_joint_position_);
+  arm_base_pose.pose.position.z -= lift_joint_z_offset_;
 
   // RCLCPP_INFO(this->get_logger(), "🔄 Transformed to arm_base_link frame (RIGHT):");
   // RCLCPP_INFO(this->get_logger(), "   Position: x=%.3f, y=%.3f, z=%.3f (lift: %.3f m)",
@@ -572,9 +573,10 @@ void FfwArmIKSolver::leftTargetPoseCallback(const geometry_msgs::msg::PoseStampe
   geometry_msgs::msg::PoseStamped arm_base_pose = *msg;
 
   // Transform: base_link -> arm_base_link using configured offsets
+  // Note: lift_joint_position_ is not used to make IK independent of lift height
   arm_base_pose.pose.position.x -= lift_joint_x_offset_;
   arm_base_pose.pose.position.y -= lift_joint_y_offset_;
-  arm_base_pose.pose.position.z -= (lift_joint_z_offset_ + lift_joint_position_);
+  arm_base_pose.pose.position.z -= lift_joint_z_offset_;
 
   // RCLCPP_INFO(this->get_logger(), "🔄 Transformed to arm_base_link frame (LEFT):");
   // RCLCPP_INFO(this->get_logger(), "   Position: x=%.3f, y=%.3f, z=%.3f (lift: %.3f m)",
