@@ -12,6 +12,7 @@ import type {
   DockerContainerActionResponse,
   DockerContainerLogsResponse,
   ErrorResponse,
+  ServiceRunScriptResponse,
 } from "@/types/api";
 
 // Get API base URL from environment variable, default to system_manager service name
@@ -105,6 +106,36 @@ export async function getServiceLogs(
       {
         params: { tail },
       }
+    );
+    return response.data;
+  } catch (error) {
+    handleError(error);
+  }
+}
+
+export async function getServiceRunScript(
+  container: string,
+  service: string
+): Promise<ServiceRunScriptResponse> {
+  try {
+    const response = await apiClient.get<ServiceRunScriptResponse>(
+      `/containers/${container}/services/${service}/run`
+    );
+    return response.data;
+  } catch (error) {
+    handleError(error);
+  }
+}
+
+export async function updateServiceRunScript(
+  container: string,
+  service: string,
+  content: string
+): Promise<ServiceRunScriptResponse> {
+  try {
+    const response = await apiClient.put<ServiceRunScriptResponse>(
+      `/containers/${container}/services/${service}/run`,
+      { content }
     );
     return response.data;
   } catch (error) {

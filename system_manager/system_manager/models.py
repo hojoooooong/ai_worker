@@ -177,3 +177,18 @@ class ServiceLogsResponse(BaseModel):
     tail: int = Field(..., description="Number of log lines returned")
     log_path: Optional[str] = Field(None, description="Path to log file in container")
 
+
+class ServiceRunScriptResponse(BaseModel):
+    """Response for GET /containers/{container}/services/{service}/run."""
+
+    container: str = Field(..., description="Container name")
+    service: str = Field(..., description="Service ID")
+    path: str = Field(..., description="Filesystem path to the service run script")
+    content: str = Field(..., description="Contents of the run script")
+
+
+class ServiceRunScriptUpdateRequest(BaseModel):
+    """Request body for updating a service run script."""
+
+    content: str = Field(..., description="New contents of the run script")
+

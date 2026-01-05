@@ -176,6 +176,64 @@ class AgentClient:
             logger.error(f"Agent returned error status for service '{service_name}': {e}")
             raise
 
+    def get_service_run_script(self, service_name: str) -> dict:
+        """Get run script for a service from agent.
+
+        Args:
+            service_name: Name of the service.
+
+        Returns:
+            Response JSON from agent's /services/{name}/run endpoint.
+
+        Raises:
+            requests.RequestException: If request fails.
+            requests.HTTPError: If agent returns error status (e.g., 404).
+        """
+        session = self._get_session()
+        base_url = self._get_base_url()
+        logger.debug(f"Requesting run script for service '{service_name}' from agent at {self.socket_path}")
+        try:
+            response = session.get(f"{base_url}/services/{service_name}/run")
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            logger.error(f"Failed to communicate with agent at {self.socket_path}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Agent returned error status for service '{service_name}': {e}")
+            raise
+
+    def update_service_run_script(self, service_name: str, content: str) -> dict:
+        """Update run script for a service via agent.
+
+        Args:
+            service_name: Name of the service.
+            content: New content for the run script.
+
+        Returns:
+            Response JSON from agent's PUT /services/{name}/run endpoint.
+
+        Raises:
+            requests.RequestException: If request fails.
+            requests.HTTPError: If agent returns error status.
+        """
+        session = self._get_session()
+        base_url = self._get_base_url()
+        logger.debug(f"Updating run script for service '{service_name}' via agent at {self.socket_path}")
+        try:
+            response = session.put(
+                f"{base_url}/services/{service_name}/run",
+                json={"content": content},
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            logger.error(f"Failed to communicate with agent at {self.socket_path}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Agent returned error status for service '{service_name}': {e}")
+            raise
+
 
 class AgentClientPool:
     """Pool of agent clients, one per container.

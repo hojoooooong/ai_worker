@@ -2,6 +2,7 @@
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Optional
 
 import docker
@@ -27,6 +28,8 @@ from system_manager.models import (
     ServiceInfo,
     ServiceListResponse,
     ServiceLogsResponse,
+    ServiceRunScriptResponse,
+    ServiceRunScriptUpdateRequest,
     ServiceStatusResponse,
     SystemConfig,
 )
@@ -505,6 +508,159 @@ async def get_service_logs(
         logs=agent_response.get("logs", ""),
         tail=agent_response.get("tail", tail),
         log_path=agent_response.get("log_path"),
+    )
+
+
+@app.get(
+    "/containers/{container}/services/{service}/run",
+    response_model=ServiceRunScriptResponse,
+    tags=["services"],
+    summary="Get service run script",
+    description="Read the s6-overlay service 'run' script for editing",
+    responses={
+        404: {"model": ErrorResponse, "description": "Service run script not found"},
+        500: {"model": ErrorResponse, "description": "Failed to read service run script"},
+        503: {"model": ErrorResponse, "description": "Agent unavailable"},
+    },
+)
+async def get_service_run_script(
+    container: str,
+    service: str,
+) -> ServiceRunScriptResponse:
+    """Get the run script for a service.
+
+    Fetches the run script from the agent, which reads from
+    /etc/s6-overlay/s6-rc.d/{service}/run inside the container.
+
+    Args:
+        container: Name of the container (e.g., "ai_worker")
+        service: Service ID (e.g., "ffw_bg2_follower_ai")
+
+    Returns:
+        ServiceRunScriptResponse with path and file contents.
+
+    Raises:
+        HTTPException: 404 if container/service not found, 503 if agent unavailable.
+
+    Example Response:
+        ```json
+        {
+          "container": "ai_worker",
+          "service": "ffw_bg2_follower_ai",
+          "path": "/etc/s6-overlay/s6-rc.d/ffw_bg2_follower_ai/run",
+          "content": "#!/command/with-contenv bash\n..."
+        }
+        ```
+    """
+    config = get_config()
+    if container not in config.containers:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Container '{container}' not found",
+        )
+
+    # Get run script from agent
+    try:
+        client = get_agent_client(container)
+        agent_response = client.get_service_run_script(service)
+        logger.info(f"Successfully retrieved run script for service '{service}' in container '{container}'")
+    except Exception as e:
+        logger.error(f"Failed to get run script from agent: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to communicate with agent: {str(e)}",
+        )
+
+    return ServiceRunScriptResponse(
+        container=container,
+        service=service,
+        path=agent_response.get("path", ""),
+        content=agent_response.get("content", ""),
+    )
+
+
+@app.put(
+    "/containers/{container}/services/{service}/run",
+    response_model=ServiceRunScriptResponse,
+    tags=["services"],
+    summary="Update service run script",
+    description="Update the s6-overlay service 'run' script from the UI",
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid request"},
+        404: {"model": ErrorResponse, "description": "Service run script not found"},
+        500: {"model": ErrorResponse, "description": "Failed to update service run script"},
+        503: {"model": ErrorResponse, "description": "Agent unavailable"},
+    },
+)
+async def update_service_run_script(
+    container: str,
+    service: str,
+    request: ServiceRunScriptUpdateRequest,
+) -> ServiceRunScriptResponse:
+    """Update the run script for a service.
+
+    Updates the run script via the agent, which writes to
+    /etc/s6-overlay/s6-rc.d/{service}/run inside the container.
+    Changes take effect after the service is restarted.
+
+    Args:
+        container: Name of the container (e.g., "ai_worker")
+        service: Service ID (e.g., "ffw_bg2_follower_ai")
+        request: ServiceRunScriptUpdateRequest with new script content
+
+    Returns:
+        Updated ServiceRunScriptResponse.
+
+    Raises:
+        HTTPException: 400 if content is invalid, 404 if service not found, 503 if agent unavailable.
+
+    Example Request:
+        ```json
+        {
+          "content": "#!/command/with-contenv bash\n# Updated script\n..."
+        }
+        ```
+
+    Example Response:
+        ```json
+        {
+          "container": "ai_worker",
+          "service": "ffw_bg2_follower_ai",
+          "path": "/etc/s6-overlay/s6-rc.d/ffw_bg2_follower_ai/run",
+          "content": "#!/command/with-contenv bash\n# Updated script\n..."
+        }
+        ```
+    """
+    config = get_config()
+    if container not in config.containers:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Container '{container}' not found",
+        )
+
+    if not request.content or not request.content.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Content must not be empty",
+        )
+
+    # Update run script via agent
+    try:
+        client = get_agent_client(container)
+        agent_response = client.update_service_run_script(service, request.content)
+        logger.info(f"Successfully updated run script for service '{service}' in container '{container}'")
+    except Exception as e:
+        logger.error(f"Failed to update run script via agent: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to communicate with agent: {str(e)}",
+        )
+
+    return ServiceRunScriptResponse(
+        container=container,
+        service=service,
+        path=agent_response.get("path", ""),
+        content=agent_response.get("content", ""),
     )
 
 

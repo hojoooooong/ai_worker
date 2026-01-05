@@ -1,0 +1,4 @@
+if { mkdir -p /var/log/ffw_sg2_follower_ai }
+if { chown nobody:nogroup /var/log/ffw_sg2_follower_ai }
+chmod 02755 /var/log/ffw_sg2_follower_ai
+

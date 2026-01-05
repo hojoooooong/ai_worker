@@ -78,25 +78,46 @@ export default function ServiceCard({
           service={service.id}
           onActionComplete={onStatusUpdate}
         />
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/containers/${container}/services/${service.id}/settings`}
+            className="px-3 py-1.5 text-xs font-normal rounded"
+            style={{
+              backgroundColor: "var(--vscode-button-secondaryBackground)",
+              color: "var(--vscode-button-secondaryForeground)",
+              textDecoration: "none",
+              display: "inline-block",
+              transition: "background-color 0.2s"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "var(--vscode-button-secondaryHoverBackground)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "var(--vscode-button-secondaryBackground)";
+            }}
+          >
+            Settings
+          </Link>
         <Link
           href={`/containers/${container}/services/${service.id}/logs`}
-          className="px-3 py-1.5 text-xs font-normal rounded"
-          style={{
-            backgroundColor: "var(--vscode-button-background)",
-            color: "var(--vscode-button-foreground)",
-            textDecoration: "none",
-            display: "inline-block",
-            transition: "background-color 0.2s"
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "var(--vscode-button-hoverBackground)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "var(--vscode-button-background)";
-          }}
+            className="px-3 py-1.5 text-xs font-normal rounded"
+            style={{
+              backgroundColor: "var(--vscode-button-background)",
+              color: "var(--vscode-button-foreground)",
+              textDecoration: "none",
+              display: "inline-block",
+              transition: "background-color 0.2s"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "var(--vscode-button-hoverBackground)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "var(--vscode-button-background)";
+            }}
         >
           View Logs
         </Link>
+        </div>
       </div>
     </div>
   );

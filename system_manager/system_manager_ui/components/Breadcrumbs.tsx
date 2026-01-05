@@ -44,6 +44,13 @@ export default function Breadcrumbs() {
             href: null 
           });
           crumbs.push({ label: "Logs", href: null });
+        } else if (segments[4] === "settings") {
+          // Settings page
+          crumbs.push({ 
+            label: serviceName, 
+            href: null 
+          });
+          crumbs.push({ label: "Settings", href: null });
         } else {
           // Service page (if it exists)
           crumbs.push({ 
