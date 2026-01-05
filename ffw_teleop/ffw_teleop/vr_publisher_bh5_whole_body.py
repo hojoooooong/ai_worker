@@ -47,8 +47,12 @@ class VRTrajectoryPublisher(Node):
         self.declare_parameter('enable_lift_publishing', False)
         self.declare_parameter('enable_head_publishing', False)
         self.declare_parameter('enable_base_publishing', True)
-        self.declare_parameter('base_linear_scale', 1.0)  # Scale factor for linear velocity
-        self.declare_parameter('base_angular_scale', 1.0)  # Scale factor for angular velocity
+        self.declare_parameter('base_linear_scale', 100.0)  # Scale factor for linear velocity (higher = more sensitive)
+        self.declare_parameter('base_angular_scale', 100.0)  # Scale factor for angular velocity (higher = more sensitive)
+        self.declare_parameter('base_linear_deadzone', 0.01)  # Deadzone range for linear velocity (m) - within this range, velocity is 0
+        self.declare_parameter('base_linear_max_range', 0.1)  # Maximum range for linear velocity (m) - beyond this, max velocity is reached
+        self.declare_parameter('base_angular_deadzone', 0.01)  # Deadzone range for angular velocity (rad) - within this range, velocity is 0
+        self.declare_parameter('base_angular_max_range', 0.1)  # Maximum range for angular velocity (rad) - beyond this, max velocity is reached
 
         # Get parameters
         self.enable_lift_publishing = self.get_parameter('enable_lift_publishing').get_parameter_value().bool_value
@@ -56,12 +60,30 @@ class VRTrajectoryPublisher(Node):
         self.enable_base_publishing = self.get_parameter('enable_base_publishing').get_parameter_value().bool_value
         self.base_linear_scale = self.get_parameter('base_linear_scale').get_parameter_value().double_value
         self.base_angular_scale = self.get_parameter('base_angular_scale').get_parameter_value().double_value
+        self.base_linear_deadzone = self.get_parameter('base_linear_deadzone').get_parameter_value().double_value
+        self.base_linear_max_range = self.get_parameter('base_linear_max_range').get_parameter_value().double_value
+        self.base_angular_deadzone = self.get_parameter('base_angular_deadzone').get_parameter_value().double_value
+        self.base_angular_max_range = self.get_parameter('base_angular_max_range').get_parameter_value().double_value
+
+        # Validate ranges
+        if self.base_linear_deadzone >= self.base_linear_max_range:
+            self.get_logger().warn('base_linear_deadzone must be less than base_linear_max_range. Using defaults.')
+            self.base_linear_deadzone = 0.01
+            self.base_linear_max_range = 0.1
+        if self.base_angular_deadzone >= self.base_angular_max_range:
+            self.get_logger().warn('base_angular_deadzone must be less than base_angular_max_range. Using defaults.')
+            self.base_angular_deadzone = 0.01
+            self.base_angular_max_range = 0.1
 
         self.get_logger().info(f'Parameters: enable_lift_publishing={self.enable_lift_publishing}, '
                               f'enable_head_publishing={self.enable_head_publishing}, '
                               f'enable_base_publishing={self.enable_base_publishing}, '
                               f'base_linear_scale={self.base_linear_scale}, '
-                              f'base_angular_scale={self.base_angular_scale}')
+                              f'base_angular_scale={self.base_angular_scale}, '
+                              f'base_linear_deadzone={self.base_linear_deadzone}m, '
+                              f'base_linear_max_range={self.base_linear_max_range}m, '
+                              f'base_angular_deadzone={self.base_angular_deadzone}rad, '
+                              f'base_angular_max_range={self.base_angular_max_range}rad')
 
         # VR publishing control flag
         self.vr_publishing_enabled = True #False  # Default: disabled
@@ -696,19 +718,19 @@ class VRTrajectoryPublisher(Node):
                 if self.initial_camera_height is not None:
                     relative_height = current_camera_height - self.initial_camera_height
 
-                # Calculate velocity based on change from previous frame (not from initial position)
-                position_velocity = np.array([0.0, 0.0])
-                yaw_velocity = 0.0
-                if (self.previous_camera_position is not None and 
-                    self.previous_camera_yaw is not None):
-                    # Calculate velocity as change from previous frame
-                    position_velocity = current_camera_position - self.previous_camera_position
-                    yaw_velocity = current_camera_yaw - self.previous_camera_yaw
-                    # Wrap yaw velocity to [-pi, pi]
-                    while yaw_velocity > math.pi:
-                        yaw_velocity -= 2.0 * math.pi
-                    while yaw_velocity < -math.pi:
-                        yaw_velocity += 2.0 * math.pi
+                # Calculate relative position and rotation from reference point (not from previous frame)
+                relative_position = np.array([0.0, 0.0])
+                relative_yaw = 0.0
+                if (self.initial_camera_position is not None and
+                    self.initial_camera_yaw is not None):
+                    # Calculate relative position from reference point
+                    relative_position = current_camera_position - self.initial_camera_position
+                    relative_yaw = current_camera_yaw - self.initial_camera_yaw
+                    # Wrap yaw to [-pi, pi]
+                    while relative_yaw > math.pi:
+                        relative_yaw -= 2.0 * math.pi
+                    while relative_yaw < -math.pi:
+                        relative_yaw += 2.0 * math.pi
 
                 # Publish lift joint command based on camera height change
                 if (self.vr_publishing_enabled and self.initial_camera_height is not None and
@@ -731,23 +753,49 @@ class VRTrajectoryPublisher(Node):
                     lift_msg.points.append(point)
                     self.lift_joint_pub.publish(lift_msg)
 
-                # Publish base velocity command based on camera position/rotation change
+                # Publish base velocity command based on camera position/rotation relative to reference
                 self.cmd_vel_log_counter += 1
-                if (self.vr_publishing_enabled and self.previous_camera_position is not None and
-                    self.previous_camera_yaw is not None and self.enable_base_publishing):
+                if (self.vr_publishing_enabled and self.initial_camera_position is not None and
+                    self.initial_camera_yaw is not None and self.enable_base_publishing):
                     twist_msg = Twist()
                     # VR coordinate system: x is forward/backward, z is left/right
                     # ROS coordinate system: linear.x is forward, linear.y is left, angular.z is rotation
-                    # Use velocity (change from previous frame) and clamp to [-0.5, 0.5]
-                    linear_x = float(position_velocity[0] * self.base_linear_scale)
-                    linear_y = float(position_velocity[1] * self.base_linear_scale)
-                    angular_z = float(yaw_velocity * self.base_angular_scale)
-                    
-                    # Clamp values to [-0.5, 0.5] range
-                    linear_x = max(-0.5, min(0.5, linear_x))
-                    linear_y = max(-0.5, min(0.5, linear_y))
-                    angular_z = max(-0.5, min(0.5, angular_z))
-                    
+
+                    # Calculate velocity with deadzone and max range
+                    def calculate_velocity_with_deadzone(relative_value, deadzone, max_range, max_velocity=0.5):
+                        """Calculate velocity with deadzone and max range."""
+                        abs_value = abs(relative_value)
+                        sign = 1.0 if relative_value >= 0.0 else -1.0
+
+                        # Deadzone: velocity is 0
+                        if abs_value <= deadzone:
+                            return 0.0
+
+                        # Max range: velocity is max_velocity
+                        if abs_value >= max_range:
+                            return sign * max_velocity
+
+                        # Linear interpolation between deadzone and max range
+                        # velocity = (value - deadzone) / (max_range - deadzone) * max_velocity
+                        normalized = (abs_value - deadzone) / (max_range - deadzone)
+                        return sign * normalized * max_velocity
+
+                    linear_x = calculate_velocity_with_deadzone(
+                        relative_position[0],
+                        self.base_linear_deadzone,
+                        self.base_linear_max_range
+                    )
+                    linear_y = calculate_velocity_with_deadzone(
+                        relative_position[1],
+                        self.base_linear_deadzone,
+                        self.base_linear_max_range
+                    )
+                    angular_z = calculate_velocity_with_deadzone(
+                        relative_yaw,
+                        self.base_angular_deadzone,
+                        self.base_angular_max_range
+                    )
+
                     # Map VR x to ROS linear.x (forward/backward)
                     twist_msg.linear.x = linear_x
                     # Map VR z to ROS linear.y (left/right)
@@ -757,29 +805,25 @@ class VRTrajectoryPublisher(Node):
                     twist_msg.angular.x = 0.0
                     twist_msg.angular.y = 0.0
                     twist_msg.angular.z = angular_z
-                    
+
                     self.cmd_vel_pub.publish(twist_msg)
-                    
+
                     # Log cmd_vel
                     if self.cmd_vel_log_counter % self.cmd_vel_log_every_n == 0:
                         self.get_logger().info(
                             f'🚗 cmd_vel: linear=[{twist_msg.linear.x:+.3f}, {twist_msg.linear.y:+.3f}, {twist_msg.linear.z:+.3f}], '
                             f'angular=[{twist_msg.angular.x:+.3f}, {twist_msg.angular.y:+.3f}, {twist_msg.angular.z:+.3f}] | '
-                            f'Position velocity: [{position_velocity[0]:+.4f}, {position_velocity[1]:+.4f}], '
-                            f'Yaw velocity: {yaw_velocity:+.4f} rad'
+                            f'Relative position: [{relative_position[0]:+.4f}, {relative_position[1]:+.4f}], '
+                            f'Relative yaw: {relative_yaw:+.4f} rad'
                         )
                 elif self.cmd_vel_log_counter % (self.cmd_vel_log_every_n * 10) == 0:
                     # Debug: log why cmd_vel is not being published (less frequently)
                     self.get_logger().debug(
                         f'⚠️ cmd_vel not published: vr_enabled={self.vr_publishing_enabled}, '
-                        f'previous_pos={self.previous_camera_position is not None}, '
-                        f'previous_yaw={self.previous_camera_yaw is not None}, '
+                        f'initial_pos={self.initial_camera_position is not None}, '
+                        f'initial_yaw={self.initial_camera_yaw is not None}, '
                         f'enable_base={self.enable_base_publishing}'
                     )
-                
-                # Update previous camera position and yaw for next frame
-                self.previous_camera_position = current_camera_position.copy()
-                self.previous_camera_yaw = current_camera_yaw
 
                 self.previous_camera_height = current_camera_height
 

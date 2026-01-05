@@ -56,8 +56,6 @@ FfwArmIKSolver::FfwArmIKSolver()
   // Low-pass filter between current state and IK target
   this->declare_parameter<double>("lpf_alpha", 0.8);
 
-  this->declare_parameter<double>("max_arm_reach", 0.70);
-
   // Joint limits parameters (can be overridden if needed)
   this->declare_parameter<bool>("use_hardcoded_joint_limits", true);
 
@@ -89,8 +87,6 @@ FfwArmIKSolver::FfwArmIKSolver()
   lpf_alpha_ = this->get_parameter("lpf_alpha").as_double();
   if (lpf_alpha_ < 0.0) { lpf_alpha_ = 0.0; }
   if (lpf_alpha_ > 1.0) { lpf_alpha_ = 1.0; }
-
-  max_arm_reach_ = this->get_parameter("max_arm_reach").as_double();
 
   use_hardcoded_joint_limits_ = this->get_parameter("use_hardcoded_joint_limits").as_bool();
 
@@ -597,16 +593,6 @@ void FfwArmIKSolver::solveIK(
   target_frame.p.x(target_pose.pose.position.x);
   target_frame.p.y(target_pose.pose.position.y);
   target_frame.p.z(target_pose.pose.position.z);
-
-
-  double dist = target_frame.p.Norm();
-
-  if (dist > max_arm_reach_ + 0.05) {
-    RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-        "⚠️ %s target is out of reach (%.3fm > %.3fm). Clamping.",
-        arm.c_str(), dist, max_arm_reach_);
-  }
-  target_frame.p = target_frame.p * (max_arm_reach_ / dist);
 
   // Convert quaternion to rotation matrix
   KDL::Rotation rot = KDL::Rotation::Quaternion(
