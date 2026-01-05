@@ -46,21 +46,13 @@ class VRTrajectoryPublisher(Node):
         # Declare parameters
         self.declare_parameter('enable_lift_publishing', False)
         self.declare_parameter('enable_head_publishing', False)
-        self.declare_parameter('lift_lpf_alpha', 0.3)  # Low-pass filter alpha for lift (0.0-1.0, higher = less filtering)
 
         # Get parameters
         self.enable_lift_publishing = self.get_parameter('enable_lift_publishing').get_parameter_value().bool_value
         self.enable_head_publishing = self.get_parameter('enable_head_publishing').get_parameter_value().bool_value
-        self.lift_lpf_alpha = self.get_parameter('lift_lpf_alpha').get_parameter_value().double_value
-        # Clamp alpha to valid range
-        if self.lift_lpf_alpha < 0.0:
-            self.lift_lpf_alpha = 0.0
-        if self.lift_lpf_alpha > 1.0:
-            self.lift_lpf_alpha = 1.0
 
         self.get_logger().info(f'Parameters: enable_lift_publishing={self.enable_lift_publishing}, '
-                              f'enable_head_publishing={self.enable_head_publishing}, '
-                              f'lift_lpf_alpha={self.lift_lpf_alpha}')
+                              f'enable_head_publishing={self.enable_head_publishing}')
 
         # VR publishing control flag
         self.vr_publishing_enabled = True #False  # Default: disabled
@@ -167,7 +159,6 @@ class VRTrajectoryPublisher(Node):
         self.head_inverse_matrix = np.eye(4)
         self.previous_camera_height = None  # Store previous camera height for tracking changes
         self.initial_camera_height = None  # Store initial camera height as reference
-        self.filtered_lift_position = None  # Filtered lift position for low-pass filtering
 
         # Low-pass filter settings
         self.low_pass_filter_alpha = 0.3
@@ -210,10 +201,10 @@ class VRTrajectoryPublisher(Node):
             status = "ENABLED" if self.vr_publishing_enabled else "DISABLED"
             self.get_logger().info(f'VR publishing changed to: {status} (message value: {msg.data})')
 
-            # When VR control is enabled (true), set current camera height as reference (0)
-            if self.vr_publishing_enabled and self.previous_camera_height is not None:
-                self.initial_camera_height = self.previous_camera_height
-                self.filtered_lift_position = None  # Reset filtered position when reference changes
+            # When VR control is enabled (true), reset reference height to be set on next camera event
+            # This ensures we use the camera height at the moment true is received
+            if self.vr_publishing_enabled:
+                self.initial_camera_height = None  # Reset to capture current height on next camera event
 
             if not self.vr_publishing_enabled:
                 # Reset joint positions to zero when disabled
@@ -665,28 +656,14 @@ class VRTrajectoryPublisher(Node):
                 # If VR control is enabled and reference height is not set yet, set it now
                 if self.vr_publishing_enabled and self.initial_camera_height is None:
                     self.initial_camera_height = current_camera_height
-                    self.filtered_lift_position = None  # Reset filtered position when reference changes
 
                 # Calculate relative height (0-based from reference)
                 relative_height = 0.0
                 if self.initial_camera_height is not None:
                     relative_height = current_camera_height - self.initial_camera_height
 
-                # Apply low-pass filter to lift position
-                filtered_lift_position = relative_height
-                if self.initial_camera_height is not None:
-                    if self.filtered_lift_position is None:
-                        # Initialize filtered position on first measurement
-                        self.filtered_lift_position = relative_height
-                        filtered_lift_position = relative_height
-                    else:
-                        # Apply low-pass filter: filtered = alpha * new + (1 - alpha) * old
-                        self.filtered_lift_position = (self.lift_lpf_alpha * relative_height + 
-                                                       (1.0 - self.lift_lpf_alpha) * self.filtered_lift_position)
-                        filtered_lift_position = self.filtered_lift_position
-
                 # Publish lift joint command based on camera height change
-                if (self.vr_publishing_enabled and self.initial_camera_height is not None and 
+                if (self.vr_publishing_enabled and self.initial_camera_height is not None and
                     self.enable_lift_publishing):
                     lift_msg = JointTrajectory()
                     # Set header.stamp to zero to avoid "ends in the past" error
@@ -694,15 +671,15 @@ class VRTrajectoryPublisher(Node):
                     lift_msg.header.stamp.nanosec = 0
                     lift_msg.header.frame_id = ''
                     lift_msg.joint_names = ['lift_joint']
-                    
+
                     point = JointTrajectoryPoint()
-                    point.positions = [float(filtered_lift_position)]
+                    point.positions = [float(relative_height)]
                     point.velocities = [0.0]
                     point.accelerations = [0.0]
                     point.effort = []
                     point.time_from_start.sec = 0
                     point.time_from_start.nanosec = 0
-                    
+
                     lift_msg.points.append(point)
                     self.lift_joint_pub.publish(lift_msg)
 
