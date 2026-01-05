@@ -31,5 +31,6 @@ echo "[ffw_bg2_follower_ai] Launching ROS2 bringup..."
 # Launch the ROS2 bringup
 # Using 'exec' ensures ros2 launch becomes PID 1 of this service,
 # which allows s6 to properly signal it and its children
+# Note: stdout/stderr are automatically piped to ffw_bg2_follower_ai-log via producer-for/consumer-for
 exec ros2 launch ffw_bringup ffw_bg2_follower_ai.launch.py use_mock_hardware:=true launch_cameras:=false
 

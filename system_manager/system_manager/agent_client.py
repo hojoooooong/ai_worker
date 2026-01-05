@@ -145,6 +145,37 @@ class AgentClient:
             logger.error(f"Agent returned error status for service '{service_name}': {e}")
             raise
 
+    def get_service_logs(self, service_name: str, tail: int = 100) -> dict:
+        """Get logs for a service from agent.
+
+        Args:
+            service_name: Name of the service.
+            tail: Number of log lines to return from the end. Defaults to 100.
+
+        Returns:
+            Response JSON from agent's /services/{name}/logs endpoint.
+
+        Raises:
+            requests.RequestException: If request fails.
+            requests.HTTPError: If agent returns error status (e.g., 404).
+        """
+        session = self._get_session()
+        base_url = self._get_base_url()
+        logger.debug(f"Requesting logs for service '{service_name}' from agent at {self.socket_path}")
+        try:
+            response = session.get(
+                f"{base_url}/services/{service_name}/logs",
+                params={"tail": tail} if tail else None,
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            logger.error(f"Failed to communicate with agent at {self.socket_path}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Agent returned error status for service '{service_name}': {e}")
+            raise
+
 
 class AgentClientPool:
     """Pool of agent clients, one per container.

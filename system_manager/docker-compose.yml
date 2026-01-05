@@ -21,3 +21,16 @@ services:
     # Note: This service can run independently, but requires agent sockets
     # to be created by the ai_worker container first
 
+  ui:
+    container_name: system_manager_ui
+    build:
+      context: ./system_manager_ui
+      dockerfile: Dockerfile
+    restart: always
+    network_mode: host
+    environment:
+      - NEXT_PUBLIC_API_URL=http://127.0.0.1:8080
+      - NODE_ENV=production
+    # Note: UI uses host network mode to communicate with system_manager
+    # If system_manager is on a Docker network, change network_mode and
+    # set NEXT_PUBLIC_API_URL to http://system_manager:8080

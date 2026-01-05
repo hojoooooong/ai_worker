@@ -6,6 +6,7 @@ from typing import Optional
 
 import docker
 from fastapi import FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from system_manager.agent_client import AgentClient, AgentClientPool
@@ -25,6 +26,7 @@ from system_manager.models import (
     ServiceControlResponse,
     ServiceInfo,
     ServiceListResponse,
+    ServiceLogsResponse,
     ServiceStatusResponse,
     SystemConfig,
 )
@@ -127,6 +129,15 @@ app = FastAPI(
             "description": "Docker container management operations. List containers, get status, control containers, and view logs.",
         },
     ],
+)
+
+# Add CORS middleware to allow requests from the UI
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins like ["http://localhost:3000"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -426,6 +437,74 @@ async def get_service_status(container: str, service: str) -> ServiceStatusRespo
         is_up=agent_response.get("is_up", False),
         pid=agent_response.get("pid"),
         uptime_seconds=agent_response.get("uptime_seconds"),
+    )
+
+
+@app.get(
+    "/containers/{container}/services/{service}/logs",
+    response_model=ServiceLogsResponse,
+    tags=["services"],
+    summary="Get service logs",
+    description="Retrieve logs from a service in a container",
+    response_description="Service logs with metadata",
+)
+async def get_service_logs(
+    container: str,
+    service: str,
+    tail: int = 100,
+) -> ServiceLogsResponse:
+    """Get logs for a service in a container.
+
+    Fetches logs from the agent's /services/{name}/logs endpoint, which reads
+    from the s6-overlay log directory (/var/log/{service_name}/current).
+
+    Args:
+        container: Name of the container (e.g., "ai_worker")
+        service: Service ID (e.g., "ffw_bg2_follower_ai")
+        tail: Number of log lines to return from the end. Defaults to 100.
+
+    Returns:
+        ServiceLogsResponse containing the service logs.
+
+    Raises:
+        HTTPException: 404 if container/service not found, 503 if agent unavailable.
+
+    Example Response:
+        ```json
+        {
+          "container": "ai_worker",
+          "service": "ffw_bg2_follower_ai",
+          "logs": "2024-01-01T01:00:00Z [ffw_bg2_follower_ai] Starting service...\n...",
+          "tail": 100,
+          "log_path": "/var/log/ffw_bg2_follower_ai/current"
+        }
+        ```
+    """
+    config = get_config()
+    if container not in config.containers:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Container '{container}' not found",
+        )
+
+    # Get logs from agent
+    try:
+        client = get_agent_client(container)
+        agent_response = client.get_service_logs(service, tail=tail)
+        logger.info(f"Successfully retrieved logs for service '{service}' in container '{container}'")
+    except Exception as e:
+        logger.error(f"Failed to get service logs from agent: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to communicate with agent: {str(e)}",
+        )
+
+    return ServiceLogsResponse(
+        container=container,
+        service=service,
+        logs=agent_response.get("logs", ""),
+        tail=agent_response.get("tail", tail),
+        log_path=agent_response.get("log_path"),
     )
 
 

@@ -1,6 +1,9 @@
 """FastAPI application for s6-overlay agent service management API."""
 
 import logging
+import re
+import subprocess
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -20,6 +23,25 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+def strip_ansi_codes(text: str) -> str:
+    """Remove ANSI escape codes from text.
+    
+    ANSI escape codes are used for terminal coloring and formatting.
+    This function removes them to produce clean log output.
+    
+    Args:
+        text: Text that may contain ANSI escape codes.
+        
+    Returns:
+        Text with ANSI escape codes removed.
+    """
+    # Pattern to match ANSI escape sequences
+    # Matches: \x1b[...m, \033[...m, \u001b[...m, etc.
+    ansi_escape = re.compile(r'\x1b\[[0-9;]*m|\033\[[0-9;]*m|\u001b\[[0-9;]*m')
+    return ansi_escape.sub('', text)
+
 
 app = FastAPI(
     title="s6 Agent API",
@@ -158,27 +180,72 @@ async def control_service_endpoint(
 @app.get(
     "/services/{name}/logs",
     tags=["services"],
-    summary="Get service logs (stub)",
-    description="Get logs for a service (placeholder for future implementation)",
+    summary="Get service logs",
+    description="Retrieve logs for a service from s6-overlay log directory",
 )
-async def get_service_logs(name: str):
-    """Get logs for a service (stub implementation).
+async def get_service_logs(name: str, tail: int = 100, strip_ansi: bool = False):
+    """Get logs for a service.
+
+    Reads logs from /var/log/{service_name}/current (s6-overlay log directory).
+    If the log file doesn't exist or the service doesn't have logging enabled,
+    returns an appropriate error.
 
     Args:
         name: Service name.
+        tail: Number of log lines to return from the end. Defaults to 100.
+        strip_ansi: If True, remove ANSI escape codes (color/formatting) from the output.
 
     Returns:
-        Placeholder response.
+        Dictionary with service name, logs content, and tail count.
 
-    Note:
-        This is a stub endpoint. Future implementation might map to
-        something like `tail -n 100 /var/log/ros/<service>.log`.
+    Raises:
+        HTTPException: 404 if service not found or logs unavailable, 500 on other errors.
     """
-    # TODO: Implement log retrieval
-    # For now, return a placeholder
-    return {
-        "service": name,
-        "message": "Log retrieval not yet implemented",
-        "note": "Future implementation might map to /var/log/ros/<service>.log",
-    }
+    # s6-overlay logs are stored in /var/log/{service_name}/current
+    log_path = Path(f"/var/log/{name}/current")
+
+    if not log_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Log file not found for service '{name}'. Service may not have logging enabled or log directory doesn't exist.",
+        )
+
+    try:
+        # Use tail command to get last N lines
+        # Read from /var/log/{service_name}/current (s6-log output)
+        result = subprocess.run(
+            ["tail", "-n", str(tail), str(log_path)],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        if result.returncode != 0:
+            logger.error(f"Failed to read logs for service '{name}': {result.stderr}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to read log file: {result.stderr}",
+            )
+
+        logs = strip_ansi_codes(result.stdout) if strip_ansi else result.stdout
+
+        return {
+            "service": name,
+            "logs": logs,
+            "tail": tail,
+            "log_path": str(log_path),
+        }
+
+    except subprocess.TimeoutExpired:
+        logger.error(f"Timeout reading logs for service '{name}'")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Timeout reading log file",
+        )
+    except Exception as e:
+        logger.error(f"Error reading logs for service '{name}': {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to read logs: {str(e)}",
+        )
 

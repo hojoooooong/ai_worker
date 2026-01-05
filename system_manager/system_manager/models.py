@@ -167,3 +167,13 @@ class DockerContainerLogsResponse(BaseModel):
     logs: str = Field(..., description="Container logs")
     tail: int = Field(..., description="Number of log lines returned")
 
+
+class ServiceLogsResponse(BaseModel):
+    """Response for GET /containers/{container}/services/{service}/logs."""
+
+    container: str = Field(..., description="Container name")
+    service: str = Field(..., description="Service ID")
+    logs: str = Field(..., description="Service logs from s6-overlay")
+    tail: int = Field(..., description="Number of log lines returned")
+    log_path: Optional[str] = Field(None, description="Path to log file in container")
+

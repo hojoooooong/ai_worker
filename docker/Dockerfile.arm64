@@ -175,10 +175,39 @@ RUN pip install --no-cache-dir -r /opt/system_manager/requirements.txt
 # Agent service (longrun)
 COPY docker/s6-agent /etc/s6-overlay/s6-rc.d/s6-agent
 
-# ROS2 ffw_bg2_follower_ai service (longrun)
+# ROS2 ffw_bg2_follower_ai service (longrun) with logging pipeline
+# Main service
 COPY docker/s6-services/ffw_bg2_follower_ai /etc/s6-overlay/s6-rc.d/ffw_bg2_follower_ai
+RUN chmod +x /etc/s6-overlay/s6-rc.d/ffw_bg2_follower_ai/run && \
+    chmod +x /etc/s6-overlay/s6-rc.d/ffw_bg2_follower_ai/finish
+
+# Log preparation oneshot service
+COPY docker/s6-services/ffw_bg2_follower_ai-log-prepare /etc/s6-overlay/s6-rc.d/ffw_bg2_follower_ai-log-prepare
+
+# Logging service (consumer)
+COPY docker/s6-services/ffw_bg2_follower_ai-log /etc/s6-overlay/s6-rc.d/ffw_bg2_follower_ai-log
+RUN chmod +x /etc/s6-overlay/s6-rc.d/ffw_bg2_follower_ai-log/run
+
+# ROS2 ffw_lg2_leader_ai service (longrun) with logging pipeline
+# Main service
+COPY docker/s6-services/ffw_lg2_leader_ai /etc/s6-overlay/s6-rc.d/ffw_lg2_leader_ai
+RUN chmod +x /etc/s6-overlay/s6-rc.d/ffw_lg2_leader_ai/run && \
+    chmod +x /etc/s6-overlay/s6-rc.d/ffw_lg2_leader_ai/finish
+
+# Log preparation oneshot service
+COPY docker/s6-services/ffw_lg2_leader_ai-log-prepare /etc/s6-overlay/s6-rc.d/ffw_lg2_leader_ai-log-prepare
+
+# Logging service (consumer)
+COPY docker/s6-services/ffw_lg2_leader_ai-log /etc/s6-overlay/s6-rc.d/ffw_lg2_leader_ai-log
+RUN chmod +x /etc/s6-overlay/s6-rc.d/ffw_lg2_leader_ai-log/run
+
+# Create log directory and set permissions
+RUN mkdir -p /var/log/ffw_lg2_leader_ai && \
+    chown nobody:nogroup /var/log/ffw_lg2_leader_ai && \
+    chmod 02755 /var/log/ffw_lg2_leader_ai
 
 # Add services to the user bundle so they start at container boot
+# Note: ffw_bg2_follower_ai-pipeline and ffw_lg2_leader_ai-pipeline are NOT in the user bundle - they must be started manually
 RUN mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d && \
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/s6-agent
 

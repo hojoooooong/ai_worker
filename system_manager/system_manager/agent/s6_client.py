@@ -3,6 +3,7 @@
 import logging
 import re
 import subprocess
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -118,6 +119,9 @@ def get_service_status(name: str) -> ServiceStatus:
 def control_service(name: str, action: str) -> None:
     """Control an s6 service (start, stop, or restart).
 
+    For s6-rc services (especially those with pipelines), uses s6-rc commands.
+    For legacy services, falls back to s6-svc.
+
     Args:
         name: Service name.
         action: Action to perform ('up', 'down', or 'restart').
@@ -125,33 +129,60 @@ def control_service(name: str, action: str) -> None:
     Raises:
         FileNotFoundError: If service does not exist.
         ValueError: If action is invalid.
-        subprocess.CalledProcessError: If s6-svc command fails.
+        subprocess.CalledProcessError: If command fails.
     """
     service_path = S6_SERVICE_DIR / name
 
     if not service_path.exists():
         raise FileNotFoundError(f"Service '{name}' not found at {service_path}")
 
-    # Map actions to s6-svc flags
-    action_map = {
-        "up": "-u",
-        "down": "-d",
-        "restart": "-r",
-    }
+    # Check if this is an s6-rc service (has producer-for or consumer-for)
+    # For s6-rc services with pipelines, we should use s6-rc commands
+    is_s6rc_service = (service_path / "producer-for").exists() or (service_path / "consumer-for").exists()
 
-    if action not in action_map:
-        raise ValueError(f"Invalid action: {action}. Must be one of: {list(action_map.keys())}")
+    # Also check if it's a symlink to s6-rc servicedirs (indicates s6-rc service)
+    try:
+        if service_path.is_symlink():
+            target = service_path.readlink()
+            if "s6-rc" in str(target):
+                is_s6rc_service = True
+    except Exception:
+        pass
 
-    flag = action_map[action]
+    if action not in ["up", "down", "restart"]:
+        raise ValueError(f"Invalid action: {action}. Must be one of: ['up', 'down', 'restart']")
 
     try:
-        # Execute s6-svc command
-        subprocess.check_output(
-            ["s6-svc", flag, str(service_path)],
-            stderr=subprocess.STDOUT,
-            timeout=10,
-        )
-        logger.info(f"Successfully executed action '{action}' on service '{name}'")
+        if is_s6rc_service:
+            # For s6-rc services, use s6-rc commands
+            # For pipelines, starting the producer service will start the entire pipeline
+            if action == "up":
+                cmd = ["s6-rc", "-u", "change", name]
+            elif action == "down":
+                cmd = ["s6-rc", "-d", "change", name]
+            else:  # restart
+                cmd = ["s6-rc", "-d", "change", name]
+                subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=10)
+                # Wait a moment, then bring it back up
+                time.sleep(1)
+                cmd = ["s6-rc", "-u", "change", name]
+
+            subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=10)
+            logger.info(f"Successfully executed action '{action}' on s6-rc service '{name}'")
+        else:
+            # For legacy services, use s6-svc
+            action_map = {
+                "up": "-u",
+                "down": "-d",
+                "restart": "-r",
+            }
+            flag = action_map[action]
+            subprocess.check_output(
+                ["s6-svc", flag, str(service_path)],
+                stderr=subprocess.STDOUT,
+                timeout=10,
+            )
+            logger.info(f"Successfully executed action '{action}' on service '{name}'")
 
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to {action} service '{name}': {e}")
