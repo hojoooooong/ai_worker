@@ -47,43 +47,48 @@ class VRTrajectoryPublisher(Node):
         self.declare_parameter('enable_lift_publishing', False)
         self.declare_parameter('enable_head_publishing', False)
         self.declare_parameter('enable_base_publishing', True)
-        self.declare_parameter('base_linear_scale', 100.0)  # Scale factor for linear velocity (higher = more sensitive)
-        self.declare_parameter('base_angular_scale', 100.0)  # Scale factor for angular velocity (higher = more sensitive)
-        self.declare_parameter('base_linear_deadzone', 0.01)  # Deadzone range for linear velocity (m) - within this range, velocity is 0
-        self.declare_parameter('base_linear_max_range', 0.1)  # Maximum range for linear velocity (m) - beyond this, max velocity is reached
-        self.declare_parameter('base_angular_deadzone', 0.01)  # Deadzone range for angular velocity (rad) - within this range, velocity is 0
-        self.declare_parameter('base_angular_max_range', 0.1)  # Maximum range for angular velocity (rad) - beyond this, max velocity is reached
+        # Position control parameters: convert position error to velocity using P control
+        self.declare_parameter('base_linear_kp', 2.0)  # P gain for linear position control (velocity = kp * position_error)
+        self.declare_parameter('base_angular_kp', 2.0)  # P gain for angular position control (velocity = kp * angle_error)
+        self.declare_parameter('base_linear_deadzone', 0.01)  # Deadzone range for linear position (m) - within this range, velocity is 0
+        self.declare_parameter('base_angular_deadzone', 0.01)  # Deadzone range for angular position (rad) - within this range, velocity is 0
+        self.declare_parameter('base_max_linear_velocity', 0.5)  # Maximum linear velocity (m/s)
+        self.declare_parameter('base_max_angular_velocity', 0.5)  # Maximum angular velocity (rad/s)
 
         # Get parameters
         self.enable_lift_publishing = self.get_parameter('enable_lift_publishing').get_parameter_value().bool_value
         self.enable_head_publishing = self.get_parameter('enable_head_publishing').get_parameter_value().bool_value
         self.enable_base_publishing = self.get_parameter('enable_base_publishing').get_parameter_value().bool_value
-        self.base_linear_scale = self.get_parameter('base_linear_scale').get_parameter_value().double_value
-        self.base_angular_scale = self.get_parameter('base_angular_scale').get_parameter_value().double_value
+        self.base_linear_kp = self.get_parameter('base_linear_kp').get_parameter_value().double_value
+        self.base_angular_kp = self.get_parameter('base_angular_kp').get_parameter_value().double_value
         self.base_linear_deadzone = self.get_parameter('base_linear_deadzone').get_parameter_value().double_value
-        self.base_linear_max_range = self.get_parameter('base_linear_max_range').get_parameter_value().double_value
         self.base_angular_deadzone = self.get_parameter('base_angular_deadzone').get_parameter_value().double_value
-        self.base_angular_max_range = self.get_parameter('base_angular_max_range').get_parameter_value().double_value
+        self.base_max_linear_velocity = self.get_parameter('base_max_linear_velocity').get_parameter_value().double_value
+        self.base_max_angular_velocity = self.get_parameter('base_max_angular_velocity').get_parameter_value().double_value
 
-        # Validate ranges
-        if self.base_linear_deadzone >= self.base_linear_max_range:
-            self.get_logger().warn('base_linear_deadzone must be less than base_linear_max_range. Using defaults.')
+        # Validate parameters
+        if self.base_linear_kp <= 0.0:
+            self.get_logger().warn('base_linear_kp must be positive. Using default 2.0.')
+            self.base_linear_kp = 2.0
+        if self.base_angular_kp <= 0.0:
+            self.get_logger().warn('base_angular_kp must be positive. Using default 2.0.')
+            self.base_angular_kp = 2.0
+        if self.base_linear_deadzone < 0.0:
+            self.get_logger().warn('base_linear_deadzone must be non-negative. Using default 0.01.')
             self.base_linear_deadzone = 0.01
-            self.base_linear_max_range = 0.1
-        if self.base_angular_deadzone >= self.base_angular_max_range:
-            self.get_logger().warn('base_angular_deadzone must be less than base_angular_max_range. Using defaults.')
+        if self.base_angular_deadzone < 0.0:
+            self.get_logger().warn('base_angular_deadzone must be non-negative. Using default 0.01.')
             self.base_angular_deadzone = 0.01
-            self.base_angular_max_range = 0.1
 
         self.get_logger().info(f'Parameters: enable_lift_publishing={self.enable_lift_publishing}, '
                               f'enable_head_publishing={self.enable_head_publishing}, '
                               f'enable_base_publishing={self.enable_base_publishing}, '
-                              f'base_linear_scale={self.base_linear_scale}, '
-                              f'base_angular_scale={self.base_angular_scale}, '
+                              f'base_linear_kp={self.base_linear_kp}, '
+                              f'base_angular_kp={self.base_angular_kp}, '
                               f'base_linear_deadzone={self.base_linear_deadzone}m, '
-                              f'base_linear_max_range={self.base_linear_max_range}m, '
                               f'base_angular_deadzone={self.base_angular_deadzone}rad, '
-                              f'base_angular_max_range={self.base_angular_max_range}rad')
+                              f'base_max_linear_velocity={self.base_max_linear_velocity}m/s, '
+                              f'base_max_angular_velocity={self.base_max_angular_velocity}rad/s')
 
         # VR publishing control flag
         self.vr_publishing_enabled = True #False  # Default: disabled
@@ -754,6 +759,8 @@ class VRTrajectoryPublisher(Node):
                     self.lift_joint_pub.publish(lift_msg)
 
                 # Publish base velocity command based on camera position/rotation relative to reference
+                # Position control: convert position error to velocity using P control
+                # The base will move to match the camera position (follower follows leader)
                 self.cmd_vel_log_counter += 1
                 if (self.vr_publishing_enabled and self.initial_camera_position is not None and
                     self.initial_camera_yaw is not None and self.enable_base_publishing):
@@ -761,39 +768,43 @@ class VRTrajectoryPublisher(Node):
                     # VR coordinate system: x is forward/backward, z is left/right
                     # ROS coordinate system: linear.x is forward, linear.y is left, angular.z is rotation
 
-                    # Calculate velocity with deadzone and max range
-                    def calculate_velocity_with_deadzone(relative_value, deadzone, max_range, max_velocity=0.5):
-                        """Calculate velocity with deadzone and max range."""
-                        abs_value = abs(relative_value)
-                        sign = 1.0 if relative_value >= 0.0 else -1.0
+                    def calculate_velocity_from_position_error(position_error, kp, deadzone, max_velocity):
+                        """Calculate velocity from position error using P control with deadzone and saturation."""
+                        abs_error = abs(position_error)
+                        sign = 1.0 if position_error >= 0.0 else -1.0
 
-                        # Deadzone: velocity is 0
-                        if abs_value <= deadzone:
+                        # Deadzone: if error is within deadzone, velocity is 0
+                        if abs_error <= deadzone:
                             return 0.0
 
-                        # Max range: velocity is max_velocity
-                        if abs_value >= max_range:
-                            return sign * max_velocity
+                        # P control: velocity = kp * position_error
+                        velocity = kp * position_error
 
-                        # Linear interpolation between deadzone and max range
-                        # velocity = (value - deadzone) / (max_range - deadzone) * max_velocity
-                        normalized = (abs_value - deadzone) / (max_range - deadzone)
-                        return sign * normalized * max_velocity
+                        # Saturate to max_velocity
+                        if abs(velocity) > max_velocity:
+                            velocity = sign * max_velocity
 
-                    linear_x = calculate_velocity_with_deadzone(
+                        return velocity
+
+                    # Calculate velocity from position error (P control)
+                    # Positive error means camera is ahead/right, so base should move forward/right
+                    linear_x = calculate_velocity_from_position_error(
                         relative_position[0],
+                        self.base_linear_kp,
                         self.base_linear_deadzone,
-                        self.base_linear_max_range
+                        self.base_max_linear_velocity
                     )
-                    linear_y = calculate_velocity_with_deadzone(
+                    linear_y = calculate_velocity_from_position_error(
                         relative_position[1],
+                        self.base_linear_kp,
                         self.base_linear_deadzone,
-                        self.base_linear_max_range
+                        self.base_max_linear_velocity
                     )
-                    angular_z = calculate_velocity_with_deadzone(
+                    angular_z = calculate_velocity_from_position_error(
                         relative_yaw,
+                        self.base_angular_kp,
                         self.base_angular_deadzone,
-                        self.base_angular_max_range
+                        self.base_max_angular_velocity
                     )
 
                     # Map VR x to ROS linear.x (forward/backward)
