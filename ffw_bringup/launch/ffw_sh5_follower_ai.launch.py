@@ -47,6 +47,8 @@ def generate_launch_description():
                               description='Whether to launch the init_position node.'),
         DeclareLaunchArgument('model', default_value='ffw_sh5_rev1_follower',
                               description='Robot model name.'),
+        DeclareLaunchArgument('use_head_eef_tracker', default_value='true',
+                              description='Whether to launch the head EEF tracker node.'),
     ]
 
     start_rviz = LaunchConfiguration('start_rviz')
@@ -57,7 +59,7 @@ def generate_launch_description():
     launch_cameras = LaunchConfiguration('launch_cameras')
     init_position = LaunchConfiguration('init_position')
     model = LaunchConfiguration('model')
-
+    use_head_eef_tracker = LaunchConfiguration('use_head_eef_tracker')
     robot_description_content = Command([
         PathJoinSubstitution([FindExecutable(name='xacro')]),
         ' ',
@@ -75,6 +77,8 @@ def generate_launch_description():
         'port_name:=', port_name,
         ' ',
         'model:=', model,
+        ' ',
+        'use_head_eef_tracker:=', use_head_eef_tracker,
     ])
 
     controller_manager_config = PathJoinSubstitution([
@@ -332,6 +336,14 @@ def generate_launch_description():
     #     output='screen',
     # )
 
+    head_eef_tracker_node = Node(
+        package='ffw_bringup',
+        executable='head_eef_tracker',
+        name='head_eef_tracker',
+        output='screen',
+        condition=IfCondition(use_head_eef_tracker),
+    )
+
     preset_hand_controller = Node(
         package='ffw_teleop',
         executable='preset_hand_controller',
@@ -409,6 +421,7 @@ def generate_launch_description():
             swerve_drive_spawner_direct,
             init_position_event_handler,
             swerve_controller_switch_event_handler,
+            head_eef_tracker_node,
             # camera_timer_20s,
             # camera_timer_10s,
             ffw_arm_launch,

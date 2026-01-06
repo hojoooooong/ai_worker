@@ -47,6 +47,8 @@ def generate_launch_description():
                               description='Whether to launch the init_position node.'),
         DeclareLaunchArgument('model', default_value='ffw_bh5_rev1_follower',
                               description='Robot model name.'),
+        DeclareLaunchArgument('use_head_eef_tracker', default_value='false',
+                              description='Whether to launch the head EEF tracker node.'),
     ]
 
     start_rviz = LaunchConfiguration('start_rviz')
@@ -339,8 +341,8 @@ def generate_launch_description():
             init_position_event_handler,
             # camera_timer_20s,
             # camera_timer_10s,
-            # ffw_arm_launch,
-            # pedal_launch,
-            preset_hand_controller,
+            ffw_arm_launch,
+            pedal_launch,
+            # preset_hand_controller,
         ]
     )
