@@ -152,23 +152,32 @@ RUN python3 -m pip config set global.break-system-packages true
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
 
 RUN cd /root && \
-    git clone https://github.com/Woojin-Crive/vuer.git && \
+    git clone -b jazzy https://github.com/ROBOTIS-GIT/vuer.git && \
     cd vuer && \
     pip3 install -e '.[all]'
 
+RUN cd /root && \
+    git clone -b jazzy https://github.com/ROBOTIS-GIT/yourdfpy.git && \
+    cd yourdfpy && \
+    pip3 install --ignore-installed -e .
 
 RUN cd /root && \
     git clone https://github.com/chungmin99/pyroki.git && \
     cd pyroki && \
-    pip3 install -e .
+    pip3 install --ignore-installed -e .
+
+RUN echo 'export PYTHONPATH=/workspace/vuer/src:$PYTHONPATH' >> ~/.bashrc && \
+    export PYTHONPATH=/workspace/vuer/src:$PYTHONPATH
+RUN echo 'export PYTHONPATH=/workspace/pyroki/src:$PYTHONPATH' >> ~/.bashrc && \
+    export PYTHONPATH=/workspace/pyroki/src:$PYTHONPATH
+RUN echo 'export PYTHONPATH=/workspace/yourdfpy/src:$PYTHONPATH' >> ~/.bashrc && \
+    export PYTHONPATH=/workspace/yourdfpy/src:$PYTHONPATH
 
 RUN chmod +x /tmp/gen_cert.sh && \
     cp /tmp/gen_cert.sh ~/
 
 EXPOSE 8012
 EXPOSE 8080
-
-CMD ["/bin/bash", "-c", "source /opt/ros/jazzy/setup.bash && uvicorn minimal:app --host 0.0.0.0 --port 8012"]
 
 RUN bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash && \
     cd ${COLCON_WS} && \
