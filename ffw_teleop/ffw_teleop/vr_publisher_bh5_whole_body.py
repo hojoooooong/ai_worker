@@ -27,6 +27,7 @@ import nest_asyncio
 import numpy as np
 import rclpy
 from rclpy.node import Node
+from nav_msgs.msg import Odometry
 from scipy.spatial.transform import Rotation as R
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from vuer import Vuer
@@ -44,14 +45,14 @@ class VRTrajectoryPublisher(Node):
         self.get_logger().set_level(rclpy.logging.LoggingSeverity.INFO)
 
         # Declare parameters
-        self.declare_parameter('enable_lift_publishing', False)
+        self.declare_parameter('enable_lift_publishing', True)
         self.declare_parameter('enable_head_publishing', False)
         self.declare_parameter('enable_base_publishing', True)
         # Position control parameters: convert position error to velocity using P control
         self.declare_parameter('base_linear_kp', 2.0)  # P gain for linear position control (velocity = kp * position_error)
-        self.declare_parameter('base_angular_kp', 2.0)  # P gain for angular position control (velocity = kp * angle_error)
-        self.declare_parameter('base_linear_deadzone', 0.01)  # Deadzone range for linear position (m) - within this range, velocity is 0
-        self.declare_parameter('base_angular_deadzone', 0.01)  # Deadzone range for angular position (rad) - within this range, velocity is 0
+        self.declare_parameter('base_angular_kp', 1.0)  # P gain for angular position control (velocity = kp * angle_error)
+        self.declare_parameter('base_linear_deadzone', 0.05)  # Deadzone range for linear position (m) - within this range, velocity is 0
+        self.declare_parameter('base_angular_deadzone', 0.05)  # Deadzone range for angular position (rad) - within this range, velocity is 0
         self.declare_parameter('base_max_linear_velocity', 0.5)  # Maximum linear velocity (m/s)
         self.declare_parameter('base_max_angular_velocity', 0.5)  # Maximum angular velocity (rad/s)
 
@@ -91,7 +92,7 @@ class VRTrajectoryPublisher(Node):
                               f'base_max_angular_velocity={self.base_max_angular_velocity}rad/s')
 
         # VR publishing control flag
-        self.vr_publishing_enabled = True #False  # Default: disabled
+        self.vr_publishing_enabled = False  # Default: disabled
 
         # VR Server setup
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -193,6 +194,14 @@ class VRTrajectoryPublisher(Node):
             10
         )
 
+        # Subscriber for odometry
+        self.odom_sub = self.create_subscription(
+            Odometry,
+            '/odom',
+            self.odom_callback,
+            10
+        )
+
         # VR data storage
         self.left_hand_data = None
         self.right_hand_data = None
@@ -204,6 +213,11 @@ class VRTrajectoryPublisher(Node):
         self.initial_camera_yaw = None  # Store initial camera yaw as reference for base rotation
         self.previous_camera_position = None  # Store previous camera position for velocity calculation
         self.previous_camera_yaw = None  # Store previous camera yaw for angular velocity calculation
+
+        # Robot odometry tracking
+        self.current_odom = None  # Current robot odometry
+        self.initial_odom_position = None  # Store initial robot position (x, y) when VR control is enabled
+        self.initial_odom_yaw = None  # Store initial robot yaw when VR control is enabled
 
         # Low-pass filter settings
         self.low_pass_filter_alpha = 0.3
@@ -238,6 +252,10 @@ class VRTrajectoryPublisher(Node):
         self.get_logger().info('VR Trajectory Publisher node has been started')
         self.get_logger().info('VR publishing is DISABLED by default. Send /vr_control/toggle message (True=enable, False=disable).')
 
+    def odom_callback(self, msg):
+        """Callback to receive robot odometry."""
+        self.current_odom = msg
+
     def vr_control_callback(self, msg):
         """Callback to enable/disable VR publishing based on message content."""
         new_state = bool(msg.data)  # Read message content
@@ -257,10 +275,29 @@ class VRTrajectoryPublisher(Node):
                 self.previous_camera_position = None  # Reset previous position for velocity calculation
                 self.previous_camera_yaw = None  # Reset previous yaw for angular velocity calculation
 
+                # Store initial robot odometry position when VR control is enabled
+                if self.current_odom is not None:
+                    pos = self.current_odom.pose.pose.position
+                    quat = self.current_odom.pose.pose.orientation
+                    r = R.from_quat([quat.x, quat.y, quat.z, quat.w])
+                    _, _, yaw = r.as_euler('xyz')
+                    self.initial_odom_position = np.array([pos.x, pos.y])
+                    self.initial_odom_yaw = yaw
+                    self.get_logger().info(
+                        f'Initial robot odom position: [{self.initial_odom_position[0]:.3f}, {self.initial_odom_position[1]:.3f}], '
+                        f'yaw: {self.initial_odom_yaw:.3f} rad'
+                    )
+                else:
+                    self.initial_odom_position = None
+                    self.initial_odom_yaw = None
+                    self.get_logger().warn('VR control enabled but odom not available yet')
+
             if not self.vr_publishing_enabled:
                 # Reset joint positions to zero when disabled
                 self.left_joint_positions = [0.0] * 20
                 self.right_joint_positions = [0.0] * 20
+                self.initial_odom_position = None
+                self.initial_odom_yaw = None
                 self.get_logger().info('Joint positions reset to zero')
 
     def log_status(self):
@@ -700,14 +737,28 @@ class VRTrajectoryPublisher(Node):
                 self.head_inverse_matrix = np.linalg.inv(self.head_transform_matrix)
                 pos, quat = self.matrix_to_pose(self.head_transform_matrix)
 
-                # Track camera pose changes for whole body control
-                # Position is [x, y, z] where y (second value) is height in VR coordinate system
-                current_camera_height = pos[1]  # y coordinate (height in VR coordinate system)
-                current_camera_position = np.array([pos[0], pos[2]])  # x, z coordinates (forward/backward, left/right)
+                # Transform from VR coordinate system to ROS coordinate system
+                # VR coordinate system: (x, y, z) where typically:
+                #   - x: right/left (depending on convention)
+                #   - y: up/down (height)
+                #   - z: forward/backward
+                # ROS coordinate system: (x, y, z) where:
+                #   - x: forward
+                #   - y: left
+                #   - z: up
+                ros_pos, ros_quat = self.vr_to_ros_transform(pos, quat)
 
-                # Extract camera rotation
-                r = R.from_quat(quat)
-                roll, pitch, yaw = r.as_euler('zxy')
+                # Track camera pose changes for whole body control
+                # After transformation to ROS coordinates:
+                #   - ros_pos[0] (ROS x): forward/backward
+                #   - ros_pos[1] (ROS y): left/right
+                #   - ros_pos[2] (ROS z): up/down (height)
+                current_camera_height = ros_pos[2]  # ROS z coordinate (height)
+                current_camera_position = np.array([ros_pos[0], ros_pos[1]])  # ROS x, y (forward/backward, left/right)
+
+                # Extract camera rotation (already in ROS coordinate system after transformation)
+                r = R.from_quat(ros_quat)
+                roll, pitch, yaw = r.as_euler('xyz')  # Use 'xyz' for ROS convention (yaw around z-axis)
                 current_camera_yaw = yaw
 
                 # If VR control is enabled and reference is not set yet, set it now
@@ -758,15 +809,41 @@ class VRTrajectoryPublisher(Node):
                     lift_msg.points.append(point)
                     self.lift_joint_pub.publish(lift_msg)
 
-                # Publish base velocity command based on camera position/rotation relative to reference
-                # Position control: convert position error to velocity using P control
-                # The base will move to match the camera position (follower follows leader)
+                # Publish base velocity command based on difference between camera movement and robot odom movement
+                # Calculate the difference: camera_movement - robot_movement
+                # Only move the robot by the remaining difference
                 self.cmd_vel_log_counter += 1
                 if (self.vr_publishing_enabled and self.initial_camera_position is not None and
-                    self.initial_camera_yaw is not None and self.enable_base_publishing):
-                    twist_msg = Twist()
-                    # VR coordinate system: x is forward/backward, z is left/right
-                    # ROS coordinate system: linear.x is forward, linear.y is left, angular.z is rotation
+                    self.initial_camera_yaw is not None and self.enable_base_publishing and
+                    self.initial_odom_position is not None and self.initial_odom_yaw is not None and
+                    self.current_odom is not None):
+                    # Calculate camera movement from initial position
+                    camera_movement_position = relative_position.copy()  # [x, y] in ROS coordinates
+                    camera_movement_yaw = relative_yaw
+
+                    # Calculate robot movement from initial odom position
+                    current_odom_pos = self.current_odom.pose.pose.position
+                    current_odom_quat = self.current_odom.pose.pose.orientation
+                    r_odom = R.from_quat([current_odom_quat.x, current_odom_quat.y, current_odom_quat.z, current_odom_quat.w])
+                    _, _, current_odom_yaw = r_odom.as_euler('xyz')
+                    current_odom_position = np.array([current_odom_pos.x, current_odom_pos.y])
+
+                    robot_movement_position = current_odom_position - self.initial_odom_position
+                    robot_movement_yaw = current_odom_yaw - self.initial_odom_yaw
+                    # Wrap yaw to [-pi, pi]
+                    while robot_movement_yaw > math.pi:
+                        robot_movement_yaw -= 2.0 * math.pi
+                    while robot_movement_yaw < -math.pi:
+                        robot_movement_yaw += 2.0 * math.pi
+
+                    # Calculate difference: what the robot still needs to move
+                    position_error = camera_movement_position - robot_movement_position  # [x, y]
+                    yaw_error = camera_movement_yaw - robot_movement_yaw
+                    # Wrap yaw error to [-pi, pi]
+                    while yaw_error > math.pi:
+                        yaw_error -= 2.0 * math.pi
+                    while yaw_error < -math.pi:
+                        yaw_error += 2.0 * math.pi
 
                     def calculate_velocity_from_position_error(position_error, kp, deadzone, max_velocity):
                         """Calculate velocity from position error using P control with deadzone and saturation."""
@@ -787,31 +864,30 @@ class VRTrajectoryPublisher(Node):
                         return velocity
 
                     # Calculate velocity from position error (P control)
-                    # Positive error means camera is ahead/right, so base should move forward/right
+                    # Position error is the difference between camera movement and robot movement
                     linear_x = calculate_velocity_from_position_error(
-                        relative_position[0],
+                        position_error[0],  # ROS x: forward/backward error
                         self.base_linear_kp,
                         self.base_linear_deadzone,
                         self.base_max_linear_velocity
                     )
                     linear_y = calculate_velocity_from_position_error(
-                        relative_position[1],
+                        position_error[1],  # ROS y: left/right error
                         self.base_linear_kp,
                         self.base_linear_deadzone,
                         self.base_max_linear_velocity
                     )
                     angular_z = calculate_velocity_from_position_error(
-                        relative_yaw,
+                        yaw_error,  # ROS yaw error
                         self.base_angular_kp,
                         self.base_angular_deadzone,
                         self.base_max_angular_velocity
                     )
 
-                    # Map VR x to ROS linear.x (forward/backward)
+                    # Map ROS coordinates to cmd_vel
+                    twist_msg = Twist()
                     twist_msg.linear.x = linear_x
-                    # Map VR z to ROS linear.y (left/right)
                     twist_msg.linear.y = linear_y
-                    # Map VR yaw to ROS angular.z (rotation)
                     twist_msg.linear.z = 0.0
                     twist_msg.angular.x = 0.0
                     twist_msg.angular.y = 0.0
@@ -824,8 +900,9 @@ class VRTrajectoryPublisher(Node):
                         self.get_logger().info(
                             f'🚗 cmd_vel: linear=[{twist_msg.linear.x:+.3f}, {twist_msg.linear.y:+.3f}, {twist_msg.linear.z:+.3f}], '
                             f'angular=[{twist_msg.angular.x:+.3f}, {twist_msg.angular.y:+.3f}, {twist_msg.angular.z:+.3f}] | '
-                            f'Relative position: [{relative_position[0]:+.4f}, {relative_position[1]:+.4f}], '
-                            f'Relative yaw: {relative_yaw:+.4f} rad'
+                            f'Camera movement: [{camera_movement_position[0]:+.4f}, {camera_movement_position[1]:+.4f}], yaw: {camera_movement_yaw:+.4f} | '
+                            f'Robot movement: [{robot_movement_position[0]:+.4f}, {robot_movement_position[1]:+.4f}], yaw: {robot_movement_yaw:+.4f} | '
+                            f'Error: [{position_error[0]:+.4f}, {position_error[1]:+.4f}], yaw: {yaw_error:+.4f}'
                         )
                 elif self.cmd_vel_log_counter % (self.cmd_vel_log_every_n * 10) == 0:
                     # Debug: log why cmd_vel is not being published (less frequently)
