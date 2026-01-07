@@ -78,7 +78,6 @@ private:
   int ik_max_iterations_;
   double ik_tolerance_;
   bool use_hardcoded_joint_limits_;
-
   // Low-pass filter parameter (0..1). 0 = hold current, 1 = full target
   double lpf_alpha_;
 

@@ -44,7 +44,7 @@ FfwArmIKSolver::FfwArmIKSolver()
   this->declare_parameter<double>("lift_joint_z_offset", 1.4316);
 
   // IK solver parameters
-  this->declare_parameter<double>("max_joint_step_degrees", 30.0);
+  this->declare_parameter<double>("max_joint_step_degrees", 50.0);
   this->declare_parameter<int>("ik_max_iterations", 800);
   this->declare_parameter<double>("ik_tolerance", 1e-2);
 
@@ -54,7 +54,7 @@ FfwArmIKSolver::FfwArmIKSolver()
   this->declare_parameter<double>("previous_solution_weight", 1.0); // Weight for previous IK solution
 
   // Low-pass filter between current state and IK target
-  this->declare_parameter<double>("lpf_alpha", 1.0);
+  this->declare_parameter<double>("lpf_alpha", 0.8);
 
   // Joint limits parameters (can be overridden if needed)
   this->declare_parameter<bool>("use_hardcoded_joint_limits", true);
@@ -529,9 +529,10 @@ void FfwArmIKSolver::rightTargetPoseCallback(const geometry_msgs::msg::PoseStamp
   geometry_msgs::msg::PoseStamped arm_base_pose = *msg;
 
   // Transform: base_link -> arm_base_link using configured offsets
+  // Note: lift_joint_position_ is not used to make IK independent of lift height
   arm_base_pose.pose.position.x -= lift_joint_x_offset_;
   arm_base_pose.pose.position.y -= lift_joint_y_offset_;
-  arm_base_pose.pose.position.z -= (lift_joint_z_offset_ + lift_joint_position_);
+  arm_base_pose.pose.position.z -= lift_joint_z_offset_;
 
   // RCLCPP_INFO(this->get_logger(), "🔄 Transformed to arm_base_link frame (RIGHT):");
   // RCLCPP_INFO(this->get_logger(), "   Position: x=%.3f, y=%.3f, z=%.3f (lift: %.3f m)",
@@ -568,9 +569,10 @@ void FfwArmIKSolver::leftTargetPoseCallback(const geometry_msgs::msg::PoseStampe
   geometry_msgs::msg::PoseStamped arm_base_pose = *msg;
 
   // Transform: base_link -> arm_base_link using configured offsets
+  // Note: lift_joint_position_ is not used to make IK independent of lift height
   arm_base_pose.pose.position.x -= lift_joint_x_offset_;
   arm_base_pose.pose.position.y -= lift_joint_y_offset_;
-  arm_base_pose.pose.position.z -= (lift_joint_z_offset_ + lift_joint_position_);
+  arm_base_pose.pose.position.z -= lift_joint_z_offset_;
 
   // RCLCPP_INFO(this->get_logger(), "🔄 Transformed to arm_base_link frame (LEFT):");
   // RCLCPP_INFO(this->get_logger(), "   Position: x=%.3f, y=%.3f, z=%.3f (lift: %.3f m)",
@@ -711,11 +713,15 @@ void FfwArmIKSolver::solveIK(
 
     if (ik_result < 0) {
       auto error_msg = (*ik_solver_ptr)->strError(ik_result);
-      RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
-        "%s arm IK iteration %d failed (error: %d, %s)",
-        arm.c_str(), iter, ik_result, error_msg);
-      // Skip this iteration if IK failed
-      continue;
+      auto initial_duration = end_time - initial_start_time;
+      RCLCPP_ERROR(this->get_logger(), "%s arm IK failed with current guess (error: %d, %s), (time: %.3f ms, %.1f Hz), (initial time: %.3f ms, %.1f Hz)",
+        arm.c_str(), ik_result, error_msg, duration.seconds() * 1000.0, 1.0 / duration.seconds(), initial_duration.seconds() * 1000.0, 1.0 / initial_duration.seconds());
+
+      if (initial_duration.seconds() > 0.03) {
+        return;
+      }
+    } else{
+      break;
     }
 
     // Compute step direction (delta)

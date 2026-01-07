@@ -43,6 +43,17 @@ class VRTrajectoryPublisher(Node):
         super().__init__('vr_trajectory_publisher')
         self.get_logger().set_level(rclpy.logging.LoggingSeverity.INFO)
 
+        # Declare parameters
+        self.declare_parameter('enable_lift_publishing', False)
+        self.declare_parameter('enable_head_publishing', False)
+
+        # Get parameters
+        self.enable_lift_publishing = self.get_parameter('enable_lift_publishing').get_parameter_value().bool_value
+        self.enable_head_publishing = self.get_parameter('enable_head_publishing').get_parameter_value().bool_value
+
+        self.get_logger().info(f'Parameters: enable_lift_publishing={self.enable_lift_publishing}, '
+                              f'enable_head_publishing={self.enable_head_publishing}')
+
         # VR publishing control flag
         self.vr_publishing_enabled = True  # Default: disabled
 
@@ -122,6 +133,11 @@ class VRTrajectoryPublisher(Node):
             '/leader/joystick_controller_left/joint_trajectory',
             10
         )
+        self.lift_joint_pub = self.create_publisher(
+            JointTrajectory,
+            '/leader/joystick_controller_right/joint_trajectory',
+            10
+        )
         self.left_wrist_rviz_pub = self.create_publisher(PoseStamped, '/vr_hand/left_wrist', 10)
         self.right_wrist_rviz_pub = self.create_publisher(PoseStamped, '/vr_hand/right_wrist', 10)
 
@@ -141,6 +157,8 @@ class VRTrajectoryPublisher(Node):
         self.right_hand_data = None
         self.head_transform_matrix = np.eye(4)
         self.head_inverse_matrix = np.eye(4)
+        self.previous_camera_height = None  # Store previous camera height for tracking changes
+        self.initial_camera_height = None  # Store initial camera height as reference
 
         # Low-pass filter settings
         self.low_pass_filter_alpha = 0.3
@@ -182,6 +200,11 @@ class VRTrajectoryPublisher(Node):
             self.vr_publishing_enabled = new_state
             status = "ENABLED" if self.vr_publishing_enabled else "DISABLED"
             self.get_logger().info(f'VR publishing changed to: {status} (message value: {msg.data})')
+
+            # When VR control is enabled (true), reset reference height to be set on next camera event
+            # This ensures we use the camera height at the moment true is received
+            if self.vr_publishing_enabled:
+                self.initial_camera_height = None  # Reset to capture current height on next camera event
 
             if not self.vr_publishing_enabled:
                 # Reset joint positions to zero when disabled
@@ -626,22 +649,59 @@ class VRTrajectoryPublisher(Node):
                 self.head_inverse_matrix = np.linalg.inv(self.head_transform_matrix)
                 pos, quat = self.matrix_to_pose(self.head_transform_matrix)
 
-                # Publish head joint trajectory
-                r = R.from_quat(quat)
-                roll, pitch, yaw = r.as_euler('zxy')
+                # Track camera height changes
+                # Position is [x, y, z] where y (second value) is height in VR coordinate system
+                current_camera_height = pos[1]  # y coordinate (height in VR coordinate system)
 
-                if self.is_valid_float(pitch) and self.is_valid_float(yaw):
-                    msg = JointTrajectory()
-                    msg.joint_names = ['head_joint1', 'head_joint2']
+                # If VR control is enabled and reference height is not set yet, set it now
+                if self.vr_publishing_enabled and self.initial_camera_height is None:
+                    self.initial_camera_height = current_camera_height
+
+                # Calculate relative height (0-based from reference)
+                relative_height = 0.0
+                if self.initial_camera_height is not None:
+                    relative_height = current_camera_height - self.initial_camera_height
+
+                # Publish lift joint command based on camera height change
+                if (self.vr_publishing_enabled and self.initial_camera_height is not None and
+                    self.enable_lift_publishing):
+                    lift_msg = JointTrajectory()
+                    # Set header.stamp to zero to avoid "ends in the past" error
+                    lift_msg.header.stamp.sec = 0
+                    lift_msg.header.stamp.nanosec = 0
+                    lift_msg.header.frame_id = ''
+                    lift_msg.joint_names = ['lift_joint']
+
                     point = JointTrajectoryPoint()
-                    # Apply pitch offset
-                    adjusted_pitch = pitch + self.pitch_offset
-                    point.positions = [-float(adjusted_pitch), float(yaw)]
-                    point.velocities = [0.0, 0.0]
-                    point.accelerations = [0.0, 0.0]
+                    point.positions = [float(relative_height)]
+                    point.velocities = [0.0]
+                    point.accelerations = [0.0]
                     point.effort = []
-                    msg.points.append(point)
-                    self.head_joint_pub.publish(msg)
+                    point.time_from_start.sec = 0
+                    point.time_from_start.nanosec = 0
+
+                    lift_msg.points.append(point)
+                    self.lift_joint_pub.publish(lift_msg)
+
+                self.previous_camera_height = current_camera_height
+
+                # Publish head joint trajectory
+                if self.enable_head_publishing:
+                    r = R.from_quat(quat)
+                    roll, pitch, yaw = r.as_euler('zxy')
+
+                    if self.is_valid_float(pitch) and self.is_valid_float(yaw):
+                        msg = JointTrajectory()
+                        msg.joint_names = ['head_joint1', 'head_joint2']
+                        point = JointTrajectoryPoint()
+                        # Apply pitch offset
+                        adjusted_pitch = pitch + self.pitch_offset
+                        point.positions = [-float(adjusted_pitch), float(yaw)]
+                        point.velocities = [0.0, 0.0]
+                        point.accelerations = [0.0, 0.0]
+                        point.effort = []
+                        msg.points.append(point)
+                        self.head_joint_pub.publish(msg)
 
         except Exception as e:
             self.get_logger().error(f'Error in camera move event: {e}')

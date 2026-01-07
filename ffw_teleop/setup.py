@@ -38,6 +38,7 @@ setup(
             'vr_publisher_bg2 = ffw_teleop.vr_publisher_bg2:main',
             'vr_publisher_bh5 = ffw_teleop.vr_publisher_bh5:main',
             'pedal_input = ffw_teleop.pedal_input_node:main',
+            'vr_publisher_bh5_whole_body = ffw_teleop.vr_publisher_bh5_whole_body:main',
         ],
     },
 )
