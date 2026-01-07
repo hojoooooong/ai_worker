@@ -166,12 +166,12 @@ RUN cd /root && \
     cd pyroki && \
     pip3 install --ignore-installed -e .
 
-RUN echo 'export PYTHONPATH=/workspace/vuer/src:$PYTHONPATH' >> ~/.bashrc && \
-    export PYTHONPATH=/workspace/vuer/src:$PYTHONPATH
-RUN echo 'export PYTHONPATH=/workspace/pyroki/src:$PYTHONPATH' >> ~/.bashrc && \
-    export PYTHONPATH=/workspace/pyroki/src:$PYTHONPATH
-RUN echo 'export PYTHONPATH=/workspace/yourdfpy/src:$PYTHONPATH' >> ~/.bashrc && \
-    export PYTHONPATH=/workspace/yourdfpy/src:$PYTHONPATH
+RUN echo 'export PYTHONPATH=/root/vuer:$PYTHONPATH' >> ~/.bashrc && \
+    export PYTHONPATH=/root/vuer:$PYTHONPATH
+RUN echo 'export PYTHONPATH=/root/pyroki/src:$PYTHONPATH' >> ~/.bashrc && \
+    export PYTHONPATH=/root/pyroki/src:$PYTHONPATH
+RUN echo 'export PYTHONPATH=/root/yourdfpy/src:$PYTHONPATH' >> ~/.bashrc && \
+    export PYTHONPATH=/root/yourdfpy/src:$PYTHONPATH
 
 RUN chmod +x /tmp/gen_cert.sh && \
     cp /tmp/gen_cert.sh ~/
@@ -193,4 +193,5 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc  && \
     echo "alias ffw_sg2_ai='ros2 launch ffw_bringup ffw_sg2_ai.launch.py'" >> ~/.bashrc && \
     echo "export ROS_DOMAIN_ID=30" >> ~/.bashrc && \
     echo "alias vr='ros2 launch ffw_teleop vr_publisher.launch.py'" >> ~/.bashrc && \
-    echo "alias ffw_bh5_follower_ai='ros2 launch ffw_bringup ffw_bh5_follower_ai.launch.py'" >> ~/.bashrc
+    echo "alias ffw_bh5_follower_ai='ros2 launch ffw_bringup ffw_bh5_follower_ai.launch.py'" >> ~/.bashrc && \
+    echo "alias ffw_sh5_follower_ai='ros2 launch ffw_bringup ffw_sh5_follower_ai.launch.py'" >> ~/.bashrc
