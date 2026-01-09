@@ -1,0 +1,26 @@
+--- ffw_bringup/config/ffw_lg2_mini_leader/ffw_lg2_mini_leader_ai_hardware_controller.yaml
++++ ffw_bringup/config/ffw_lg2_mini_leader/ffw_lg2_mini_leader_ai_hardware_controller.yaml
+@@ -34,9 +34,9 @@
+         - 0.0
+         - 0.0
+         - 0.0
+-        - 0.0
+-        - 0.0
+         - 0.3
++        - 0.0
++        - 0.1
+       right_joints:
+         - arm_r_joint1
+         - arm_r_joint2
+@@ -52,9 +52,9 @@
+         - 0.0
+         - 0.0
+         - 0.0
+-        - 0.0
+-        - 0.0
+         - 0.3
++        - 0.0
++        - 0.1
+       trigger_threshold: -0.5
+ 
+ /**:

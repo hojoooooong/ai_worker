@@ -1,0 +1,12 @@
+--- ffw_bringup/launch/ffw_lg2_mini_leader_ai.launch.py
++++ ffw_bringup/launch/ffw_lg2_mini_leader_ai.launch.py
+@@ -68,6 +68,9 @@ def generate_launch_description():
+         package='controller_manager',
+         executable='spawner',
+         arguments=[
++            '--controller-ros-args',
++            '-r /leader/joystick_controller_left/joint_trajectory:='
++            '/dummy_leader/joystick_controller_left/joint_trajectory',
+             'joint_state_broadcaster',
+             'joint_trajectory_command_broadcaster',
+             'trigger_position_controller',
