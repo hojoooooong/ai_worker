@@ -22,7 +22,8 @@ import os
 import socket
 import threading
 
-from geometry_msgs.msg import Point, Pose, PoseArray, PoseStamped, Quaternion
+from geometry_msgs.msg import Point, Pose, PoseArray, PoseStamped, Quaternion, Twist
+from sensor_msgs.msg import JointState
 import nest_asyncio
 import numpy as np
 import rclpy
@@ -82,6 +83,26 @@ class VRTrajectoryPublisher(Node):
         self.squeeze_hold_duration = 2.0  # seconds
         self.publishing_enabled_by_squeeze = False
 
+        # Thumbstick mode tracking
+        # joystick_mode: True = lift+head mode, False = lift+cmd_vel mode
+        # Arm control always works regardless of mode
+        self.joystick_mode = True  # True: lift+head, False: lift+cmd_vel
+        self.prev_left_thumbstick_pressed = False
+        self.prev_right_thumbstick_pressed = False
+
+        # Cmd_vel scaling factors (similar to joystick_controller.cpp)
+        self.linear_x_scale = 2.0
+        self.linear_y_scale = 2.0
+        self.angular_z_scale = 2.0
+
+        # Joystick control parameters (similar to joystick_controller.cpp)
+        self.jog_scale = 0.015  # Default jog scale (DEFAULT_JOG_SCALE)
+        self.deadzone = 0.25  # Deadzone for thumbstick values (0.0 to 1.0)
+        self.current_joint_states = None
+        self.lift_joint_current_position = 0.0
+        self.head_joint1_current_position = 0.0
+        self.head_joint2_current_position = 0.0
+
         # VR data storage
         self.left_hand_data = None
         self.right_hand_data = None
@@ -95,6 +116,21 @@ class VRTrajectoryPublisher(Node):
         # Publishers for controller poses (matching vr_publisher_bh5.py naming)
         self.left_controller_wrist_pub = self.create_publisher(PoseStamped, '/vr_hand/left_wrist', 10)
         self.right_controller_wrist_pub = self.create_publisher(PoseStamped, '/vr_hand/right_wrist', 10)
+
+        # Publishers for joystick control
+        self.left_joystick_pub = self.create_publisher(JointTrajectory, '/leader/joystick_controller_left/joint_trajectory', 10)
+        self.right_joystick_pub = self.create_publisher(JointTrajectory, '/leader/joystick_controller_right/joint_trajectory', 10)
+
+        # Publisher for swerve mode (base velocity)
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+
+        # Subscriber for joint states (needed for joystick control)
+        self.joint_states_sub = self.create_subscription(
+            JointState,
+            '/joint_states',
+            self.joint_states_callback,
+            10
+        )
 
         # Subscriber for VR control toggle
         self.vr_control_sub = self.create_subscription(
@@ -305,6 +341,40 @@ class VRTrajectoryPublisher(Node):
 
         return base_position, relative_quat_ros
 
+    def apply_deadzone(self, value):
+        """Apply deadzone to thumbstick value (similar to joystick_controller.cpp)."""
+        abs_value = abs(value)
+        
+        # If value is within deadzone, return 0
+        if abs_value < self.deadzone:
+            return 0.0
+        
+        # Normalize after deadzone
+        sign = 1.0 if value >= 0.0 else -1.0
+        normalized_value = (abs_value - self.deadzone) / (1.0 - self.deadzone)
+        
+        return sign * normalized_value
+
+    def joint_states_callback(self, msg):
+        """Callback to receive joint states."""
+        self.current_joint_states = msg
+        # Update joint current positions
+        if 'lift_joint' in msg.name:
+            idx = msg.name.index('lift_joint')
+            old_position = self.lift_joint_current_position
+            self.lift_joint_current_position = msg.position[idx]
+            # Log if position changed significantly
+            if abs(old_position - self.lift_joint_current_position) > 0.01:
+                self.get_logger().debug(
+                    f'[JOINT_STATES] lift_joint: {old_position:.3f} -> {self.lift_joint_current_position:.3f}'
+                )
+        if 'head_joint1' in msg.name:
+            idx = msg.name.index('head_joint1')
+            self.head_joint1_current_position = msg.position[idx]
+        if 'head_joint2' in msg.name:
+            idx = msg.name.index('head_joint2')
+            self.head_joint2_current_position = msg.position[idx]
+
     def vr_control_callback(self, msg):
         """Callback to enable/disable VR publishing based on message content."""
         new_state = bool(msg.data)  # Read message content
@@ -361,12 +431,169 @@ class VRTrajectoryPublisher(Node):
 
         return self.publishing_enabled_by_squeeze
 
+    def process_thumbstick(self):
+        """Process thumbstick input for mode switching and joystick control."""
+        try:
+            # Extract thumbstick values
+            left_thumbstick_pressed = False
+            right_thumbstick_pressed = False
+            left_thumbstick_value = [0.0, 0.0]
+            right_thumbstick_value = [0.0, 0.0]
+
+            if isinstance(self.left_controller_state, dict):
+                if 'thumbstick' in self.left_controller_state:
+                    left_thumbstick_pressed = bool(self.left_controller_state.get('thumbstick', False))
+                if 'thumbstickValue' in self.left_controller_state:
+                    thumbstick_val = self.left_controller_state.get('thumbstickValue', [0.0, 0.0])
+                    if isinstance(thumbstick_val, (list, tuple)) and len(thumbstick_val) >= 2:
+                        left_thumbstick_value = [-float(thumbstick_val[0]), float(thumbstick_val[1])]
+
+            if isinstance(self.right_controller_state, dict):
+                if 'thumbstick' in self.right_controller_state:
+                    right_thumbstick_pressed = bool(self.right_controller_state.get('thumbstick', False))
+                if 'thumbstickValue' in self.right_controller_state:
+                    thumbstick_val = self.right_controller_state.get('thumbstickValue', [0.0, 0.0])
+                    if isinstance(thumbstick_val, (list, tuple)) and len(thumbstick_val) >= 2:
+                        right_thumbstick_value = [float(thumbstick_val[0]), float(thumbstick_val[1])]
+
+            # Check for mode switch: both thumbsticks pressed simultaneously -> toggle between lift+head and lift+cmd_vel
+            if left_thumbstick_pressed and right_thumbstick_pressed:
+                # Only switch on rising edge (when both are newly pressed)
+                if not self.prev_left_thumbstick_pressed or not self.prev_right_thumbstick_pressed:
+                    self.joystick_mode = not self.joystick_mode
+                    mode_name = "LIFT+HEAD" if self.joystick_mode else "LIFT+CMD_VEL"
+                    self.get_logger().info(f'[THUMBSTICK] Mode switched to: {mode_name}')
+
+            self.prev_left_thumbstick_pressed = left_thumbstick_pressed
+            self.prev_right_thumbstick_pressed = right_thumbstick_pressed
+
+            # Publish lift based on right thumbstick (works in both modes)
+            # Deadzone is applied inside publish_right_joystick
+            if abs(right_thumbstick_value[1]) > 0.0:
+                self.publish_right_joystick(-right_thumbstick_value[1])
+
+            # Publish head based on left thumbstick (only in lift+head mode)
+            # Deadzone is applied inside publish_left_joystick_from_thumbstick
+            if self.joystick_mode and (abs(left_thumbstick_value[0]) > 0.0 or abs(left_thumbstick_value[1]) > 0.0):
+                self.publish_left_joystick_from_thumbstick(left_thumbstick_value)
+
+            # Publish cmd_vel in lift+cmd_vel mode (based on thumbstick values)
+            # Deadzone is applied inside publish_cmd_vel_from_thumbstick
+            if not self.joystick_mode:
+                self.publish_cmd_vel_from_thumbstick(left_thumbstick_value, right_thumbstick_value)
+
+        except Exception as e:
+            self.get_logger().error(f'Error processing thumbstick: {e}')
+            import traceback
+            traceback.print_exc()
+
+    def publish_right_joystick(self, thumbstick_value):
+        """Publish right joystick command to lift_joint (similar to joystick_controller.cpp)."""
+        try:
+            # Apply deadzone to thumbstick value
+            deadzone_applied_value = self.apply_deadzone(float(thumbstick_value))
+            
+            # Calculate new position: current_position + thumbstick_value * jog_scale
+            # Similar to joystick_controller.cpp: new_position = current_position + sensorxel_joy_value * sensor_jog_scale
+            new_lift_position = self.lift_joint_current_position + deadzone_applied_value * self.jog_scale
+            
+            # Log for debugging
+            self.get_logger().debug(
+                f'[LIFT] current={self.lift_joint_current_position:.3f}, '
+                f'thumbstick={thumbstick_value:.3f}, '
+                f'deadzone_applied={deadzone_applied_value:.3f}, '
+                f'new={new_lift_position:.3f}'
+            )
+
+            msg = JointTrajectory()
+            msg.header.stamp.sec = 0
+            msg.header.stamp.nanosec = 0
+            msg.header.frame_id = ''
+            msg.joint_names = ['lift_joint']
+
+            point = JointTrajectoryPoint()
+            point.positions = [new_lift_position]
+            point.velocities = [0.0]
+            point.accelerations = [0.0]
+            point.effort = []
+            point.time_from_start.sec = 0
+            point.time_from_start.nanosec = 0
+
+            msg.points.append(point)
+            self.right_joystick_pub.publish(msg)
+
+        except Exception as e:
+            self.get_logger().error(f'Error publishing right joystick: {e}')
+            import traceback
+            traceback.print_exc()
+
+    def publish_left_joystick_from_thumbstick(self, thumbstick_value):
+        """Publish left joystick command to head joints from thumbstick (similar to joystick_controller.cpp)."""
+        try:
+            # Apply deadzone to thumbstick values
+            deadzone_applied_x = self.apply_deadzone(float(thumbstick_value[0]))
+            deadzone_applied_y = self.apply_deadzone(float(thumbstick_value[1]))
+            
+            # Calculate new positions: current_position + thumbstick_value * jog_scale
+            # Similar to joystick_controller.cpp
+            # thumbstick_value[0] -> head_joint1, thumbstick_value[1] -> head_joint2
+            new_head_joint1_position = self.head_joint1_current_position + deadzone_applied_x * self.jog_scale
+            new_head_joint2_position = self.head_joint2_current_position + deadzone_applied_y * self.jog_scale
+
+            msg = JointTrajectory()
+            msg.joint_names = ['head_joint1', 'head_joint2']
+            point = JointTrajectoryPoint()
+            point.positions = [new_head_joint1_position, new_head_joint2_position]
+            point.velocities = [0.0, 0.0]
+            point.accelerations = [0.0, 0.0]
+            point.effort = []
+            msg.points.append(point)
+            self.left_joystick_pub.publish(msg)
+
+        except Exception as e:
+            self.get_logger().error(f'Error publishing left joystick from thumbstick: {e}')
+            import traceback
+            traceback.print_exc()
+
+    def publish_cmd_vel_from_thumbstick(self, left_thumbstick_value, right_thumbstick_value):
+        """Publish cmd_vel based on thumbstick values (similar to joystick_controller.cpp)."""
+        try:
+            if not self.vr_publishing_enabled:
+                return
+
+            # Apply deadzone to thumbstick values
+            left_x_deadzone = self.apply_deadzone(float(left_thumbstick_value[0]))
+            left_y_deadzone = self.apply_deadzone(float(left_thumbstick_value[1]))
+            right_x_deadzone = self.apply_deadzone(float(right_thumbstick_value[0]))
+            right_y_deadzone = self.apply_deadzone(float(right_thumbstick_value[1]))
+
+            # Calculate cmd_vel from thumbstick values (similar to joystick_controller.cpp)
+            # linear.x = -left_y / LINEAR_X_SCALE
+            # linear.y = left_x / LINEAR_Y_SCALE
+            # angular.z = -right_x / ANGULAR_Z_SCALE
+            twist_msg = Twist()
+            twist_msg.linear.x = -left_y_deadzone / self.linear_x_scale
+            twist_msg.linear.y = left_x_deadzone / self.linear_y_scale
+            twist_msg.linear.z = 0.0
+            twist_msg.angular.x = 0.0
+            twist_msg.angular.y = 0.0
+            twist_msg.angular.z = -right_x_deadzone / self.angular_z_scale
+
+            self.cmd_vel_pub.publish(twist_msg)
+
+        except Exception as e:
+            self.get_logger().error(f'Error publishing cmd_vel from thumbstick: {e}')
+            import traceback
+            traceback.print_exc()
+
     def publish_controller_pose(self, controller_matrix, side='left'):
         """Transform controller pose from VR coordinates to ROS base_link and publish."""
         try:
             if not self.vr_publishing_enabled:
                 self.get_logger().debug('VR publishing is disabled, skipping controller pose publish')
                 return
+
+            # Arm control always works (no mode check needed)
 
             # Check squeeze condition - both squeezes must be held for 2 seconds
             if not self.check_squeeze_condition():
@@ -385,7 +612,7 @@ class VRTrajectoryPublisher(Node):
                 rot_z_90 = R.from_euler('z', 90, degrees=True)
                 camera_relative_rotation = camera_relative_rotation * rot_z_90
             elif side == 'left':
-                rot_z_90 = R.from_euler('z', -90, degrees=True)
+                rot_z_90 = R.from_euler('z', 90, degrees=True)
                 camera_relative_rotation = camera_relative_rotation * rot_z_90
 
             arm_quaternion = camera_relative_rotation.as_quat()  # [x, y, z, w]
@@ -407,9 +634,6 @@ class VRTrajectoryPublisher(Node):
             # Publish to appropriate topic
             if side == 'left':
                 self.left_controller_wrist_pub.publish(target_pose)
-                self.get_logger().info(
-                    f'Published left controller pose: pos=[{base_position[0]:.3f}, {base_position[1]:.3f}, {base_position[2]:.3f}]'
-                )
             elif side == 'right':
                 self.right_controller_wrist_pub.publish(target_pose)
                 self.get_logger().info(
@@ -508,11 +732,11 @@ class VRTrajectoryPublisher(Node):
                 self.head_inverse_matrix = np.linalg.inv(self.head_transform_matrix)
                 pos, quat = self.matrix_to_pose(self.head_transform_matrix)
 
-                # Publish head joint trajectory
-                r = R.from_quat(quat)
-                roll, pitch, yaw = r.as_euler('zxy')
+                # Calculate relative position and quaternion for swerve mode
+                relative_pos_ros, relative_quat_ros = self.vr_to_ros_transform(pos, quat)
 
-                # print(f'roll: {roll}, pitch: {pitch}, yaw: {yaw}')
+                # Head is published in process_thumbstick() based on thumbstick values
+                # Cmd_vel is also published in process_thumbstick() based on thumbstick values
 
         except Exception as e:
             self.get_logger().error(f'Error in camera move event: {e}')
@@ -543,16 +767,7 @@ class VRTrajectoryPublisher(Node):
                                     self.left_controller_state != [0, 0] and
                                     self.left_controller_state != {})
 
-                    detection_type = '[CONTROLLER]' if is_controller else '[HAND TRACKING]'
-                    has_finger_data = 'False' if is_controller else 'True (estimated)'
-
-                    # Log left data with coordinates and detection type
-                    state_info = f', state={self.left_controller_state}' if self.left_controller_state is not None else ', state=None'
-                    self.get_logger().info(
-                        f'{detection_type} left: pos=[{base_position[0]:.3f}, {base_position[1]:.3f}, {base_position[2]:.3f}]{state_info}, has_finger_data={has_finger_data}'
-                    )
-
-                    # Publish to topic
+                    # Publish to topic (no logging for left)
                     self.publish_controller_pose(left_matrix, 'left')
 
             # Process right controller (hand data)
@@ -587,11 +802,7 @@ class VRTrajectoryPublisher(Node):
             # Process controller states
             if 'leftState' in event.value:
                 self.left_controller_state = event.value['leftState']
-                # Extract squeeze value for logging
-                left_squeeze = 0.0
-                if isinstance(self.left_controller_state, dict) and 'squeezeValue' in self.left_controller_state:
-                    left_squeeze = self.left_controller_state.get('squeezeValue', 0.0)
-                self.get_logger().info(f'left_controller_state: {self.left_controller_state}, squeeze={left_squeeze:.3f}')
+                # No logging for left state
 
             if 'rightState' in event.value:
                 self.right_controller_state = event.value['rightState']
@@ -600,6 +811,9 @@ class VRTrajectoryPublisher(Node):
                 if isinstance(self.right_controller_state, dict) and 'squeezeValue' in self.right_controller_state:
                     right_squeeze = self.right_controller_state.get('squeezeValue', 0.0)
                 self.get_logger().info(f'right_controller_state: {self.right_controller_state}, squeeze={right_squeeze:.3f}')
+
+            # Process thumbstick for mode switching and joystick control
+            self.process_thumbstick()
 
             # Debug logging
             self.hand_log_counter += 1
