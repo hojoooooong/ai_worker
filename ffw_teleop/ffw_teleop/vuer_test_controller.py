@@ -76,6 +76,12 @@ class VRTrajectoryPublisher(Node):
         self.left_controller_state = None
         self.right_controller_state = None
 
+        # Squeeze tracking for enabling publishing
+        self.left_squeeze_start_time = None
+        self.right_squeeze_start_time = None
+        self.squeeze_hold_duration = 2.0  # seconds
+        self.publishing_enabled_by_squeeze = False
+
         # VR data storage
         self.left_hand_data = None
         self.right_hand_data = None
@@ -90,6 +96,14 @@ class VRTrajectoryPublisher(Node):
         self.left_controller_wrist_pub = self.create_publisher(PoseStamped, '/vr_hand/left_wrist', 10)
         self.right_controller_wrist_pub = self.create_publisher(PoseStamped, '/vr_hand/right_wrist', 10)
 
+        # Subscriber for VR control toggle
+        self.vr_control_sub = self.create_subscription(
+            Bool,
+            '/vr_control/toggle',
+            self.vr_control_callback,
+            10
+        )
+
         # Scaling VR data
         self.scaling_vr = 1.1
 
@@ -99,6 +113,7 @@ class VRTrajectoryPublisher(Node):
         self.start_vuer_server()
 
         self.get_logger().info('VR Trajectory Publisher node has been started')
+        self.get_logger().info('VR publishing is DISABLED by default. Send /vr_control/toggle message (True=enable, False=disable).')
 
 
 
@@ -290,11 +305,71 @@ class VRTrajectoryPublisher(Node):
 
         return base_position, relative_quat_ros
 
+    def vr_control_callback(self, msg):
+        """Callback to enable/disable VR publishing based on message content."""
+        new_state = bool(msg.data)  # Read message content
+
+        # Only log if state actually changed
+        if new_state != self.vr_publishing_enabled:
+            self.vr_publishing_enabled = new_state
+            status = "ENABLED" if self.vr_publishing_enabled else "DISABLED"
+            self.get_logger().info(f'VR publishing changed to: {status} (message value: {msg.data})')
+
+    def check_squeeze_condition(self):
+        """Check if both squeezes are held for 2 seconds or more."""
+        current_time = self.get_clock().now().nanoseconds / 1e9
+
+        # Extract squeeze values from controller states
+        left_squeeze = 0.0
+        right_squeeze = 0.0
+
+        if isinstance(self.left_controller_state, dict) and 'squeezeValue' in self.left_controller_state:
+            left_squeeze = float(self.left_controller_state.get('squeezeValue', 0.0))
+        elif isinstance(self.left_controller_state, (int, float)):
+            left_squeeze = float(self.left_controller_state)
+
+        if isinstance(self.right_controller_state, dict) and 'squeezeValue' in self.right_controller_state:
+            right_squeeze = float(self.right_controller_state.get('squeezeValue', 0.0))
+        elif isinstance(self.right_controller_state, (int, float)):
+            right_squeeze = float(self.right_controller_state)
+
+        # Check if both squeezes are pressed (non-zero)
+        both_squeezed = left_squeeze > 0.0 and right_squeeze > 0.0
+
+        if both_squeezed:
+            # Start tracking time if not already started
+            if self.left_squeeze_start_time is None or self.right_squeeze_start_time is None:
+                self.left_squeeze_start_time = current_time
+                self.right_squeeze_start_time = current_time
+                self.get_logger().info(f'[SQUEEZE] Both squeezes pressed: left={left_squeeze:.3f}, right={right_squeeze:.3f}, starting timer')
+
+            # Check if 2 seconds have passed
+            elapsed = current_time - max(self.left_squeeze_start_time, self.right_squeeze_start_time)
+            if elapsed >= self.squeeze_hold_duration:
+                if not self.publishing_enabled_by_squeeze:
+                    self.publishing_enabled_by_squeeze = True
+                    self.get_logger().info(f'[SQUEEZE] Publishing ENABLED: Both squeezes held for {elapsed:.2f} seconds')
+            # Don't log debug messages too frequently
+        else:
+            # Reset if either squeeze is released
+            if self.left_squeeze_start_time is not None or self.right_squeeze_start_time is not None:
+                self.left_squeeze_start_time = None
+                self.right_squeeze_start_time = None
+                if self.publishing_enabled_by_squeeze:
+                    self.publishing_enabled_by_squeeze = False
+                    self.get_logger().info(f'[SQUEEZE] Publishing DISABLED: Squeeze released (left={left_squeeze:.3f}, right={right_squeeze:.3f})')
+
+        return self.publishing_enabled_by_squeeze
+
     def publish_controller_pose(self, controller_matrix, side='left'):
         """Transform controller pose from VR coordinates to ROS base_link and publish."""
         try:
             if not self.vr_publishing_enabled:
                 self.get_logger().debug('VR publishing is disabled, skipping controller pose publish')
+                return
+
+            # Check squeeze condition - both squeezes must be held for 2 seconds
+            if not self.check_squeeze_condition():
                 return
 
             # Calculate base position using shared function
@@ -303,10 +378,15 @@ class VRTrajectoryPublisher(Node):
             # Process orientation
             camera_relative_rotation = R.from_quat(relative_quat_ros)
 
-            # Additional: Apply 180-degree rotation around Z-axis (right hand only)
+            # Apply rotation around Z-axis (blue axis) based on hand side
+            # Right hand: counter-clockwise 90 degrees (positive)
+            # Left hand: clockwise 90 degrees (negative)
             if side == 'right':
-                rot_z_180 = R.from_euler('z', 180, degrees=True)
-                camera_relative_rotation = camera_relative_rotation * rot_z_180
+                rot_z_90 = R.from_euler('z', 90, degrees=True)
+                camera_relative_rotation = camera_relative_rotation * rot_z_90
+            elif side == 'left':
+                rot_z_90 = R.from_euler('z', -90, degrees=True)
+                camera_relative_rotation = camera_relative_rotation * rot_z_90
 
             arm_quaternion = camera_relative_rotation.as_quat()  # [x, y, z, w]
 
@@ -450,42 +530,76 @@ class VRTrajectoryPublisher(Node):
             if 'left' in event.value:
                 left_matrix_data = event.value['left']
                 if isinstance(left_matrix_data, (list, np.ndarray)) and len(left_matrix_data) == 16:
-                    # Reshape with column-major order (Fortran order) like vr_publisher_bh5.py
                     left_matrix = np.array(left_matrix_data).reshape(4, 4, order='F')
                     self.left_controller_data = left_matrix
 
                     # Calculate base position using shared function
                     base_position, _ = self.calculate_base_position(left_matrix)
 
-                    # Log left hand data with coordinates
+                    # Check if controller or hand tracking based on state value
+                    # Controller has state values, hand tracking typically has 0 or None
+                    is_controller = (self.left_controller_state is not None and
+                                    self.left_controller_state != 0 and
+                                    self.left_controller_state != [0, 0] and
+                                    self.left_controller_state != {})
+
+                    detection_type = '[CONTROLLER]' if is_controller else '[HAND TRACKING]'
+                    has_finger_data = 'False' if is_controller else 'True (estimated)'
+
+                    # Log left data with coordinates and detection type
+                    state_info = f', state={self.left_controller_state}' if self.left_controller_state is not None else ', state=None'
                     self.get_logger().info(
-                        f'left: pos=[{base_position[0]:.3f}, {base_position[1]:.3f}, {base_position[2]:.3f}]'
+                        f'{detection_type} left: pos=[{base_position[0]:.3f}, {base_position[1]:.3f}, {base_position[2]:.3f}]{state_info}, has_finger_data={has_finger_data}'
                     )
+
+                    # Publish to topic
+                    self.publish_controller_pose(left_matrix, 'left')
 
             # Process right controller (hand data)
             if 'right' in event.value:
                 right_matrix_data = event.value['right']
                 if isinstance(right_matrix_data, (list, np.ndarray)) and len(right_matrix_data) == 16:
-                    # Reshape with column-major order (Fortran order) like vr_publisher_bh5.py
                     right_matrix = np.array(right_matrix_data).reshape(4, 4, order='F')
                     self.right_controller_data = right_matrix
 
                     # Calculate base position using shared function
                     base_position, _ = self.calculate_base_position(right_matrix)
 
-                    # Log right hand data with coordinates
+                    # Check if controller or hand tracking based on state value
+                    # Controller has state values, hand tracking typically has 0 or None
+                    is_controller = (self.right_controller_state is not None and
+                                    self.right_controller_state != 0 and
+                                    self.right_controller_state != [0, 0] and
+                                    self.right_controller_state != {})
+
+                    detection_type = '[CONTROLLER]' if is_controller else '[HAND TRACKING]'
+                    has_finger_data = 'False' if is_controller else 'True (estimated)'
+
+                    # Log right data with coordinates and detection type
+                    state_info = f', state={self.right_controller_state}' if self.right_controller_state is not None else ', state=None'
                     self.get_logger().info(
-                        f'right: pos=[{base_position[0]:.3f}, {base_position[1]:.3f}, {base_position[2]:.3f}]'
+                        f'{detection_type} right: pos=[{base_position[0]:.3f}, {base_position[1]:.3f}, {base_position[2]:.3f}]{state_info}, has_finger_data={has_finger_data}'
                     )
+
+                    # Publish to topic
+                    self.publish_controller_pose(right_matrix, 'right')
 
             # Process controller states
             if 'leftState' in event.value:
                 self.left_controller_state = event.value['leftState']
-                self.get_logger().info('leftstate')
+                # Extract squeeze value for logging
+                left_squeeze = 0.0
+                if isinstance(self.left_controller_state, dict) and 'squeezeValue' in self.left_controller_state:
+                    left_squeeze = self.left_controller_state.get('squeezeValue', 0.0)
+                self.get_logger().info(f'left_controller_state: {self.left_controller_state}, squeeze={left_squeeze:.3f}')
 
             if 'rightState' in event.value:
                 self.right_controller_state = event.value['rightState']
-                self.get_logger().info('rightstate')
+                # Extract squeeze value for logging
+                right_squeeze = 0.0
+                if isinstance(self.right_controller_state, dict) and 'squeezeValue' in self.right_controller_state:
+                    right_squeeze = self.right_controller_state.get('squeezeValue', 0.0)
+                self.get_logger().info(f'right_controller_state: {self.right_controller_state}, squeeze={right_squeeze:.3f}')
 
             # Debug logging
             self.hand_log_counter += 1
