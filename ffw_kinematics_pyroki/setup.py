@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'bimanual_ik_solver = ffw_kinematics_pyroki.bimanual_ik_solver:main',
+            'bimanual_ik_solver_collision = ffw_kinematics_pyroki.bimanual_ik_solver_collision:main',
         ],
     },
 )
