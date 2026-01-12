@@ -67,9 +67,7 @@ class VRTrajectoryPublisher(Node):
         self.get_logger().info(f'VR Trajectory server available at: https://{hostname}:8012')
 
         # VR event handlers
-        # self.vuer.add_handler('HAND_MOVE')(self.on_hand_move)
         self.vuer.add_handler('CAMERA_MOVE')(self.on_camera_move)
-        # self.vuer.add_handler('BODY_TRACKING_MOVE')(self.on_body_move)
         self.vuer.add_handler('CONTROLLER_MOVE')(self.on_controller_move)
 
         # Controller data storage
@@ -266,6 +264,32 @@ class VRTrajectoryPublisher(Node):
             angle += 2.0 * math.pi
         return angle
 
+    def calculate_base_position(self, controller_matrix):
+        """Calculate base_link position from controller matrix (similar to transform_and_publish_pose in vr_publisher_bh5.py)."""
+        # Transform to head relative coordinates
+        if self.head_inverse_matrix is not None and np.all(np.isfinite(self.head_inverse_matrix)):
+            relative_matrix = self.head_inverse_matrix @ controller_matrix
+            relative_pos, relative_quat = self.matrix_to_pose(relative_matrix)
+            relative_pos_ros, relative_quat_ros = self.vr_to_ros_transform(relative_pos, relative_quat)
+        else:
+            vr_world_pos, vr_world_quat = self.matrix_to_pose(controller_matrix)
+            relative_pos_ros, relative_quat_ros = self.vr_to_ros_transform(vr_world_pos, vr_world_quat)
+
+        # Scale VR position
+        camera_relative_position = relative_pos_ros * self.scaling_vr
+
+        # Fixed offset: zedm_camera_center → base_link
+        zedm_to_base_offset = np.array([
+            0.0 - 0.0238122 - 0.040 - 0.049483 - 0.0055,  # x: -0.1187952
+            0.0 + 0.0 + 0.0 + 0.0 + 0.0,                  # y: 0.0
+            -0.01325 + 0.0242094 - 0.054 - 0.102130 - 1.4316  # z: -1.5767706
+        ], dtype=np.float64)
+
+        # Transform to base_link coordinates
+        base_position = camera_relative_position - zedm_to_base_offset
+
+        return base_position, relative_quat_ros
+
     def publish_controller_pose(self, controller_matrix, side='left'):
         """Transform controller pose from VR coordinates to ROS base_link and publish."""
         try:
@@ -273,35 +297,8 @@ class VRTrajectoryPublisher(Node):
                 self.get_logger().debug('VR publishing is disabled, skipping controller pose publish')
                 return
 
-            # Controller matrix is in VR world coordinates
-            # First transform to head/camera relative coordinates (like hand tracking)
-            if self.head_inverse_matrix is not None and np.all(np.isfinite(self.head_inverse_matrix)):
-                # Transform world matrix to head relative matrix
-                relative_matrix = self.head_inverse_matrix @ controller_matrix
-                
-                # Convert relative matrix to pose
-                relative_pos, relative_quat = self.matrix_to_pose(relative_matrix)
-                
-                # Transform from VR coordinate system to ROS coordinate system
-                relative_pos_ros, relative_quat_ros = self.vr_to_ros_transform(relative_pos, relative_quat)
-            else:
-                # Fallback: use world coordinates directly if head matrix not available
-                self.get_logger().warn('Head inverse matrix not available, using world coordinates')
-                vr_world_pos, vr_world_quat = self.matrix_to_pose(controller_matrix)
-                relative_pos_ros, relative_quat_ros = self.vr_to_ros_transform(vr_world_pos, vr_world_quat)
-
-            # Scale VR position
-            camera_relative_position = relative_pos_ros * self.scaling_vr
-
-            # Fixed offset: zedm_camera_center → base_link
-            zedm_to_base_offset = np.array([
-                0.0 - 0.0238122 - 0.040 - 0.049483 - 0.0055,  # x: -0.1187952
-                0.0 + 0.0 + 0.0 + 0.0 + 0.0,                  # y: 0.0
-                -0.01325 + 0.0242094 - 0.054 - 0.102130 - 1.4316  # z: -1.5767706
-            ], dtype=np.float64)
-
-            # Transform to base_link coordinates
-            base_position = camera_relative_position - zedm_to_base_offset
+            # Calculate base position using shared function
+            base_position, relative_quat_ros = self.calculate_base_position(controller_matrix)
 
             # Process orientation
             camera_relative_rotation = R.from_quat(relative_quat_ros)
@@ -426,8 +423,6 @@ class VRTrajectoryPublisher(Node):
                 elif 'camera' in event.value and isinstance(event.value['camera'], dict):
                     matrix = event.value['camera'].get('matrix')
 
-            # print(f'matrix: {matrix}')
-
             if isinstance(matrix, (list, np.ndarray)) and len(matrix) == 16:
                 self.head_transform_matrix = np.array(matrix).reshape(4, 4, order='F')
                 self.head_inverse_matrix = np.linalg.inv(self.head_transform_matrix)
@@ -442,54 +437,6 @@ class VRTrajectoryPublisher(Node):
         except Exception as e:
             self.get_logger().error(f'Error in camera move event: {e}')
 
-    async def on_hand_move(self, event, session):
-        """Handle hand movement events."""
-        try:
-            if not self.vr_publishing_enabled:
-                return
-
-            # Process hand data
-            if 'left' in event.value:
-                left_data = event.value['left']
-                if isinstance(left_data, (list, np.ndarray)) and len(left_data) == 400:
-                    self.left_hand_data = np.array(left_data)
-                    # Store hand data for processing
-                    # TODO: Implement process_hand_joints if needed
-
-            # Process hand data
-            if 'right' in event.value:
-                right_data = event.value['right']
-                if isinstance(right_data, (list, np.ndarray)) and len(right_data) == 400:
-                    self.right_hand_data = np.array(right_data)
-                    # Store hand data for processing
-                    # TODO: Implement process_hand_joints if needed
-
-            # Debug logging
-            self.hand_log_counter += 1
-            if self.hand_log_counter % self.log_every_n == 0:
-                self.get_logger().info('Hand tracking data processed')
-
-        except Exception as e:
-            self.get_logger().error(f'Error in hand move event: {e}')
-
-    async def on_body_move(self, event, session):
-        """
-        Handle incoming BODY_TRACKING_MOVE events from the client.
-        event.value should be a BodiesData dictionary:
-        { jointName: { matrix: Float32Array-like, ... }, ... }
-        """
-        print(f"BODY_TRACKING_MOVE: key={event.key} ts={getattr(event, 'ts', None)}")
-        # print(f'event.value: {event.value}')
-
-        # Example: print only the first joint to avoid large output
-        if event.value:
-            first_joint, first_data = next(iter(event.value.items()))
-            print(
-                first_joint,
-                "matrix_len=",
-                len(first_data.get("matrix", [])) if first_data else None,
-            )
-
     async def on_controller_move(self, event, session: VuerSession):
         """Handle controller movement events."""
         try:
@@ -499,7 +446,7 @@ class VRTrajectoryPublisher(Node):
             if not isinstance(event.value, dict):
                 return
 
-            # Process left controller
+            # Process left controller (hand data)
             if 'left' in event.value:
                 left_matrix_data = event.value['left']
                 if isinstance(left_matrix_data, (list, np.ndarray)) and len(left_matrix_data) == 16:
@@ -507,15 +454,15 @@ class VRTrajectoryPublisher(Node):
                     left_matrix = np.array(left_matrix_data).reshape(4, 4, order='F')
                     self.left_controller_data = left_matrix
 
-                    # Convert matrix to pose and process (similar to hand tracking)
-                    pos, quat = self.matrix_to_pose(left_matrix)
+                    # Calculate base position using shared function
+                    base_position, _ = self.calculate_base_position(left_matrix)
 
-                    # print(f'Left controller: pos=[{pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f}]')
+                    # Log left hand data with coordinates
+                    self.get_logger().info(
+                        f'left: pos=[{base_position[0]:.3f}, {base_position[1]:.3f}, {base_position[2]:.3f}]'
+                    )
 
-                    # Transform VR coordinates to ROS and publish
-                    self.publish_controller_pose(left_matrix, 'left')
-
-            # Process right controller
+            # Process right controller (hand data)
             if 'right' in event.value:
                 right_matrix_data = event.value['right']
                 if isinstance(right_matrix_data, (list, np.ndarray)) and len(right_matrix_data) == 16:
@@ -523,43 +470,22 @@ class VRTrajectoryPublisher(Node):
                     right_matrix = np.array(right_matrix_data).reshape(4, 4, order='F')
                     self.right_controller_data = right_matrix
 
-                    # Convert matrix to pose and process (similar to hand tracking)
-                    pos, quat = self.matrix_to_pose(right_matrix)
-                    # print(f'Right controller: pos=[{pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f}], quat=[{quat[0]:.3f}, {quat[1]:.3f}, {quat[2]:.3f}, {quat[3]:.3f}]')
+                    # Calculate base position using shared function
+                    base_position, _ = self.calculate_base_position(right_matrix)
 
-                    # Transform VR coordinates to ROS and publish
-                    self.publish_controller_pose(right_matrix, 'right')
+                    # Log right hand data with coordinates
+                    self.get_logger().info(
+                        f'right: pos=[{base_position[0]:.3f}, {base_position[1]:.3f}, {base_position[2]:.3f}]'
+                    )
 
             # Process controller states
             if 'leftState' in event.value:
                 self.left_controller_state = event.value['leftState']
-                trigger_value = self.left_controller_state.get('triggerValue', 0.0)
-
-                # Optional: Trigger haptic feedback
-                if trigger_value > 0.5:
-                    session.upsert @ MotionControllers(
-                        key="motion-controller",
-                        left=True,
-                        right=True,
-                        pulseLeftStrength=trigger_value,
-                        pulseLeftDuration=100,
-                        pulseLeftHash=f'{self.get_clock().now().to_msg().sec}_{trigger_value:.2f}',
-                    )
+                self.get_logger().info('leftstate')
 
             if 'rightState' in event.value:
                 self.right_controller_state = event.value['rightState']
-                trigger_value = self.right_controller_state.get('triggerValue', 0.0)
-
-                # Optional: Trigger haptic feedback
-                if trigger_value > 0.5:
-                    session.upsert @ MotionControllers(
-                        key="motion-controller",
-                        left=True,
-                        right=True,
-                        pulseRightStrength=trigger_value,
-                        pulseRightDuration=100,
-                        pulseRightHash=f'{self.get_clock().now().to_msg().sec}_{trigger_value:.2f}',
-                    )
+                self.get_logger().info('rightstate')
 
             # Debug logging
             self.hand_log_counter += 1
