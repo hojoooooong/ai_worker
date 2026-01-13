@@ -77,13 +77,12 @@ def _solve_ik_jax(
             rest_pose=JointVar.default_factory(),
             weight=1.0,
         ),
-    ]
-    costs.append(
-        pk.costs.limit_constraint(
+        pk.costs.limit_cost(
             robot,
             JointVar(0),
+            jnp.array([100.0] * robot.joints.num_joints),
         ),
-    )
+    ]
     sol = (
         jaxls.LeastSquaresProblem(costs=costs, variables=[JointVar(0)])
         .analyze()
