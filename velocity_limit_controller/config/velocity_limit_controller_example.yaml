@@ -1,0 +1,57 @@
+velocity_limit_controller:
+  ros__parameters:
+    # Joint names (7 joints total)
+    joints:
+      - joint1
+      - joint2
+      - joint3
+      - joint4
+      - joint5
+      - joint6
+      - joint7
+
+    # Topic to subscribe to (should match joint_trajectory_controller's topic)
+    trajectory_topic: "/joint_trajectory_controller/joint_trajectory"
+
+    # Braking acceleration per joint (rad/s²)
+    # Computes v_stop = sqrt(2 * a_brake * |error|)
+    # Adjust based on your motor capabilities
+    a_brake: [2.0, 2.0, 2.0, 3.0, 3.0, 3.0, 2.0]
+
+    # Maximum velocity limit per joint (rad/s)
+    # Converted from RPM: 35 RPM = 3.665 rad/s, 64 RPM = 6.702 rad/s, 29 RPM = 3.037 rad/s
+    v_max: [3.665, 3.665, 3.665, 6.702, 6.702, 6.702, 3.037]
+
+    # Minimum velocity limit per joint (rad/s)
+    # When position error is small, computed velocity might be too low to overcome friction/deadband.
+    # If computed velocity > 0 but < v_min, use v_min instead to ensure motor actually moves.
+    # Set to 0.0 to disable minimum velocity threshold.
+    # Typical values: 0.1-0.5 rad/s depending on motor friction characteristics
+    v_min: [0.1, 0.1, 0.1, 0.15, 0.15, 0.15, 0.1]
+
+    # Velocity ramp-up rate per joint (rad/s²)
+    # Limits how fast velocity can increase
+    ramp_up: [5.0, 5.0, 5.0, 8.0, 8.0, 8.0, 5.0]
+
+    # Velocity ramp-down rate per joint (rad/s²)
+    # Limits how fast velocity can decrease
+    ramp_down: [10.0, 10.0, 10.0, 15.0, 15.0, 15.0, 10.0]
+
+    # Deadband thresholds for locking (optional, only used if use_lock=true)
+    # e_dead_in: inner threshold - if error < this, lock (set velocity to 0)
+    # e_dead_out: outer threshold - if error > this, unlock
+    # Hysteresis prevents chattering near target
+    e_dead_in: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01]   # rad
+    e_dead_out: [0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02]  # rad
+
+    # Enable locking near target (optional)
+    # If true, sets velocity to 0 when error is within e_dead_in
+    use_lock: false
+
+    # Low-pass filter cutoff frequency (Hz)
+    # Smooths velocity commands to reduce jerk
+    lpf_cutoff_hz: 10.0
+
+    # Trajectory timeout in milliseconds
+    # If no trajectory message received for this duration, velocity ramps down to 0
+    timeout_ms: 100.0

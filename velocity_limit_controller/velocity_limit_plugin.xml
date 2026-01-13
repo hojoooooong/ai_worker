@@ -1,0 +1,8 @@
+<library path="velocity_limit_controller">
+  <class name="velocity_limit_controller/VelocityLimitController" type="velocity_limit_controller::VelocityLimitController" base_class_type="controller_interface::ControllerInterface">
+    <description>
+      Controller that computes velocity limits based on braking distance from trajectory target positions.
+      Designed for Dynamixel Y servos where goal_velocity acts as a velocity limit for the internal cascade controller.
+    </description>
+  </class>
+</library>
