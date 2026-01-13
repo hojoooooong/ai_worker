@@ -159,15 +159,14 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc  && \
     echo "alias ffw_sg2_ai='ros2 launch ffw_bringup ffw_sg2_ai.launch.py'" >> ~/.bashrc
 
 # Create directory for agent Unix Domain Socket
-# The agent will create /var/run/agent/s6_agent.sock
 RUN mkdir -p /var/run/agent && \
     chmod 777 /var/run/agent
 
-# Copy system_manager package (contains both system_manager and agent modules)
-COPY system_manager /opt/system_manager
-ENV PYTHONPATH=/opt/system_manager:${PYTHONPATH}
+RUN git clone -b main https://github.com/ROBOTIS-GIT/robotis_system_manager.git /opt/robotis_system_manager
 
-RUN pip install --no-cache-dir -r /opt/system_manager/requirements.txt
+ENV PYTHONPATH=/opt/robotis_system_manager:${PYTHONPATH}
+
+RUN pip install --no-cache-dir -r /opt/robotis_system_manager/requirements.txt
 
 # New-style s6-rc services (recommended in s6-overlay v3 docs)
 # Define services under /etc/s6-overlay/s6-rc.d and add them to the user bundle.
@@ -175,66 +174,32 @@ RUN pip install --no-cache-dir -r /opt/system_manager/requirements.txt
 # Agent service (longrun)
 COPY docker/s6-agent /etc/s6-overlay/s6-rc.d/s6-agent
 
-# ROS2 ffw_bg2_follower_ai service (longrun) with logging pipeline
-# Main service
-COPY docker/s6-services/ffw_bg2_follower_ai /etc/s6-overlay/s6-rc.d/ffw_bg2_follower_ai
-RUN chmod +x /etc/s6-overlay/s6-rc.d/ffw_bg2_follower_ai/run && \
-    chmod +x /etc/s6-overlay/s6-rc.d/ffw_bg2_follower_ai/finish
+# Define ROS2 services
+ARG ROS2_SERVICES="ffw_bg2_follower_ai ffw_lg2_leader_ai ffw_sg2_follower_ai"
 
-# Log preparation oneshot service
-COPY docker/s6-services/ffw_bg2_follower_ai-log-prepare /etc/s6-overlay/s6-rc.d/ffw_bg2_follower_ai-log-prepare
+# Copy all ROS2 service directories directly to s6-rc.d
+COPY docker/s6-services/ /etc/s6-overlay/s6-rc.d/
 
-# Logging service (consumer)
-COPY docker/s6-services/ffw_bg2_follower_ai-log /etc/s6-overlay/s6-rc.d/ffw_bg2_follower_ai-log
-RUN chmod +x /etc/s6-overlay/s6-rc.d/ffw_bg2_follower_ai-log/run
-
-# ROS2 ffw_lg2_leader_ai service (longrun) with logging pipeline
-# Main service
-COPY docker/s6-services/ffw_lg2_leader_ai /etc/s6-overlay/s6-rc.d/ffw_lg2_leader_ai
-RUN chmod +x /etc/s6-overlay/s6-rc.d/ffw_lg2_leader_ai/run && \
-    chmod +x /etc/s6-overlay/s6-rc.d/ffw_lg2_leader_ai/finish
-
-# Log preparation oneshot service
-COPY docker/s6-services/ffw_lg2_leader_ai-log-prepare /etc/s6-overlay/s6-rc.d/ffw_lg2_leader_ai-log-prepare
-
-# Logging service (consumer)
-COPY docker/s6-services/ffw_lg2_leader_ai-log /etc/s6-overlay/s6-rc.d/ffw_lg2_leader_ai-log
-RUN chmod +x /etc/s6-overlay/s6-rc.d/ffw_lg2_leader_ai-log/run
-
-# ROS2 ffw_sg2_follower_ai service (longrun) with logging pipeline
-# Main service
-COPY docker/s6-services/ffw_sg2_follower_ai /etc/s6-overlay/s6-rc.d/ffw_sg2_follower_ai
-RUN chmod +x /etc/s6-overlay/s6-rc.d/ffw_sg2_follower_ai/run && \
-    chmod +x /etc/s6-overlay/s6-rc.d/ffw_sg2_follower_ai/finish
-
-# Log preparation oneshot service
-COPY docker/s6-services/ffw_sg2_follower_ai-log-prepare /etc/s6-overlay/s6-rc.d/ffw_sg2_follower_ai-log-prepare
-
-# Logging service (consumer)
-COPY docker/s6-services/ffw_sg2_follower_ai-log /etc/s6-overlay/s6-rc.d/ffw_sg2_follower_ai-log
-RUN chmod +x /etc/s6-overlay/s6-rc.d/ffw_sg2_follower_ai-log/run
+# Setup ROS2 services with logging pipeline and permissions
+RUN for service in ${ROS2_SERVICES}; do \
+    chmod +x /etc/s6-overlay/s6-rc.d/${service}/run /etc/s6-overlay/s6-rc.d/${service}/finish && \
+    chmod +x /etc/s6-overlay/s6-rc.d/${service}-log/run && \
+    mkdir -p /var/log/${service} && \
+    chown nobody:nogroup /var/log/${service} && \
+    chmod 02755 /var/log/${service}; \
+    done && \
+    # Remove common directory from s6-rc.d (it's copied separately below)
+    rm -rf /etc/s6-overlay/s6-rc.d/common
 
 # Copy reusable ROS2 service scripts to a location outside s6-rc.d
 # This prevents s6-rc-compile from treating them as services
 RUN mkdir -p /usr/local/lib/s6-services
 COPY docker/s6-services/common/ros2_service_run.sh /usr/local/lib/s6-services/ros2_service_run.sh
 COPY docker/s6-services/common/ros2_service_finish.sh /usr/local/lib/s6-services/ros2_service_finish.sh
-RUN chmod +x /usr/local/lib/s6-services/ros2_service_run.sh && \
-    chmod +x /usr/local/lib/s6-services/ros2_service_finish.sh
-
-# Create log directories and set permissions
-RUN mkdir -p /var/log/ffw_bg2_follower_ai && \
-    chown nobody:nogroup /var/log/ffw_bg2_follower_ai && \
-    chmod 02755 /var/log/ffw_bg2_follower_ai && \
-    mkdir -p /var/log/ffw_lg2_leader_ai && \
-    chown nobody:nogroup /var/log/ffw_lg2_leader_ai && \
-    chmod 02755 /var/log/ffw_lg2_leader_ai && \
-    mkdir -p /var/log/ffw_sg2_follower_ai && \
-    chown nobody:nogroup /var/log/ffw_sg2_follower_ai && \
-    chmod 02755 /var/log/ffw_sg2_follower_ai
+RUN chmod +x /usr/local/lib/s6-services/ros2_service_run.sh /usr/local/lib/s6-services/ros2_service_finish.sh
 
 # Add services to the user bundle so they start at container boot
-# Note: ffw_bg2_follower_ai-pipeline and ffw_lg2_leader_ai-pipeline are NOT in the user bundle - they must be started manually
+# Note: ROS2 services are NOT in the user bundle - they must be started manually
 RUN mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d && \
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/s6-agent
 
