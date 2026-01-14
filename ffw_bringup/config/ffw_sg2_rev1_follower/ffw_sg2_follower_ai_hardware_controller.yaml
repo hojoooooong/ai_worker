@@ -1,7 +1,7 @@
 /**:
   controller_manager:
     ros__parameters:
-      use_sim_time: False
+      use_sim_time: True
       update_rate: 100  # Hz
 
       arm_l_controller:
@@ -116,7 +116,7 @@
 
       wheel_joint_names: ["left_wheel_drive", "right_wheel_drive", "rear_wheel_drive"]
 
-      wheel_radius: 0.0825 # [m]
+      wheel_radius: 0.0865 # [m]
       cmd_vel_timeout: 1.0  # [sec]
 
       module_x_offsets: [ 0.1371,  0.1371, -0.2899] # x-distance between base_link and steering angle joint [m]  =>
@@ -134,7 +134,7 @@
       enabled_steering_angular_velocity_limit: true # select the shortest steering direciton or not, true or false
       steering_angular_velocity_limit: 100.0 # steering angular velocity [rad/s]
 
-      steering_alignment_angle_error_threshold: 1.0 # wheel stop when the difference b/w current steering angle and target steering angle is below it # [rad] => x * 57.2958 [deg]
+      steering_alignment_angle_error_threshold: 0.3 # wheel stop when the difference b/w current steering angle and target steering angle is below it # [rad] => x * 57.2958 [deg]
       steering_alignment_start_angle_error_threshold: 0.01
       steering_alignment_start_speed_error_threshold: 0.1
       enabled_open_loop: false # use open-loop control or not, true or false
