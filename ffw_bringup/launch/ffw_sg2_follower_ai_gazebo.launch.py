@@ -145,6 +145,7 @@ def generate_launch_description():
     gz_bridge_params_path = os.path.join(
         ffw_bringup_path,
         'config',
+        'common',
         'gz_bridge.yaml'
     )
 
