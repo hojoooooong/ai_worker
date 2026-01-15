@@ -87,7 +87,8 @@ class HandPublisher(Node):
             10
         )
 
-        self.left_hand_publisher_ = self.create_publisher(JointTrajectory, '/leader/joint_trajectory_command_broadcaster_left_hand/joint_trajectory', 10)
+        # Left hand is gripper, so use arm_l_controller for gripper_l_joint1
+        self.left_gripper_publisher_ = self.create_publisher(JointTrajectory, '/leader/joint_trajectory_command_broadcaster_left/joint_trajectory', 10)
         self.right_hand_publisher_ = self.create_publisher(JointTrajectory, '/leader/joint_trajectory_command_broadcaster_right_hand/joint_trajectory', 10)
         self.trigger_publisher_ = self.create_publisher(JointState, '/topic_based_joint_states', 10)
 
@@ -132,25 +133,15 @@ class HandPublisher(Node):
                 right_interpolation_value = self.normalize_value(msg.position[i])
                 thumb_right_interpolation_value = self.normalize_value(right_interpolation_value, self.thumb_preset_threshold, 1.0)
 
-        # left
-        left_interpolated_trajectory = np.zeros(20)
-        left_interpolated_trajectory[4:] = left_interpolation_value*self.left_preset_grasp[4:] + (1-left_interpolation_value)*self.left_preset_release[4:]
-        left_interpolated_trajectory[:4] = thumb_left_interpolation_value*self.left_preset_grasp[:4] + (1-thumb_left_interpolation_value)*self.left_preset_release[:4]
+        # left - gripper (gripper_l_joint1 only, no preset needed, just pass through)
+        # For gripper, we don't need preset interpolation, just use the gripper value directly
+        # The gripper is controlled via arm_l_controller which includes gripper_l_joint1
+        # So we don't publish left hand trajectory here, gripper is handled by arm controller
 
-        # right
+        # right - hand (finger_r_joint1~20 with preset)
         right_interpolated_trajectory = np.zeros(20)
         right_interpolated_trajectory[4:] = right_interpolation_value*self.right_preset_grasp[4:] + (1-right_interpolation_value)*self.right_preset_release[4:]
         right_interpolated_trajectory[:4] = thumb_right_interpolation_value*self.right_preset_grasp[:4] + (1-thumb_right_interpolation_value)*self.right_preset_release[:4]
-
-        left_msg = JointTrajectory()
-        left_msg.joint_names = self.left_joint_names
-        left_traj_point = JointTrajectoryPoint()
-        # left_traj_point.positions = (left_interpolation_value*self.left_preset_grasp + (1-left_interpolation_value)*self.left_preset_release).tolist()
-        left_traj_point.positions = left_interpolated_trajectory.tolist()
-        left_traj_point.time_from_start.sec = 0
-        left_traj_point.time_from_start.nanosec = 0
-        left_msg.points.append(left_traj_point)
-        self.left_hand_publisher_.publish(left_msg)
 
         right_msg = JointTrajectory()
         right_msg.joint_names = self.right_joint_names
