@@ -1545,7 +1545,19 @@
         <param name="Max Position Limit">131875</param>
         <param name="Min Position Limit">-151875</param>
       </gpio>
-
+      <gpio name="dxl38">
+        <param name="type">dxl</param>
+        <param name="ID">38</param>
+        <command_interface name="Goal Position"/>
+        <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
+        <state_interface name="Hardware Error Status"/>
+        <param name="Operating Mode">5</param>
+        <param name="Return Delay Time">0</param>
+        <param name="Profile Velocity">0</param>
+        <param name="Profile Acceleration">0</param>
+      </gpio>
       <!-- HEAD -->
       <gpio name="dxl61">
         <param name="type">dxl</param>
