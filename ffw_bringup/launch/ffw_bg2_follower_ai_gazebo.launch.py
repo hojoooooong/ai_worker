@@ -34,7 +34,7 @@ def generate_launch_description():
     declared_arguments = [
         DeclareLaunchArgument('model', default_value='ffw_bg2_rev4_follower',
                               description='Robot model name.'),
-        DeclareLaunchArgument('world', default_value='warehouse',
+        DeclareLaunchArgument('world', default_value='default',
                               description='Gz sim World'),
     ]
 

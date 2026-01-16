@@ -1,7 +1,7 @@
 /**:
   controller_manager:
     ros__parameters:
-      use_sim_time: True
+      use_sim_time: False
       update_rate: 100  # Hz
 
       arm_l_controller:
