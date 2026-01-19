@@ -55,7 +55,7 @@ class VRTrajectoryPublisher(Node):
                               f'enable_head_publishing={self.enable_head_publishing}')
 
         # VR publishing control flag
-        self.vr_publishing_enabled = True  # Default: disabled
+        self.vr_publishing_enabled = False #True  # Default: disabled
 
         # VR Server setup
         current_dir = os.path.dirname(os.path.abspath(__file__))

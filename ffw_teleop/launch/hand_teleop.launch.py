@@ -76,7 +76,7 @@ def generate_launch_description():
     # Offsets for lift joint origin (from URDF)
     ld.add_action(DeclareLaunchArgument('lift_joint_x_offset', default_value='0.0055'))
     ld.add_action(DeclareLaunchArgument('lift_joint_y_offset', default_value='0.0'))
-    ld.add_action(DeclareLaunchArgument('lift_joint_z_offset', default_value='1.6316'))
+    ld.add_action(DeclareLaunchArgument('lift_joint_z_offset', default_value='1.4316'))
 
     # IK parameters
     ld.add_action(DeclareLaunchArgument('max_joint_step_degrees', default_value='50.0'))
