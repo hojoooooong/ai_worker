@@ -470,6 +470,7 @@
         <param name="SyncTable 5 Write Size 4">4</param>
         <param name="SyncTable 5 Write Size 5">0</param>
       </gpio>
+
       <gpio name="dxl111_init">
         <param name="type">controller</param>
         <param name="ID">111</param>
@@ -482,7 +483,7 @@
         <param name="Profile Acceleration">50</param>
         <param name="Position P Gain">500</param>
         <param name="Position D Gain">1000</param>
-        <param name="Homing Offset">1024</param>
+        <param name="Homing Offset">0</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
         <param name="Indirect Address 3">128</param>
@@ -500,13 +501,13 @@
         <param name="Reboot">1</param>
         <param name="Startup Configuration">2</param>
         <param name="Operating Mode">5</param>
-        <param name="Drive Mode">13</param>
+        <param name="Drive Mode">12</param>
         <param name="Bus Watchdog">100</param>
         <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
         <param name="Position P Gain">500</param>
         <param name="Position D Gain">1000</param>
-        <param name="Homing Offset">341</param>
+        <param name="Homing Offset">-1024</param>
         <param name="Indirect Address 1">126</param>
         <param name="Indirect Address 2">127</param>
         <param name="Indirect Address 3">128</param>
@@ -524,7 +525,7 @@
         <param name="Reboot">1</param>
         <param name="Startup Configuration">2</param>
         <param name="Operating Mode">5</param>
-        <param name="Drive Mode">13</param>
+        <param name="Drive Mode">12</param>
         <param name="Bus Watchdog">100</param>
         <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
@@ -547,7 +548,7 @@
         <param name="Reboot">1</param>
         <param name="Startup Configuration">2</param>
         <param name="Operating Mode">5</param>
-        <param name="Drive Mode">13</param>
+        <param name="Drive Mode">12</param>
         <param name="Bus Watchdog">100</param>
         <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
