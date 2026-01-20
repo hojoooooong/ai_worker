@@ -49,6 +49,10 @@ def generate_launch_description():
                               description='Robot model name.'),
         DeclareLaunchArgument('use_head_eef_tracker', default_value='true',
                               description='Whether to launch the head EEF tracker node.'),
+        DeclareLaunchArgument(
+            'init_position_file',
+            default_value='ffw_sh5_follower_initial_positions.yaml',
+            description='Initial position file.'),
     ]
 
     start_rviz = LaunchConfiguration('start_rviz')
@@ -60,6 +64,7 @@ def generate_launch_description():
     init_position = LaunchConfiguration('init_position')
     model = LaunchConfiguration('model')
     use_head_eef_tracker = LaunchConfiguration('use_head_eef_tracker')
+    init_position_file = LaunchConfiguration('init_position_file')
     robot_description_content = Command([
         PathJoinSubstitution([FindExecutable(name='xacro')]),
         ' ',
@@ -257,7 +262,7 @@ def generate_launch_description():
         FindPackageShare('ffw_bringup'),
         'config',
         model,
-        'ffw_sh5_follower_initial_positions.yaml',
+        init_position_file,
     ])
 
     joint_trajectory_executor_left = Node(
