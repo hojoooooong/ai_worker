@@ -35,7 +35,7 @@ def get_key():
 
 
 class KeyboardTeleop(Node):
-    
+
     def __init__(self):
         super().__init__('keyboard_teleop')
         self.publisher = self.create_publisher(Twist, '/cmd_vel', 5)
