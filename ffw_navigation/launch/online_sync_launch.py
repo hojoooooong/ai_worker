@@ -1,3 +1,17 @@
+# Copyright 2026 ROBOTIS CO., LTD.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
 
 from ament_index_python.packages import get_package_share_directory
@@ -9,10 +23,10 @@ from launch.events import matches_action
 from launch.substitutions import (AndSubstitution, LaunchConfiguration,
                                   NotSubstitution)
 from launch_ros.actions import LifecycleNode
+from launch_ros.descriptions import ParameterFile
 from launch_ros.event_handlers import OnStateTransition
 from launch_ros.events.lifecycle import ChangeState
 from lifecycle_msgs.msg import Transition
-from launch_ros.descriptions import ParameterFile
 
 
 def generate_launch_description():
@@ -34,7 +48,7 @@ def generate_launch_description():
         description='Use simulation/Gazebo clock')
     declare_slam_params_file_cmd = DeclareLaunchArgument(
         'slam_params_file',
-        default_value=os.path.join(get_package_share_directory("ffw_navigation"),
+        default_value=os.path.join(get_package_share_directory('ffw_navigation'),
                                    'config', 'mapper_params_online_sync.yaml'),
         description='Full path to the ROS2 parameters file to use for the slam_toolbox node')
 
@@ -69,10 +83,10 @@ def generate_launch_description():
     activate_event = RegisterEventHandler(
         OnStateTransition(
             target_lifecycle_node=start_sync_slam_toolbox_node,
-            start_state="configuring",
-            goal_state="inactive",
+            start_state='configuring',
+            goal_state='inactive',
             entities=[
-                LogInfo(msg="[LifecycleLaunch] Slamtoolbox node is activating."),
+                LogInfo(msg='[LifecycleLaunch] Slamtoolbox node is activating.'),
                 EmitEvent(event=ChangeState(
                     lifecycle_node_matcher=matches_action(start_sync_slam_toolbox_node),
                     transition_id=Transition.TRANSITION_ACTIVATE
