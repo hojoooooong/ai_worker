@@ -31,7 +31,7 @@ from lifecycle_msgs.msg import Transition
 
 def generate_launch_description():
     autostart = LaunchConfiguration('autostart')
-    use_lifecycle_manager = LaunchConfiguration("use_lifecycle_manager")
+    use_lifecycle_manager = LaunchConfiguration('use_lifecycle_manager')
     use_sim_time = LaunchConfiguration('use_sim_time')
     slam_params_file = LaunchConfiguration('slam_params_file')
 
