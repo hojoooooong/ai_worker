@@ -245,9 +245,35 @@ void JoystickController::publish_joint_state(
   joint_state_msg.header.frame_id = "";
   joint_state_msg.name = controlled_joints;
   joint_state_msg.position = positions;
-  // Set velocity and effort to NaN (not available from joystick)
+  
+  // Get velocity and effort from current_joint_states_ if available
   joint_state_msg.velocity.resize(positions.size(), std::numeric_limits<double>::quiet_NaN());
   joint_state_msg.effort.resize(positions.size(), std::numeric_limits<double>::quiet_NaN());
+  
+  if (!current_joint_states_.name.empty()) {
+    for (size_t i = 0; i < controlled_joints.size(); ++i) {
+      const auto & joint_name = controlled_joints[i];
+      auto it = std::find(current_joint_states_.name.begin(), current_joint_states_.name.end(),
+          joint_name);
+      if (it != current_joint_states_.name.end()) {
+        size_t index = std::distance(current_joint_states_.name.begin(), it);
+        
+        // Get velocity if available
+        if (index < current_joint_states_.velocity.size() &&
+            !std::isnan(current_joint_states_.velocity[index]))
+        {
+          joint_state_msg.velocity[i] = current_joint_states_.velocity[index];
+        }
+        
+        // Get effort if available
+        if (index < current_joint_states_.effort.size() &&
+            !std::isnan(current_joint_states_.effort[index]))
+        {
+          joint_state_msg.effort[i] = current_joint_states_.effort[index];
+        }
+      }
+    }
+  }
 
   auto joint_state_publisher = sensor_joint_state_stamped_publisher_[sensor_name];
   if (joint_state_publisher) {
