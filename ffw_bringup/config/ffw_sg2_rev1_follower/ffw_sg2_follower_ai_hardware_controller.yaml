@@ -212,7 +212,7 @@
         - joystick_right
       joint_groups:
         arm_left:
-          topic_name: "/leader/arm_left/joint_states"
+          topic_name: "/follower/arm_left/joint_states"
           joints:
             - arm_l_joint1
             - arm_l_joint2
@@ -223,7 +223,7 @@
             - arm_l_joint7
             - gripper_l_joint1
         arm_right:
-          topic_name: "/leader/arm_right/joint_states"
+          topic_name: "/follower/arm_right/joint_states"
           joints:
             - arm_r_joint1
             - arm_r_joint2
@@ -234,12 +234,12 @@
             - arm_r_joint7
             - gripper_r_joint1
         joystick_left:
-          topic_name: "/leader/joystick_left/joint_states"
+          topic_name: "/follower/joystick_left/joint_states"
           joints:
             - head_joint1
             - head_joint2
         joystick_right:
-          topic_name: "/leader/joystick_right/joint_states"
+          topic_name: "/follower/joystick_right/joint_states"
           joints:
             - lift_joint
 
