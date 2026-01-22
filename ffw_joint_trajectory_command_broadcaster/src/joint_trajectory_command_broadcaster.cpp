@@ -147,24 +147,10 @@ controller_interface::CallbackReturn JointTrajectoryCommandBroadcaster::on_confi
         std::make_shared<realtime_tools::RealtimePublisher<trajectory_msgs::msg::JointTrajectory>>(
         joint_trajectory_publishers_[group_name]);
 
-      // Create stamped topic publisher for data storage
-      std::string stamped_topic_name = topic_name + "_stamped";
-      joint_trajectory_stamped_publishers_[group_name] =
-        get_node()->create_publisher<trajectory_msgs::msg::JointTrajectory>(
-        stamped_topic_name, rclcpp::SystemDefaultsQoS());
-
-      realtime_joint_trajectory_stamped_publishers_[group_name] =
-        std::make_shared<realtime_tools::RealtimePublisher<trajectory_msgs::msg::JointTrajectory>>(
-        joint_trajectory_stamped_publishers_[group_name]);
-
       RCLCPP_INFO(
         get_node()->get_logger(),
         "Created joint trajectory publisher for group '%s' on topic: %s with %zu joints",
         group_name.c_str(), topic_name.c_str(), group_joints.size());
-      RCLCPP_INFO(
-        get_node()->get_logger(),
-        "Created joint trajectory stamped publisher for group '%s' on topic: %s",
-        group_name.c_str(), stamped_topic_name.c_str());
     }
 
     // Store the groups for later use
@@ -180,16 +166,6 @@ controller_interface::CallbackReturn JointTrajectoryCommandBroadcaster::on_confi
       get_node()->get_logger(),
       "Subscribed to follower joint states topic: %s",
       params_.follower_joint_states_topic.c_str());
-
-    // Create subscriber for leader joint states to get timestamp
-    leader_joint_states_subscriber_ = get_node()->create_subscription<sensor_msgs::msg::JointState>(
-      "/joint_states", rclcpp::SystemDefaultsQoS(),
-      std::bind(&JointTrajectoryCommandBroadcaster::leader_joint_states_callback, this,
-        std::placeholders::_1));
-
-    RCLCPP_INFO(
-      get_node()->get_logger(),
-      "Subscribed to leader joint states topic: /joint_states for timestamp");
   } catch (const std::exception & e) {
     // get_node() may throw, logging raw here
     fprintf(stderr, "Exception thrown during init stage with message: %s \n", e.what());
@@ -336,14 +312,6 @@ void JointTrajectoryCommandBroadcaster::joint_states_callback(
     RCLCPP_DEBUG(get_node()->get_logger(),
       "Received follower joint states for %zu joints", msg->name.size());
   }
-}
-
-void JointTrajectoryCommandBroadcaster::leader_joint_states_callback(
-  const sensor_msgs::msg::JointState::SharedPtr msg)
-{
-  // Store timestamp from leader joint states for stamped topic
-  std::lock_guard<std::mutex> lock(leader_joint_states_mutex_);
-  leader_joint_states_timestamp_ = msg->header.stamp;
 }
 
 double JointTrajectoryCommandBroadcaster::calculate_mean_error() const
@@ -588,20 +556,6 @@ controller_interface::return_type JointTrajectoryCommandBroadcaster::update(
       }
 
       realtime_publisher->try_publish(traj_msg);
-
-      // Publish stamped version for data storage with timestamp from leader joint states
-      auto & realtime_stamped_publisher = realtime_joint_trajectory_stamped_publishers_[group_name];
-      if (realtime_stamped_publisher) {
-        trajectory_msgs::msg::JointTrajectory traj_stamped_msg = traj_msg;
-
-        // Get timestamp from leader joint states
-        {
-          std::lock_guard<std::mutex> lock(leader_joint_states_mutex_);
-          traj_stamped_msg.header.stamp = leader_joint_states_timestamp_;
-        }
-
-        realtime_stamped_publisher->try_publish(traj_stamped_msg);
-      }
     }
   }
 

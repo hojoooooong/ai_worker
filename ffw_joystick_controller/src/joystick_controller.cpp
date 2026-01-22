@@ -232,20 +232,6 @@ void JoystickController::publish_joint_trajectory(
     RCLCPP_WARN(get_node()->get_logger(),
         "Joint trajectory publisher not found for sensor: %s", sensor_name.c_str());
   }
-
-  // Publish stamped version for data storage with timestamp from leader joint states
-  auto joint_trajectory_stamped_publisher = sensor_joint_trajectory_stamped_publisher_[sensor_name];
-  if (joint_trajectory_stamped_publisher) {
-    auto trajectory_stamped_msg = trajectory_msg;
-
-    // Get timestamp from leader joint states
-    {
-      std::lock_guard<std::mutex> lock(leader_joint_states_mutex_);
-      trajectory_stamped_msg.header.stamp = leader_joint_states_timestamp_;
-    }
-
-    joint_trajectory_stamped_publisher->publish(trajectory_stamped_msg);
-  }
 }
 
 void JoystickController::publish_cmd_vel(bool swerve_mode, const JoystickValues & joystick_values)
@@ -434,14 +420,6 @@ void JoystickController::joint_states_callback(const sensor_msgs::msg::JointStat
   has_joint_states_ = true;
 }
 
-void JoystickController::leader_joint_states_callback(
-  const sensor_msgs::msg::JointState::SharedPtr msg)
-{
-  // Store timestamp from leader joint states for stamped topic
-  std::lock_guard<std::mutex> lock(leader_joint_states_mutex_);
-  leader_joint_states_timestamp_ = msg->header.stamp;
-}
-
 controller_interface::return_type JoystickController::update(
   const rclcpp::Time & time, const rclcpp::Duration & /*period*/)
 {
@@ -621,17 +599,6 @@ controller_interface::CallbackReturn JoystickController::on_configure(
     sensor_joint_trajectory_publisher_[sensor_name] =
       get_node()->create_publisher<trajectory_msgs::msg::JointTrajectory>(
       sensor_joint_trajectory_topic_[sensor_name], rclcpp::SystemDefaultsQoS());
-
-    // Create stamped topic publisher for data storage
-    std::string stamped_topic_name = sensor_joint_trajectory_topic_[sensor_name] + "_stamped";
-    sensor_joint_trajectory_stamped_publisher_[sensor_name] =
-      get_node()->create_publisher<trajectory_msgs::msg::JointTrajectory>(
-      stamped_topic_name, rclcpp::SystemDefaultsQoS());
-
-    RCLCPP_INFO(
-      get_node()->get_logger(),
-      "Created joint trajectory stamped publisher for sensor '%s' on topic: %s",
-      sensor_name.c_str(), stamped_topic_name.c_str());
   }
 
   // Create subscriber for joint states
@@ -640,15 +607,6 @@ controller_interface::CallbackReturn JoystickController::on_configure(
   joint_states_subscriber_ = get_node()->create_subscription<sensor_msgs::msg::JointState>(
     params_.joint_states_topic, rclcpp::SystemDefaultsQoS(),
     std::bind(&JoystickController::joint_states_callback, this, std::placeholders::_1));
-
-  // Create subscriber for leader joint states to get timestamp
-  leader_joint_states_subscriber_ = get_node()->create_subscription<sensor_msgs::msg::JointState>(
-    "/joint_states", rclcpp::SystemDefaultsQoS(),
-    std::bind(&JoystickController::leader_joint_states_callback, this, std::placeholders::_1));
-
-  RCLCPP_INFO(
-    get_node()->get_logger(),
-    "Subscribed to leader joint states topic: /joint_states for timestamp");
 
   // Create publisher for mode
   mode_pub_ = get_node()->create_publisher<std_msgs::msg::String>(

@@ -16,7 +16,6 @@
 #define JOINT_TRAJECTORY_COMMAND_BROADCASTER__JOINT_TRAJECTORY_COMMAND_BROADCASTER_HPP_
 
 #include <memory>
-#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -93,7 +92,6 @@ public:
 protected:
   bool init_joint_data();
   void joint_states_callback(const sensor_msgs::msg::JointState::SharedPtr msg);
-  void leader_joint_states_callback(const sensor_msgs::msg::JointState::SharedPtr msg);
   bool check_joints_synced() const;
   double calculate_mean_error() const;
   void update_trigger_state(const rclcpp::Time & current_time);
@@ -135,19 +133,6 @@ protected:
   std::unordered_map<std::string, double> follower_joint_positions_;
   bool joints_synced_ = false;
   bool first_publish_ = true;
-
-  // Leader joint states tracking for timestamp
-  std::shared_ptr<rclcpp::Subscription<sensor_msgs::msg::JointState>> leader_joint_states_subscriber_;
-  rclcpp::Time leader_joint_states_timestamp_{0, 0, RCL_ROS_TIME};
-  std::mutex leader_joint_states_mutex_;
-
-  // Stamped topic publishers for data storage
-  std::unordered_map<std::string,
-    std::shared_ptr<rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>>>
-  joint_trajectory_stamped_publishers_;
-  std::unordered_map<std::string,
-    std::shared_ptr<realtime_tools::RealtimePublisher<trajectory_msgs::msg::JointTrajectory>>>
-  realtime_joint_trajectory_stamped_publishers_;
 
   // Trigger-based auto mode control
   enum class AutoMode

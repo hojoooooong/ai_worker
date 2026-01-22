@@ -16,7 +16,6 @@
 #define JOYSTICK_CONTROLLER__JOYSTICK_CONTROLLER_HPP_
 
 #include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
 #include <functional>
@@ -92,7 +91,6 @@ public:
 
 protected:
   void joint_states_callback(const sensor_msgs::msg::JointState::SharedPtr msg);
-  void leader_joint_states_callback(const sensor_msgs::msg::JointState::SharedPtr msg);
 
   // Helper methods for better code organization
   double normalize_joystick_value(double raw_adc, bool is_tact_switch) const;
@@ -137,20 +135,12 @@ protected:
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr>
   sensor_joint_trajectory_publisher_;
   std::map<std::string,
-    rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr>
-  sensor_joint_trajectory_stamped_publisher_;
-  std::map<std::string,
     rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr> sensorxel_joy_publisher_;
 
   // Add per-sensor jog scale
   std::map<std::string, double> sensor_jog_scale_;
 
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_states_subscriber_;
-  
-  // Leader joint states tracking for timestamp
-  rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr leader_joint_states_subscriber_;
-  rclcpp::Time leader_joint_states_timestamp_{0, 0, RCL_ROS_TIME};
-  std::mutex leader_joint_states_mutex_;
 
   std::shared_ptr<ParamListener> param_listener_;
   Params params_;
