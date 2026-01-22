@@ -15,6 +15,7 @@
 #include "ffw_joint_state_broadcaster/ffw_joint_state_broadcaster.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <limits>
 #include <set>
 #include <string>
@@ -58,7 +59,6 @@ controller_interface::CallbackReturn FFWJointStateBroadcaster::on_configure(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
   joint_groups_.clear();
-  joint_to_group_.clear();
   publishers_.clear();
   rt_publishers_.clear();
 
@@ -213,11 +213,6 @@ controller_interface::CallbackReturn FFWJointStateBroadcaster::on_configure(
       continue;
     }
 
-    // Build joint to group mapping
-    for (const auto & joint : config.joints) {
-      joint_to_group_[joint] = group_name;
-    }
-
     // Create publisher
     publishers_[group_name] = get_node()->create_publisher<sensor_msgs::msg::JointState>(
       config.topic_name, rclcpp::SystemDefaultsQoS());
@@ -249,10 +244,10 @@ controller_interface::CallbackReturn FFWJointStateBroadcaster::on_configure(
 controller_interface::CallbackReturn FFWJointStateBroadcaster::on_activate(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  if (!init_joint_data()) {
+  if (!init_publishing_handles()) {
     RCLCPP_ERROR(
       get_node()->get_logger(),
-      "Failed to initialize joint data. Controller will not run.");
+      "Failed to initialize publishing handles. Controller will not run.");
     return controller_interface::CallbackReturn::ERROR;
   }
 
@@ -262,85 +257,89 @@ controller_interface::CallbackReturn FFWJointStateBroadcaster::on_activate(
 controller_interface::CallbackReturn FFWJointStateBroadcaster::on_deactivate(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  joint_data_.clear();
+  interface_handles_.clear();
+  group_infos_.clear();
+  group_names_.clear();
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
-bool FFWJointStateBroadcaster::init_joint_data()
+bool FFWJointStateBroadcaster::init_publishing_handles()
 {
-  joint_data_.clear();
+  interface_handles_.clear();
+  group_infos_.clear();
+  group_names_.clear();
 
-  if (state_interfaces_.empty()) {
+  if (state_interfaces_.empty() || joint_groups_.empty()) {
     return false;
   }
 
-  // Initialize joint data structure
-  for (const auto & state_interface : state_interfaces_) {
-    const std::string & joint_name = state_interface.get_prefix_name();
-    const std::string & interface_name = state_interface.get_interface_name();
-
-    // Map interface name if needed
-    std::string mapped_name = interface_name;
-    if (map_interface_to_joint_state_.count(interface_name) > 0) {
-      mapped_name = map_interface_to_joint_state_[interface_name];
-    }
-
-    // For joystick sensor interfaces (e.g., "sensorxel_l_joy/JOYSTICK X VALUE"),
-    // we need to create a synthetic joint name from the sensor name and interface
-    // Format: sensorxel_l_joy -> sensorxel_l_joy_x, sensorxel_l_joy_y, etc.
-    std::string data_key = joint_name;
-    if (interface_name.find("JOYSTICK") != std::string::npos) {
-      // This is a joystick sensor interface
-      // Create a synthetic joint name: sensorxel_l_joy + "_" + simplified_interface_name
-      std::string simplified_interface = interface_name;
-      // Replace spaces and convert to lowercase for consistency
-      std::replace(simplified_interface.begin(), simplified_interface.end(), ' ', '_');
-      // Extract meaningful part: "JOYSTICK X VALUE" -> "x", "JOYSTICK Y VALUE" -> "y", "JOYSTICK TACT SWITCH" -> "tact"
-      if (interface_name.find("X VALUE") != std::string::npos) {
-        simplified_interface = "x";
-      } else if (interface_name.find("Y VALUE") != std::string::npos) {
-        simplified_interface = "y";
-      } else if (interface_name.find("TACT SWITCH") != std::string::npos) {
-        simplified_interface = "tact";
-      } else {
-        simplified_interface = interface_name;
-        std::replace(simplified_interface.begin(), simplified_interface.end(), ' ', '_');
-        std::transform(simplified_interface.begin(), simplified_interface.end(),
-                      simplified_interface.begin(), ::tolower);
-      }
-      data_key = joint_name + "_" + simplified_interface;
-      // For joystick interfaces, we'll store them as "position" in joint state
-      mapped_name = "position";
-    }
-
-    // Initialize if not exists
-    if (joint_data_.count(data_key) == 0) {
-      joint_data_[data_key] = {};
-    }
-
-    joint_data_[data_key][mapped_name] = std::numeric_limits<double>::quiet_NaN();
+  // Build group_names_ vector for indexing
+  group_names_.reserve(joint_groups_.size());
+  for (const auto & [group_name, config] : joint_groups_) {
+    group_names_.push_back(group_name);
   }
 
-  return true;
-}
+  // Initialize group_infos_
+  group_infos_.resize(group_names_.size());
 
-void FFWJointStateBroadcaster::publish_joint_states(const rclcpp::Time & time)
-{
-  // Update joint data from state interfaces
-  for (const auto & state_interface : state_interfaces_) {
+  // Build joint name to group index and joint index mapping (done once, not in update loop)
+  std::unordered_map<std::string, std::pair<size_t, size_t>> joint_to_group_and_index;
+  for (size_t group_idx = 0; group_idx < group_names_.size(); ++group_idx) {
+    const std::string & group_name = group_names_[group_idx];
+    const auto & config = joint_groups_[group_name];
+    
+    group_infos_[group_idx].group_index = group_idx;
+    
+    for (size_t joint_idx = 0; joint_idx < config.joints.size(); ++joint_idx) {
+      const std::string & joint_name = config.joints[joint_idx];
+      joint_to_group_and_index[joint_name] = {group_idx, joint_idx};
+    }
+  }
+
+  // Pre-allocate message sizes and joint names for each group
+  for (size_t group_idx = 0; group_idx < group_names_.size(); ++group_idx) {
+    const std::string & group_name = group_names_[group_idx];
+    const auto & config = joint_groups_[group_name];
+    
+    if (rt_publishers_.count(group_name) == 0) {
+      continue;
+    }
+
+    auto & rt_pub = rt_publishers_[group_name];
+    if (!rt_pub) {
+      continue;
+    }
+
+    // Pre-allocate message size and set joint names (done once, not in update loop)
+    auto & msg = rt_pub->msg_;
+    const size_t num_joints = config.joints.size();
+    msg.name.resize(num_joints);
+    msg.position.resize(num_joints, std::numeric_limits<double>::quiet_NaN());
+    msg.velocity.resize(num_joints, std::numeric_limits<double>::quiet_NaN());
+    msg.effort.resize(num_joints, std::numeric_limits<double>::quiet_NaN());
+    
+    // Set joint names once
+    for (size_t i = 0; i < num_joints; ++i) {
+      msg.name[i] = config.joints[i];
+    }
+  }
+
+  // Process all state interfaces and create handles (all string parsing done here)
+  for (size_t interface_idx = 0; interface_idx < state_interfaces_.size(); ++interface_idx) {
+    const auto & state_interface = state_interfaces_[interface_idx];
     const std::string & joint_name = state_interface.get_prefix_name();
     const std::string & interface_name = state_interface.get_interface_name();
 
-    // Map interface name if needed
+    // Map interface name to joint state field (position, velocity, effort)
     std::string mapped_name = interface_name;
     if (map_interface_to_joint_state_.count(interface_name) > 0) {
       mapped_name = map_interface_to_joint_state_[interface_name];
     }
 
     // For joystick sensor interfaces, create synthetic joint name
+    // All string operations done here, not in update loop
     std::string data_key = joint_name;
     if (interface_name.find("JOYSTICK") != std::string::npos) {
-      // This is a joystick sensor interface
       std::string simplified_interface;
       if (interface_name.find("X VALUE") != std::string::npos) {
         simplified_interface = "x";
@@ -355,79 +354,109 @@ void FFWJointStateBroadcaster::publish_joint_states(const rclcpp::Time & time)
                       simplified_interface.begin(), ::tolower);
       }
       data_key = joint_name + "_" + simplified_interface;
-      mapped_name = "position";  // Store joystick values as position
+      mapped_name = "position";  // Joystick values stored as position
     }
 
-    // Get value
-    auto value = state_interface.get_optional();
-    if (value && joint_data_.count(data_key) > 0) {
-      joint_data_[data_key][mapped_name] = *value;
+    // Find which group(s) this joint belongs to
+    auto it = joint_to_group_and_index.find(data_key);
+    if (it == joint_to_group_and_index.end()) {
+      continue;  // This joint is not in any configured group
+    }
+
+    const auto & [group_idx, joint_idx] = it->second;
+    
+    // Create handle for this interface
+    InterfaceHandle handle;
+    handle.state_interface_index = interface_idx;
+    handle.group_index = group_idx;
+    handle.has_position = (mapped_name == "position");
+    handle.has_velocity = (mapped_name == "velocity");
+    handle.has_effort = (mapped_name == "effort");
+    
+    // Set message indices
+    handle.msg_position_index = handle.has_position ? joint_idx : SIZE_MAX;
+    handle.msg_velocity_index = handle.has_velocity ? joint_idx : SIZE_MAX;
+    handle.msg_effort_index = handle.has_effort ? joint_idx : SIZE_MAX;
+
+    interface_handles_.push_back(handle);
+
+    // Update group info indices
+    if (handle.has_position) {
+      group_infos_[group_idx].position_indices.push_back(interface_handles_.size() - 1);
+    }
+    if (handle.has_velocity) {
+      group_infos_[group_idx].velocity_indices.push_back(interface_handles_.size() - 1);
+    }
+    if (handle.has_effort) {
+      group_infos_[group_idx].effort_indices.push_back(interface_handles_.size() - 1);
     }
   }
 
-  // Publish for each configured group
-  for (const auto & [group_name, config] : joint_groups_) {
-    if (rt_publishers_.count(group_name) == 0 || config.joints.empty()) {
+  RCLCPP_INFO(
+    get_node()->get_logger(),
+    "Initialized %zu interface handles for %zu groups",
+    interface_handles_.size(), group_names_.size());
+
+  return true;
+}
+
+void FFWJointStateBroadcaster::publish_joint_states(const rclcpp::Time & time)
+{
+  // Real-time safe: Only copy values using pre-computed handles
+  // No string operations, no map lookups, no dynamic memory allocation
+
+  // Process each group separately (lock once per group, not per interface)
+  for (size_t group_idx = 0; group_idx < group_names_.size(); ++group_idx) {
+    const std::string & group_name = group_names_[group_idx];
+    
+    auto rt_pub_it = rt_publishers_.find(group_name);
+    if (rt_pub_it == rt_publishers_.end() || !rt_pub_it->second) {
       continue;
     }
 
-    auto & rt_pub = rt_publishers_[group_name];
-    if (!rt_pub) {
-      continue;
+    auto & rt_pub = rt_pub_it->second;
+    
+    // Try to lock once per group (non-blocking)
+    if (!rt_pub->trylock()) {
+      continue;  // Skip this group if lock fails
     }
 
-    if (rt_pub->trylock()) {
-      auto & msg = rt_pub->msg_;
-
-      // Set header with actual timestamp when sensor data was read
-      msg.header.stamp = time;
-      msg.header.frame_id = "";
-
-      // Clear and resize message
-      msg.name.clear();
-      msg.position.clear();
-      msg.velocity.clear();
-      msg.effort.clear();
-
-      // Fill message with joint data
-      for (const auto & joint_name : config.joints) {
-        if (joint_data_.count(joint_name) == 0) {
-          continue;
-        }
-
-        const auto & joint_interfaces = joint_data_[joint_name];
-        msg.name.push_back(joint_name);
-
-        // Add position if available
-        if (joint_interfaces.count("position") > 0 &&
-          !std::isnan(joint_interfaces.at("position")))
-        {
-          msg.position.push_back(joint_interfaces.at("position"));
-        } else {
-          msg.position.push_back(std::numeric_limits<double>::quiet_NaN());
-        }
-
-        // Add velocity if available
-        if (joint_interfaces.count("velocity") > 0 &&
-          !std::isnan(joint_interfaces.at("velocity")))
-        {
-          msg.velocity.push_back(joint_interfaces.at("velocity"));
-        } else {
-          msg.velocity.push_back(std::numeric_limits<double>::quiet_NaN());
-        }
-
-        // Add effort if available
-        if (joint_interfaces.count("effort") > 0 &&
-          !std::isnan(joint_interfaces.at("effort")))
-        {
-          msg.effort.push_back(joint_interfaces.at("effort"));
-        } else {
-          msg.effort.push_back(std::numeric_limits<double>::quiet_NaN());
-        }
+    auto & msg = rt_pub->msg_;
+    
+    // Set timestamp once per group
+    msg.header.stamp = time;
+    
+    // Copy all interface values for this group
+    // Iterate through handles and copy values for this group
+    for (const auto & handle : interface_handles_) {
+      if (handle.group_index != group_idx) {
+        continue;  // Skip handles for other groups
       }
 
-      rt_pub->unlockAndPublish();
+      // Get value from state interface (fast, no string operations)
+      const auto & state_interface = state_interfaces_[handle.state_interface_index];
+      auto value = state_interface.get_optional();
+      
+      if (!value.has_value()) {
+        continue;
+      }
+
+      const double val = *value;
+      
+      // Copy value directly to pre-allocated message position
+      // No push_back, no reallocation, just direct assignment
+      if (handle.has_position && handle.msg_position_index != SIZE_MAX) {
+        msg.position[handle.msg_position_index] = val;
+      }
+      if (handle.has_velocity && handle.msg_velocity_index != SIZE_MAX) {
+        msg.velocity[handle.msg_velocity_index] = val;
+      }
+      if (handle.has_effort && handle.msg_effort_index != SIZE_MAX) {
+        msg.effort[handle.msg_effort_index] = val;
+      }
     }
+    
+    rt_pub->unlockAndPublish();
   }
 }
 

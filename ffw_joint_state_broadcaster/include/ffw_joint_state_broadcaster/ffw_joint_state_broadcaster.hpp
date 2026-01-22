@@ -82,7 +82,7 @@ public:
     const rclcpp_lifecycle::State & previous_state) override;
 
 protected:
-  bool init_joint_data();
+  bool init_publishing_handles();
   void publish_joint_states(const rclcpp::Time & time);
 
 protected:
@@ -93,11 +93,34 @@ protected:
     std::vector<std::string> joints;
   };
 
+  // Real-time safe handle for interface data access
+  // All string parsing and mapping is done in on_activate(), not in update()
+  struct InterfaceHandle
+  {
+    size_t state_interface_index;  // Index into state_interfaces_ vector
+    size_t group_index;            // Index into group_names_ vector
+    size_t msg_position_index;     // Index in msg.position vector (or SIZE_MAX if not used)
+    size_t msg_velocity_index;     // Index in msg.velocity vector (or SIZE_MAX if not used)
+    size_t msg_effort_index;       // Index in msg.effort vector (or SIZE_MAX if not used)
+    bool has_position;             // Whether this interface provides position data
+    bool has_velocity;             // Whether this interface provides velocity data
+    bool has_effort;               // Whether this interface provides effort data
+  };
+
+  // Group information for fast access
+  struct GroupInfo
+  {
+    size_t group_index;                    // Index in group_names_
+    std::vector<size_t> position_indices;  // Indices of handles that provide position
+    std::vector<size_t> velocity_indices;  // Indices of handles that provide velocity
+    std::vector<size_t> effort_indices;    // Indices of handles that provide effort
+  };
+
   // Joint groups configuration (key: group name, value: config)
   std::unordered_map<std::string, JointGroupConfig> joint_groups_;
 
-  // Joint name to group mapping
-  std::unordered_map<std::string, std::string> joint_to_group_;
+  // Group names in order (for indexing)
+  std::vector<std::string> group_names_;
 
   // Publishers for each group (key: group name)
   std::unordered_map<std::string,
@@ -108,10 +131,14 @@ protected:
     std::shared_ptr<realtime_tools::RealtimePublisher<sensor_msgs::msg::JointState>>>
     rt_publishers_;
 
-  // Joint data storage
-  std::unordered_map<std::string, std::unordered_map<std::string, double>> joint_data_;
+  // Real-time safe handles: pre-computed mapping from interfaces to message positions
+  // All string operations are done in on_activate(), update() only uses indices
+  std::vector<InterfaceHandle> interface_handles_;
 
-  // Interface type mapping
+  // Group information for fast lookup
+  std::vector<GroupInfo> group_infos_;
+
+  // Interface type mapping (used only in on_activate)
   std::unordered_map<std::string, std::string> map_interface_to_joint_state_;
 };
 
