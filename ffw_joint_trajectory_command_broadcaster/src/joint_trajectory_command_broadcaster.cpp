@@ -74,16 +74,11 @@ const
   controller_interface::InterfaceConfiguration state_interfaces_config;
 
   state_interfaces_config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
-  // Request position, velocity, and effort interfaces for all joints
   for (const auto & joint : params_.left_joints) {
     state_interfaces_config.names.push_back(joint + "/" + HW_IF_POSITION);
-    state_interfaces_config.names.push_back(joint + "/" + HW_IF_VELOCITY);
-    state_interfaces_config.names.push_back(joint + "/" + HW_IF_EFFORT);
   }
   for (const auto & joint : params_.right_joints) {
     state_interfaces_config.names.push_back(joint + "/" + HW_IF_POSITION);
-    state_interfaces_config.names.push_back(joint + "/" + HW_IF_VELOCITY);
-    state_interfaces_config.names.push_back(joint + "/" + HW_IF_EFFORT);
   }
   return state_interfaces_config;
 }
