@@ -132,8 +132,9 @@ protected:
     rt_publishers_;
 
   // Real-time safe handles: pre-computed mapping from interfaces to message positions
+  // Grouped by group index for efficient iteration (no if checks in update loop)
   // All string operations are done in on_activate(), update() only uses indices
-  std::vector<InterfaceHandle> interface_handles_;
+  std::vector<std::vector<InterfaceHandle>> handles_per_group_;
 
   // Group information for fast lookup
   std::vector<GroupInfo> group_infos_;

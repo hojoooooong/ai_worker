@@ -257,7 +257,7 @@ controller_interface::CallbackReturn FFWJointStateBroadcaster::on_activate(
 controller_interface::CallbackReturn FFWJointStateBroadcaster::on_deactivate(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  interface_handles_.clear();
+  handles_per_group_.clear();
   group_infos_.clear();
   group_names_.clear();
   return controller_interface::CallbackReturn::SUCCESS;
@@ -265,7 +265,7 @@ controller_interface::CallbackReturn FFWJointStateBroadcaster::on_deactivate(
 
 bool FFWJointStateBroadcaster::init_publishing_handles()
 {
-  interface_handles_.clear();
+  handles_per_group_.clear();
   group_infos_.clear();
   group_names_.clear();
 
@@ -279,17 +279,19 @@ bool FFWJointStateBroadcaster::init_publishing_handles()
     group_names_.push_back(group_name);
   }
 
-  // Initialize group_infos_
-  group_infos_.resize(group_names_.size());
+  // Initialize group_infos_ and handles_per_group_ with correct size
+  const size_t num_groups = group_names_.size();
+  group_infos_.resize(num_groups);
+  handles_per_group_.resize(num_groups);
 
   // Build joint name to group index and joint index mapping (done once, not in update loop)
   std::unordered_map<std::string, std::pair<size_t, size_t>> joint_to_group_and_index;
   for (size_t group_idx = 0; group_idx < group_names_.size(); ++group_idx) {
     const std::string & group_name = group_names_[group_idx];
     const auto & config = joint_groups_[group_name];
-    
+
     group_infos_[group_idx].group_index = group_idx;
-    
+
     for (size_t joint_idx = 0; joint_idx < config.joints.size(); ++joint_idx) {
       const std::string & joint_name = config.joints[joint_idx];
       joint_to_group_and_index[joint_name] = {group_idx, joint_idx};
@@ -300,7 +302,7 @@ bool FFWJointStateBroadcaster::init_publishing_handles()
   for (size_t group_idx = 0; group_idx < group_names_.size(); ++group_idx) {
     const std::string & group_name = group_names_[group_idx];
     const auto & config = joint_groups_[group_name];
-    
+
     if (rt_publishers_.count(group_name) == 0) {
       continue;
     }
@@ -317,7 +319,7 @@ bool FFWJointStateBroadcaster::init_publishing_handles()
     msg.position.resize(num_joints, std::numeric_limits<double>::quiet_NaN());
     msg.velocity.resize(num_joints, std::numeric_limits<double>::quiet_NaN());
     msg.effort.resize(num_joints, std::numeric_limits<double>::quiet_NaN());
-    
+
     // Set joint names once
     for (size_t i = 0; i < num_joints; ++i) {
       msg.name[i] = config.joints[i];
@@ -364,7 +366,7 @@ bool FFWJointStateBroadcaster::init_publishing_handles()
     }
 
     const auto & [group_idx, joint_idx] = it->second;
-    
+
     // Create handle for this interface
     InterfaceHandle handle;
     handle.state_interface_index = interface_idx;
@@ -372,30 +374,38 @@ bool FFWJointStateBroadcaster::init_publishing_handles()
     handle.has_position = (mapped_name == "position");
     handle.has_velocity = (mapped_name == "velocity");
     handle.has_effort = (mapped_name == "effort");
-    
+
     // Set message indices
     handle.msg_position_index = handle.has_position ? joint_idx : SIZE_MAX;
     handle.msg_velocity_index = handle.has_velocity ? joint_idx : SIZE_MAX;
     handle.msg_effort_index = handle.has_effort ? joint_idx : SIZE_MAX;
 
-    interface_handles_.push_back(handle);
+    // Add handle to the corresponding group's vector (pre-grouped for efficient iteration)
+    handles_per_group_[group_idx].push_back(handle);
 
-    // Update group info indices
+    // Update group info indices (for potential future use)
+    const size_t handle_index = handles_per_group_[group_idx].size() - 1;
     if (handle.has_position) {
-      group_infos_[group_idx].position_indices.push_back(interface_handles_.size() - 1);
+      group_infos_[group_idx].position_indices.push_back(handle_index);
     }
     if (handle.has_velocity) {
-      group_infos_[group_idx].velocity_indices.push_back(interface_handles_.size() - 1);
+      group_infos_[group_idx].velocity_indices.push_back(handle_index);
     }
     if (handle.has_effort) {
-      group_infos_[group_idx].effort_indices.push_back(interface_handles_.size() - 1);
+      group_infos_[group_idx].effort_indices.push_back(handle_index);
     }
+  }
+
+  // Count total handles for logging
+  size_t total_handles = 0;
+  for (const auto & handles : handles_per_group_) {
+    total_handles += handles.size();
   }
 
   RCLCPP_INFO(
     get_node()->get_logger(),
-    "Initialized %zu interface handles for %zu groups",
-    interface_handles_.size(), group_names_.size());
+    "Initialized %zu interface handles across %zu groups",
+    total_handles, group_names_.size());
 
   return true;
 }
@@ -408,41 +418,37 @@ void FFWJointStateBroadcaster::publish_joint_states(const rclcpp::Time & time)
   // Process each group separately (lock once per group, not per interface)
   for (size_t group_idx = 0; group_idx < group_names_.size(); ++group_idx) {
     const std::string & group_name = group_names_[group_idx];
-    
+
     auto rt_pub_it = rt_publishers_.find(group_name);
     if (rt_pub_it == rt_publishers_.end() || !rt_pub_it->second) {
       continue;
     }
 
     auto & rt_pub = rt_pub_it->second;
-    
+
     // Try to lock once per group (non-blocking)
     if (!rt_pub->trylock()) {
       continue;  // Skip this group if lock fails
     }
 
     auto & msg = rt_pub->msg_;
-    
+
     // Set timestamp once per group
     msg.header.stamp = time;
-    
-    // Copy all interface values for this group
-    // Iterate through handles and copy values for this group
-    for (const auto & handle : interface_handles_) {
-      if (handle.group_index != group_idx) {
-        continue;  // Skip handles for other groups
-      }
 
+    // Copy all interface values for this group
+    // No if checks needed - handles_per_group_[group_idx] contains only handles for this group
+    for (const auto & handle : handles_per_group_[group_idx]) {
       // Get value from state interface (fast, no string operations)
       const auto & state_interface = state_interfaces_[handle.state_interface_index];
       auto value = state_interface.get_optional();
-      
+
       if (!value.has_value()) {
         continue;
       }
 
       const double val = *value;
-      
+
       // Copy value directly to pre-allocated message position
       // No push_back, no reallocation, just direct assignment
       if (handle.has_position && handle.msg_position_index != SIZE_MAX) {
@@ -455,7 +461,7 @@ void FFWJointStateBroadcaster::publish_joint_states(const rclcpp::Time & time)
         msg.effort[handle.msg_effort_index] = val;
       }
     }
-    
+
     rt_pub->unlockAndPublish();
   }
 }
