@@ -234,6 +234,30 @@ void JoystickController::publish_joint_trajectory(
   }
 }
 
+void JoystickController::publish_joint_state(
+  const std::vector<std::string> & controlled_joints,
+  const std::vector<double> & positions,
+  const std::string & sensor_name,
+  const rclcpp::Time & time)
+{
+  auto joint_state_msg = sensor_msgs::msg::JointState();
+  joint_state_msg.header.stamp = time;
+  joint_state_msg.header.frame_id = "";
+  joint_state_msg.name = controlled_joints;
+  joint_state_msg.position = positions;
+  // Set velocity and effort to NaN (not available from joystick)
+  joint_state_msg.velocity.resize(positions.size(), std::numeric_limits<double>::quiet_NaN());
+  joint_state_msg.effort.resize(positions.size(), std::numeric_limits<double>::quiet_NaN());
+
+  auto joint_state_publisher = sensor_joint_state_stamped_publisher_[sensor_name];
+  if (joint_state_publisher) {
+    joint_state_publisher->publish(joint_state_msg);
+  } else {
+    RCLCPP_WARN(get_node()->get_logger(),
+        "Joint state publisher not found for sensor: %s", sensor_name.c_str());
+  }
+}
+
 void JoystickController::publish_cmd_vel(bool swerve_mode, const JoystickValues & joystick_values)
 {
   geometry_msgs::msg::Twist twist_msg;
@@ -484,6 +508,8 @@ controller_interface::return_type JoystickController::update(
       }
 
       publish_joint_trajectory(controlled_joints, positions, sensor_name);
+      // Publish joint state with timestamp from update() function
+      publish_joint_state(controlled_joints, positions, sensor_name, time);
     }
 
     was_active_ = any_sensorxel_joy_active;
@@ -599,6 +625,24 @@ controller_interface::CallbackReturn JoystickController::on_configure(
     sensor_joint_trajectory_publisher_[sensor_name] =
       get_node()->create_publisher<trajectory_msgs::msg::JointTrajectory>(
       sensor_joint_trajectory_topic_[sensor_name], rclcpp::SystemDefaultsQoS());
+
+    // Create joint state publisher for this sensor with timestamp from update() function
+    std::string joint_state_topic_name = sensor_joint_trajectory_topic_[sensor_name];
+    // Replace "joint_trajectory" with "joint_states_stamped" in topic name
+    size_t pos = joint_state_topic_name.find("joint_trajectory");
+    if (pos != std::string::npos) {
+      joint_state_topic_name.replace(pos, std::string("joint_trajectory").length(),
+          "joint_states_stamped");
+    } else {
+      // Fallback: append "_joint_states_stamped" if pattern not found
+      joint_state_topic_name += "_joint_states_stamped";
+    }
+    sensor_joint_state_stamped_publisher_[sensor_name] =
+      get_node()->create_publisher<sensor_msgs::msg::JointState>(
+      joint_state_topic_name, rclcpp::SystemDefaultsQoS());
+    RCLCPP_INFO(get_node()->get_logger(),
+        "Created joint state stamped publisher for sensor: %s, topic: %s",
+        sensor_name.c_str(), joint_state_topic_name.c_str());
   }
 
   // Create subscriber for joint states
