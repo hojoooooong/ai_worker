@@ -60,10 +60,6 @@ RUN cd /root && \
     cd vuer && \
     pip3 install -e '.[all]'
 
-# Install tqdm and numpy with --ignore-installed to override Debian packages
-RUN pip3 install --ignore-installed --no-deps tqdm && \
-    pip3 install --ignore-installed numpy
-
 RUN cd /root && \
     git clone -b jazzy https://github.com/ROBOTIS-GIT/yourdfpy.git && \
     cd yourdfpy && \
@@ -80,6 +76,8 @@ RUN echo 'export PYTHONPATH=/root/pyroki/src:$PYTHONPATH' >> ~/.bashrc && \
     export PYTHONPATH=/root/pyroki/src:$PYTHONPATH
 RUN echo 'export PYTHONPATH=/root/yourdfpy/src:$PYTHONPATH' >> ~/.bashrc && \
     export PYTHONPATH=/root/yourdfpy/src:$PYTHONPATH
+
+RUN pip3 uninstall argparse
 
 RUN chmod +x /tmp/gen_cert.sh && \
     cp /tmp/gen_cert.sh ~/

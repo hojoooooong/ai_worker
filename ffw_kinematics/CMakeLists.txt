@@ -23,7 +23,6 @@ find_package(Eigen3 QUIET)
 # ffw Arm IK Solver executable
 add_executable(arm_ik_solver
   src/arm_ik_solver.cpp
-  src/chainiksolverpos_nr_jl.cpp
 )
 
 target_include_directories(arm_ik_solver PUBLIC
@@ -71,84 +70,10 @@ target_link_libraries(hand_ik_solver
   orocos-kdl
 )
 
-# Pinocchio IK Solver executable
-if(pinocchio_FOUND)
-  add_executable(arm_ik_solver_pinoccino src/arm_ik_solver_pinoccino.cpp)
-
-  target_include_directories(arm_ik_solver_pinoccino PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-    ${sensor_msgs_INCLUDE_DIRS}
-    ${geometry_msgs_INCLUDE_DIRS}
-    ${std_msgs_INCLUDE_DIRS}
-    ${trajectory_msgs_INCLUDE_DIRS}
-  )
-
-  # Add pinocchio and Eigen includes
-  if(pinocchio_FOUND)
-    target_include_directories(arm_ik_solver_pinoccino PUBLIC
-      ${pinocchio_INCLUDE_DIRS}
-    )
-  endif()
-  if(Eigen3_FOUND)
-    target_include_directories(arm_ik_solver_pinoccino PUBLIC
-      ${EIGEN3_INCLUDE_DIR}
-    )
-  endif()
-
-  target_compile_features(arm_ik_solver_pinoccino PUBLIC c_std_99 cxx_std_17)
-
-  target_link_libraries(arm_ik_solver_pinoccino
-    rclcpp::rclcpp
-    ${sensor_msgs_LIBRARIES}
-    ${geometry_msgs_LIBRARIES}
-    ${std_msgs_LIBRARIES}
-    ${trajectory_msgs_LIBRARIES}
-  )
-
-  # Link pinocchio and Eigen libraries
-  if(pinocchio_FOUND)
-    target_link_libraries(arm_ik_solver_pinoccino
-      ${pinocchio_LIBRARIES}
-    )
-  else()
-    # Fallback: try to link with standard library names
-    target_link_libraries(arm_ik_solver_pinoccino
-      pinocchio
-    )
-  endif()
-  if(Eigen3_FOUND)
-    target_link_libraries(arm_ik_solver_pinoccino
-      Eigen3::Eigen
-    )
-  endif()
-else()
-  message(WARNING "pinocchio not found, skipping arm_ik_solver_pinoccino build")
-endif()
-
 
 # Install C++ executables
-if(pinocchio_FOUND)
-  install(TARGETS arm_ik_solver hand_ik_solver arm_ik_solver_pinoccino
-    DESTINATION lib/${PROJECT_NAME})
-else()
-  install(TARGETS arm_ik_solver hand_ik_solver
-    DESTINATION lib/${PROJECT_NAME})
-endif()
-
-# Install Python scripts
-install(PROGRAMS
-  src/arm_ik_solver_pyroki.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME arm_ik_solver_pyroki
-)
-
-install(PROGRAMS
-  src/pyroki_test.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME pyroki_test
-)
-
+install(TARGETS arm_ik_solver hand_ik_solver
+  DESTINATION lib/${PROJECT_NAME})
 
 # Install headers
 install(DIRECTORY include/

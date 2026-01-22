@@ -173,6 +173,8 @@ RUN echo 'export PYTHONPATH=/root/pyroki/src:$PYTHONPATH' >> ~/.bashrc && \
 RUN echo 'export PYTHONPATH=/root/yourdfpy/src:$PYTHONPATH' >> ~/.bashrc && \
     export PYTHONPATH=/root/yourdfpy/src:$PYTHONPATH
 
+RUN pip3 uninstall argparse
+
 RUN chmod +x /tmp/gen_cert.sh && \
     cp /tmp/gen_cert.sh ~/
 
