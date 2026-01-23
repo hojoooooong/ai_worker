@@ -424,8 +424,8 @@ def generate_launch_description():
             head_eef_tracker_node,
             # camera_timer_20s,
             # camera_timer_10s,
-            ffw_arm_launch,
-            pedal_launch,
-            # preset_hand_controller,
+            # ffw_arm_launch,
+            # pedal_launch,
+            preset_hand_controller,
         ]
     )
