@@ -46,7 +46,9 @@ def generate_launch_description():
 
     ffw_bringup_path = os.path.join(
         get_package_share_directory('ffw_bringup'))
+    ffw_bringup_src_path = str(Path(__file__).resolve().parent.parent)
 
+    # Set gazebo sim resource path
     gazebo_resource_path = SetEnvironmentVariable(
         name='GZ_SIM_RESOURCE_PATH',
         value=[
@@ -54,12 +56,6 @@ def generate_launch_description():
             str(Path(ffw_description_path).parent.resolve())
             ]
         )
-    
-    dual_laser_config = os.path.join(
-        get_package_share_directory('dual_laser_merger'),
-        'config',
-        'dual_laser_merger_params.yaml'
-    )
 
     gazebo = IncludeLaunchDescription(
                 PythonLaunchDescriptionSource([os.path.join(
@@ -165,10 +161,26 @@ def generate_launch_description():
         package='dual_laser_merger',
         executable='dual_laser_merger_node',
         output='screen',
-        parameters=[
-            dual_laser_config,      # 1. YAML 파일 로드
-            {'use_sim_time': True}  # 2. 시뮬레이션 시간 사용 강제 (덮어쓰기)
-        ],
+        parameters=[{
+            'laser_1_topic': '/scan_left',
+            'laser_2_topic': '/scan_right',
+            'merged_scan_topic': '/scan',
+            'merged_cloud_topic': '/scan_cloud',
+            'target_frame': 'base_link',
+            'angle_min': -3.141592654,
+            'angle_max': 3.141592654,
+            'angle_increment': 0.006544985,
+            'scan_time': 0.1,
+            'range_min': 0.05,
+            'range_max': 20.0,
+            'use_inf': True,
+            'tolerance': 0.05,
+            'queue_size': 10,
+            'enable_shadow_filter': True,
+            'enable_average_filter': True,
+        }, {
+            'use_sim_time': True,
+        }],
     )
 
     rviz_config_file = os.path.join(ffw_description_path, 'rviz', 'ffw_sg2.rviz')
