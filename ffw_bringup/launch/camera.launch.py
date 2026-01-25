@@ -20,21 +20,58 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, TimerAction
+from launch.actions import GroupAction, IncludeLaunchDescription, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch_ros.actions import SetRemap
 
 
 def generate_launch_description():
     bringup_launch_dir = os.path.join(get_package_share_directory('ffw_bringup'), 'launch')
 
-    camera_zed = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(bringup_launch_dir, 'camera_zed.launch.py')),
-        launch_arguments={'camera_model': 'zedm'}.items()
-    )
-    camera_realsense = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(bringup_launch_dir,
-                                                   'camera_realsense.launch.py'))
-    )
+    # ZED camera with Scale AI topic remapping
+    # ZED publishes: /zed/zed_node/left/image_rect_color/compressed
+    # Scale AI expects: /robot/camera/cam_left_head/image_raw/compressed
+    camera_zed = GroupAction([
+        SetRemap(
+            src='/zed/zed_node/left/image_rect_color/compressed',
+            dst='/robot/camera/cam_left_head/image_raw/compressed'),
+        SetRemap(
+            src='/zed/zed_node/right/image_rect_color/compressed',
+            dst='/robot/camera/cam_right_head/image_raw/compressed'),
+        SetRemap(
+            src='/zed/zed_node/left/camera_info',
+            dst='/robot/camera/cam_left_head/camera_info'),
+        SetRemap(
+            src='/zed/zed_node/right/camera_info',
+            dst='/robot/camera/cam_right_head/camera_info'),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(bringup_launch_dir, 'camera_zed.launch.py')),
+            launch_arguments={'camera_model': 'zedm'}.items()
+        ),
+    ])
+
+    # RealSense cameras with Scale AI topic remapping
+    # RealSense publishes: /camera_left/color/image_raw/compressed
+    # Scale AI expects: /robot/camera/cam_left_wrist/image_raw/compressed
+    camera_realsense = GroupAction([
+        SetRemap(
+            src='/camera_left/color/image_raw/compressed',
+            dst='/robot/camera/cam_left_wrist/image_raw/compressed'),
+        SetRemap(
+            src='/camera_right/color/image_raw/compressed',
+            dst='/robot/camera/cam_right_wrist/image_raw/compressed'),
+        SetRemap(
+            src='/camera_left/color/camera_info',
+            dst='/robot/camera/cam_left_wrist/camera_info'),
+        SetRemap(
+            src='/camera_right/color/camera_info',
+            dst='/robot/camera/cam_right_wrist/camera_info'),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(bringup_launch_dir, 'camera_realsense.launch.py')),
+        ),
+    ])
 
     return LaunchDescription([
         camera_zed,

@@ -128,6 +128,61 @@
       <inertia ixx="8.907301100e-04" ixy="-5.211330800e-06" ixz="1.758054200e-05" iyy="7.631788100e-04" iyz="-1.022156300e-06" izz="1.339403400e-03"/>
     </inertial>
   </link>
+  <!-- ZED Mini Camera (Head) -->
+  <link name="zedm_camera_link"/>
+  <joint name="zedm_joint" type="fixed">
+    <parent link="head_link2"/>
+    <child link="zedm_camera_link"/>
+    <origin rpy="0 0 0" xyz="0.0238122 -0.00651797 -0.0242094"/>
+  </joint>
+  <link name="zedm_camera_center">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://ffw_description/meshes/common/follower/zedm.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="zedm_mat">
+        <color rgba="0.25 0.25 0.25 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://ffw_description/meshes/common/follower/zedm.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="zedm_camera_center_joint" type="fixed">
+    <parent link="zedm_camera_link"/>
+    <child link="zedm_camera_center"/>
+    <origin rpy="0 0 0" xyz="0 0 0.01325"/>
+  </joint>
+  <!-- ZED Left Camera (cam_left_head) -->
+  <link name="zedm_left_camera_frame"/>
+  <joint name="zedm_left_camera_joint" type="fixed">
+    <parent link="zedm_camera_center"/>
+    <child link="zedm_left_camera_frame"/>
+    <origin rpy="0 0 0" xyz="0 0.0315 0"/>
+  </joint>
+  <link name="zedm_left_camera_optical_frame"/>
+  <joint name="zedm_left_camera_optical_joint" type="fixed">
+    <parent link="zedm_left_camera_frame"/>
+    <child link="zedm_left_camera_optical_frame"/>
+    <origin rpy="-1.57079632679 0.0 -1.57079632679" xyz="0 0 0"/>
+  </joint>
+  <!-- ZED Right Camera (cam_right_head) -->
+  <link name="zedm_right_camera_frame"/>
+  <joint name="zedm_right_camera_joint" type="fixed">
+    <parent link="zedm_camera_center"/>
+    <child link="zedm_right_camera_frame"/>
+    <origin rpy="0 0 0" xyz="0 -0.0315 0"/>
+  </joint>
+  <link name="zedm_right_camera_optical_frame"/>
+  <joint name="zedm_right_camera_optical_joint" type="fixed">
+    <parent link="zedm_right_camera_frame"/>
+    <child link="zedm_right_camera_optical_frame"/>
+    <origin rpy="-1.57079632679 0.0 -1.57079632679" xyz="0 0 0"/>
+  </joint>
   <joint name="arm_l_joint1" type="revolute">
     <parent link="arm_base_link"/>
     <child link="arm_l_link1"/>
