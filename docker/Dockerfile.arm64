@@ -141,6 +141,7 @@ RUN mkdir -p ${COLCON_WS}/src && \
 
 RUN cd ${COLCON_WS} && \
     apt-get update && \
+    apt-get install -y ros-${ROS_DISTRO}-rmw-zenoh-cpp && \
     rosdep update && \
     rosdep install -i --from-path src --rosdistro $ROS_DISTRO --skip-keys="librealsense2" -y && \
     rm -rf /var/lib/apt/lists/*
@@ -149,8 +150,12 @@ RUN bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash && \
     cd ${COLCON_WS} && \
     colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release"
 
+# Set zenoh as default RMW implementation
+ENV RMW_IMPLEMENTATION=rmw_zenoh_cpp
+
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc  && \
     echo "source ${COLCON_WS}/install/setup.bash" >> ~/.bashrc  && \
+    echo "export RMW_IMPLEMENTATION=rmw_zenoh_cpp" >> ~/.bashrc && \
     echo "alias cb='colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release'" >> ~/.bashrc && \
     echo "alias ffw_lg2_leader_ai='ros2 launch ffw_bringup ffw_lg2_leader_ai.launch.py'" >> ~/.bashrc && \
     echo "alias ffw_bg2_follower_ai='ros2 launch ffw_bringup ffw_bg2_follower_ai.launch.py'" >> ~/.bashrc && \
@@ -162,11 +167,14 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc  && \
 RUN mkdir -p /var/run/agent && \
     chmod 777 /var/run/agent
 
-RUN git clone -b main https://github.com/ROBOTIS-GIT/robotis_system_manager.git /opt/robotis_system_manager
+RUN git clone https://github.com/ROBOTIS-GIT/robotis_system_manager.git /opt/robotis_system_manager
 
 ENV PYTHONPATH=/opt/robotis_system_manager:${PYTHONPATH}
 
-RUN pip install --no-cache-dir -r /opt/robotis_system_manager/requirements.txt
+# Install requirements.txt excluding tqdm (already installed as debian package by ros-jazzy-rmw-zenoh-cpp)
+# Filter out tqdm lines and use --ignore-installed to skip already installed packages
+RUN sed -E '/^tqdm[>=<]?/d' /opt/robotis_system_manager/requirements.txt > /tmp/requirements_filtered.txt && \
+    pip install --no-cache-dir --ignore-installed -r /tmp/requirements_filtered.txt
 
 # New-style s6-rc services (recommended in s6-overlay v3 docs)
 # Define services under /etc/s6-overlay/s6-rc.d and add them to the user bundle.

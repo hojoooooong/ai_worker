@@ -19,6 +19,8 @@ fi
 export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-30}
 export ROS_DISTRO=${ROS_DISTRO:-jazzy}
 export COLCON_WS=${COLCON_WS:-/root/ros2_ws}
+# Set zenoh as default RMW implementation
+export RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_zenoh_cpp}
 
 # Enable s6-overlay debug logging (set S6_VERBOSITY=1 for more verbose output)
 export S6_VERBOSITY=${S6_VERBOSITY:-1}
@@ -26,6 +28,7 @@ export S6_VERBOSITY=${S6_VERBOSITY:-1}
 echo "[${SERVICE_NAME}] Starting service..."
 echo "[${SERVICE_NAME}] ROS_DOMAIN_ID=${ROS_DOMAIN_ID}"
 echo "[${SERVICE_NAME}] ROS_DISTRO=${ROS_DISTRO}"
+echo "[${SERVICE_NAME}] RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION}"
 echo "[${SERVICE_NAME}] COLCON_WS=${COLCON_WS}"
 echo "[${SERVICE_NAME}] PID: $$"
 
