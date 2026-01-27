@@ -1,6 +1,13 @@
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 Changelog for package ffw
 ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+1.1.17 (2026-01-27)
+-------------------
+* Supported System Manager
+* Added s6-overlay services
+* Contributors: Hyungyu Kim
+
 1.1.16 (2026-01-20)
 -------------------
 * Added dual_laser_merger for SG2

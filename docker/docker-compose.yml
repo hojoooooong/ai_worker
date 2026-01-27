@@ -1,7 +1,7 @@
 services:
   ai_worker:
     container_name: ai_worker
-    image: robotis/ai-worker:system-manager-dev
+    image: robotis/ai-worker:latest
     build:
       context: ..
       dockerfile: docker/Dockerfile.arm64
