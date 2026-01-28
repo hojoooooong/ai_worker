@@ -29,20 +29,20 @@
             </material>
          </collision>
          <inertial>
-            <origin xyz="-1.6712049e-03 -1.2917175e-03 6.0855259e-02" />
-            <mass value="3.5303653e-01" />
-            <inertia ixx="5.9370227e-04" ixy="1.9045567e-06" ixz="-4.5830168e-06"
-            iyy="3.8516080e-04" iyz="2.0197014e-05"
-            izz="3.1555740e-04" />
+            <origin xyz="-2.6226269e-03 -1.6836251e-03 6.2283668e-02" />
+            <mass value="3.0185182e-01" />
+            <inertia ixx="5.2854441e-04" ixy="-9.4576969e-06" ixz="-1.8870822e-06"
+            iyy="3.8232027e-04" iyz="-3.4927346e-07"
+            izz="2.0124950e-04" />
          </inertial>
       </link>
       <!-- THUMB -->
       <joint name="${prefix}finger_l_joint1" type="revolute">
          <parent link="${prefix}hx5_d20_left_base" />
          <child link="${prefix}finger_l_link1" />
-         <origin xyz="0.0145 -0.02624 0.05394" rpy="0.523599 0 0" />
-         <axis xyz="0 0 1" />
-         <limit velocity="4.8" effort="1000" lower="0.0" upper="2.2" />
+         <origin xyz="-0.0125 -0.03493 0.04475" rpy="0 0 0" />
+         <axis xyz="1 0 0" />
+         <limit velocity="4.8" effort="1000" lower="-1.57" upper="1.57" />
          <dynamics damping="0.05" />
       </joint>
       <link name="${prefix}finger_l_link1">
@@ -65,19 +65,19 @@
             </material>
          </collision>
          <inertial>
-            <origin xyz="-3.5667993e-04 -1.3999343e-02 3.5920775e-04" />
-            <mass value="1.1760611e-02" />
-            <inertia ixx="1.3023455e-06" ixy="-5.3492769e-08" ixz="-1.5068343e-10"
-            iyy="1.0556381e-06" iyz="-5.3427751e-08"
-            izz="1.3024709e-06" />
+            <origin xyz="2.3807543e-02 -1.3864423e-03 -1.7245618e-05" />
+            <mass value="4.0868482e-02" />
+            <inertia ixx="2.8827174e-06" ixy="-1.2704973e-06" ixz="1.6732651e-08"
+            iyy="9.3996806e-06" iyz="1.5043128e-09"
+            izz="9.6857093e-06" />
          </inertial>
       </link>
       <joint name="${prefix}finger_l_joint2" type="revolute">
          <parent link="${prefix}finger_l_link1" />
          <child link="${prefix}finger_l_link2" />
-         <origin xyz="0.0 -0.028 0.0" rpy="-0.523599 0 0" />
-         <axis xyz="1 0 0" />
-         <limit velocity="4.8" effort="1000" lower="-0.3" upper="2.0" />
+         <origin xyz="0.039 0.0 0.0" rpy="0 0 0" />
+         <axis xyz="0 0 1" />
+         <limit velocity="4.8" effort="1000" lower="0.0" upper="3.14" />
          <dynamics damping="0.05" />
       </joint>
       <link name="${prefix}finger_l_link2">
@@ -100,19 +100,19 @@
             </material>
          </collision>
          <inertial>
-            <origin xyz="1.1730962e-05 -1.3370146e-02 1.2381933e-02" />
-            <mass value="7.2148285e-02" />
-            <inertia ixx="2.0147275e-05" ixy="-1.4760922e-08" ixz="6.8034568e-09"
-            iyy="1.7510414e-05" iyz="1.6235264e-06"
-            izz="8.0461430e-06" />
+            <origin xyz="3.5667920e-04 -1.3999343e-02 3.5920711e-04" />
+            <mass value="1.1760611e-02" />
+            <inertia ixx="1.3023455e-06" ixy="5.3492870e-08" ixz="1.5067505e-09"
+            iyy="1.0556381e-06" iyz="-5.3427868e-08"
+            izz="1.3024709e-06" />
          </inertial>
       </link>
       <joint name="${prefix}finger_l_joint3" type="revolute">
          <parent link="${prefix}finger_l_link2" />
          <child link="${prefix}finger_l_link3" />
-         <origin xyz="0.0 -0.0145 0.035" rpy="0 0 0" />
-         <axis xyz="0 1 0" />
-         <limit velocity="4.8" effort="1000" lower="0.0" upper="1.57" />
+         <origin xyz="0.0 -0.028 0.0" rpy="0 0 0" />
+         <axis xyz="1 0 0" />
+         <limit velocity="4.8" effort="1000" lower="-1.57" upper="0.0" />
          <dynamics damping="0.05" />
       </joint>
       <link name="${prefix}finger_l_link3">
@@ -135,19 +135,19 @@
             </material>
          </collision>
          <inertial>
-            <origin xyz="-4.0805550e-06 -1.0146203e-04 2.4156485e-02" />
+            <origin xyz="1.0146203e-04 -1.1343515e-02 4.0805550e-06" />
             <mass value="3.4689700e-02" />
-            <inertia ixx="5.4029785e-06" ixy="5.4161055e-10" ixz="8.5483839e-10"
-            iyy="5.0370173e-06" iyz="-1.1035638e-07"
-            izz="2.2580703e-06" />
+            <inertia ixx="5.0370173e-06" ixy="1.1035638e-07" ixz="5.4161055e-10"
+            iyy="2.2580703e-06" iyz="-8.5483839e-10"
+            izz="5.4029785e-06" />
          </inertial>
       </link>
       <joint name="${prefix}finger_l_joint4" type="revolute">
          <parent link="${prefix}finger_l_link3" />
          <child link="${prefix}finger_l_link4" />
-         <origin xyz="0.0 0.0 0.0355" rpy="0 0 0" />
-         <axis xyz="0 1 0" />
-         <limit velocity="4.8" effort="1000" lower="0.0" upper="1.57" />
+         <origin xyz="0.0 -0.0355 0.0" rpy="0 0 0" />
+         <axis xyz="1 0 0" />
+         <limit velocity="4.8" effort="1000" lower="-1.57" upper="0.0" />
          <dynamics damping="0.05" />
       </joint>
       <link name="${prefix}finger_l_link4">
@@ -170,17 +170,17 @@
             </material>
          </collision>
          <inertial>
-            <origin xyz="7.1025148e-04 -1.4717103e-04 1.8098640e-02" />
-            <mass value="1.3637201e-02" />
-            <inertia ixx="2.2351803e-06" ixy="-3.2698952e-09" ixz="-1.4362365e-07"
-            iyy="2.0188065e-06" iyz="-5.9990689e-08"
-            izz="1.0814083e-06" />
+            <origin xyz="-1.7938916e-05 -1.6839136e-02 2.3602399e-04" />
+            <mass value="4.3781048e-02" />
+            <inertia ixx="1.1225495e-05" ixy="1.5543842e-08" ixz="5.8360810e-10"
+            iyy="2.7956646e-06" iyz="3.1575945e-07"
+            izz="1.1392997e-05" />
          </inertial>
       </link>
       <joint name="${prefix}finger_end_l_joint1" type="fixed">
          <parent link="${prefix}finger_l_link4" />
          <child link="${prefix}finger_end_l_link1" />
-         <origin xyz="0.0 0.0 0.02425" rpy="0 0 0" />
+         <origin xyz="0.0 -0.03975 0.0" rpy="0 0 0" />
       </joint>
       <link name="${prefix}finger_end_l_link1">
          <visual>
@@ -197,7 +197,7 @@
       <joint name="${prefix}finger_l_joint5" type="revolute">
          <parent link="${prefix}hx5_d20_left_base" />
          <child link="${prefix}finger_l_link5" />
-         <origin xyz="-0.0015 -0.03608 0.09575" rpy="0 0 0" />
+         <origin xyz="-0.0015 -0.03608 0.10275" rpy="0 0 0" />
          <axis xyz="1 0 0" />
          <limit velocity="4.8" effort="1000" lower="-0.6" upper="0.6" />
          <dynamics damping="0.05" />
@@ -222,11 +222,11 @@
             </material>
          </collision>
          <inertial>
-            <origin xyz="5.2161821e-03 -1.8190051e-05 2.1122832e-02" />
-            <mass value="3.8746882e-02" />
-            <inertia ixx="3.5211189e-06" ixy="1.3625281e-08" ixz="-3.7225930e-07"
-            iyy="5.7770789e-06" iyz="1.1482566e-09"
-            izz="4.6967406e-06" />
+            <origin xyz="5.193401000e-03 -1.816308100e-05 2.111550700e-02" />
+            <mass value="3.880441100e-02" />
+            <inertia ixx="3.524993200e-06" ixy="1.364133900e-08" ixz="-3.766210300e-07"
+            iyy="5.792157500e-06" iyz="1.153419900e-09"
+            izz="4.712679800e-06" />
          </inertial>
       </link>
       <joint name="${prefix}finger_l_joint6" type="revolute">
@@ -354,7 +354,7 @@
       <joint name="${prefix}finger_l_joint9" type="revolute">
          <parent link="${prefix}hx5_d20_left_base" />
          <child link="${prefix}finger_l_link9" />
-         <origin xyz="-0.0015 -0.00908 0.10353" rpy="0 0 0" />
+         <origin xyz="-0.0015 -0.00908 0.11053" rpy="0 0 0" />
          <axis xyz="1 0 0" />
          <limit velocity="4.8" effort="1000" lower="-0.6" upper="0.6" />
          <dynamics damping="0.05" />
@@ -379,11 +379,11 @@
             </material>
          </collision>
          <inertial>
-            <origin xyz="5.2161821e-03 -1.8190051e-05 2.1122832e-02" />
-            <mass value="3.8746882e-02" />
-            <inertia ixx="3.5211189e-06" ixy="1.3625281e-08" ixz="-3.7225930e-07"
-            iyy="5.7770789e-06" iyz="1.1482566e-09"
-            izz="4.6967406e-06" />
+            <origin xyz="5.193401000e-03 -1.816308100e-05 2.111550700e-02" />
+            <mass value="3.880441100e-02" />
+            <inertia ixx="3.524993200e-06" ixy="1.364133900e-08" ixz="-3.766210300e-07"
+            iyy="5.792157500e-06" iyz="1.153419900e-09"
+            izz="4.712679800e-06" />
          </inertial>
       </link>
       <joint name="${prefix}finger_l_joint10" type="revolute">
@@ -511,7 +511,7 @@
       <joint name="${prefix}finger_l_joint13" type="revolute">
          <parent link="${prefix}hx5_d20_left_base" />
          <child link="${prefix}finger_l_link13" />
-         <origin xyz="-0.0015 0.01792 0.09775" rpy="0 0 0" />
+         <origin xyz="-0.0015 0.01792 0.10475" rpy="0 0 0" />
          <axis xyz="1 0 0" />
          <limit velocity="4.8" effort="1000" lower="-0.6" upper="0.6" />
          <dynamics damping="0.05" />
@@ -536,11 +536,11 @@
             </material>
          </collision>
          <inertial>
-            <origin xyz="5.2161821e-03 -1.8190051e-05 2.1122832e-02" />
-            <mass value="3.8746882e-02" />
-            <inertia ixx="3.5211189e-06" ixy="1.3625281e-08" ixz="-3.7225930e-07"
-            iyy="5.7770789e-06" iyz="1.1482566e-09"
-            izz="4.6967406e-06" />
+            <origin xyz="5.193401000e-03 -1.816308100e-05 2.111550700e-02" />
+            <mass value="3.880441100e-02" />
+            <inertia ixx="3.524993200e-06" ixy="1.364133900e-08" ixz="-3.766210300e-07"
+            iyy="5.792157500e-06" iyz="1.153419900e-09"
+            izz="4.712679800e-06" />
          </inertial>
       </link>
       <joint name="${prefix}finger_l_joint14" type="revolute">
@@ -668,7 +668,7 @@
       <joint name="${prefix}finger_l_joint17" type="revolute">
          <parent link="${prefix}hx5_d20_left_base" />
          <child link="${prefix}finger_l_link17" />
-         <origin xyz="-0.0015 0.04492 0.07875" rpy="0 0 0" />
+         <origin xyz="-0.0015 0.04492 0.08575" rpy="0 0 0" />
          <axis xyz="1 0 0" />
          <limit velocity="4.8" effort="1000" lower="-0.6" upper="0.6" />
          <dynamics damping="0.05" />
@@ -693,11 +693,11 @@
             </material>
          </collision>
          <inertial>
-            <origin xyz="5.2161821e-03 -1.8190051e-05 2.1122832e-02" />
-            <mass value="3.8746882e-02" />
-            <inertia ixx="3.5211189e-06" ixy="1.3625281e-08" ixz="-3.7225930e-07"
-            iyy="5.7770789e-06" iyz="1.1482566e-09"
-            izz="4.6967406e-06" />
+            <origin xyz="5.193401000e-03 -1.816308100e-05 2.111550700e-02" />
+            <mass value="3.880441100e-02" />
+            <inertia ixx="3.524993200e-06" ixy="1.364133900e-08" ixz="-3.766210300e-07"
+            iyy="5.792157500e-06" iyz="1.153419900e-09"
+            izz="4.712679800e-06" />
          </inertial>
       </link>
       <joint name="${prefix}finger_l_joint18" type="revolute">
