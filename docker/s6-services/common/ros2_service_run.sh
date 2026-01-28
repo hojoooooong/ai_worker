@@ -19,8 +19,6 @@ fi
 export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-30}
 export ROS_DISTRO=${ROS_DISTRO:-jazzy}
 export COLCON_WS=${COLCON_WS:-/root/ros2_ws}
-# Set zenoh as default RMW implementation
-export RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_zenoh_cpp}
 
 # Enable s6-overlay debug logging (set S6_VERBOSITY=1 for more verbose output)
 export S6_VERBOSITY=${S6_VERBOSITY:-1}

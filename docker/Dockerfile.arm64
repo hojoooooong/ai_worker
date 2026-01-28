@@ -39,7 +39,7 @@ WORKDIR /usr/src
 
 RUN git clone https://github.com/IntelRealSense/librealsense.git && \
     cd librealsense && \
-    git checkout 1e34346894be975e8e594fab22f8b31a89a710bb
+    git checkout 1e34346894be975e8e594fab22f8b31a89710bb
 
 # Build and install
 RUN cd /usr/src/librealsense \
@@ -152,12 +152,8 @@ RUN bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash && \
     cd ${COLCON_WS} && \
     colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release"
 
-# Set zenoh as default RMW implementation
-ENV RMW_IMPLEMENTATION=rmw_zenoh_cpp
-
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc  && \
     echo "source ${COLCON_WS}/install/setup.bash" >> ~/.bashrc  && \
-    echo "export RMW_IMPLEMENTATION=rmw_zenoh_cpp" >> ~/.bashrc && \
     echo "alias cb='colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release'" >> ~/.bashrc && \
     echo "alias ffw_lg2_leader_ai='ros2 launch ffw_bringup ffw_lg2_leader_ai.launch.py'" >> ~/.bashrc && \
     echo "alias ffw_bg2_follower_ai='ros2 launch ffw_bringup ffw_bg2_follower_ai.launch.py'" >> ~/.bashrc && \
