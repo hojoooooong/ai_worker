@@ -1,0 +1,27 @@
+--- ffw_description/ros2_control/ffw_lg2_mini_leader/ffw_lg2_mini_leader_right.ros2_control.xacro
++++ ffw_description/ros2_control/ffw_lg2_mini_leader/ffw_lg2_mini_leader_right.ros2_control.xacro
+@@ -32,6 +32,16 @@
+             <param name="set_dynamixel_data_srv_name">dynamixel_hardware_interface/set_dxl_data</param>
+             <param name="reboot_dxl_srv_name">dynamixel_hardware_interface/reboot_dxl</param>
+             <param name="set_dxl_torque_srv_name">dynamixel_hardware_interface/set_dxl_torque</param>
++            <param name="transmission_to_joint_matrix">
++              2.2, 0, 0, 0, 0, 0, 0, 0,
++              0, 1, 0, 0, 0, 0, 0, 0,
++              0, 0, 1, 0, 0, 0, 0, 0,
++              0, 0, 0, 1, 0, 0, 0, 0,
++              0, 0, 0, 0, 1, 0, 0, 0,
++              0, 0, 0, 0, 0, 1, 0, 0,
++              0, 0, 0, 0, 0, 0, 2.0, 0,
++              0, 0, 0, 0, 0, 0, 0, 1
++            </param>
+           </xacro:unless>
+         </hardware>
+       </xacro:unless>
+@@ -86,6 +96,7 @@
+         <param name="Position P Gain">150</param>
+         <param name="Position D Gain">300</param>
+         <param name="Current Limit">100</param>
++        <param name="Homing Offset">-200</param>
+       </gpio>
+       <gpio name="dxl1">
+         <param name="type">dxl</param>

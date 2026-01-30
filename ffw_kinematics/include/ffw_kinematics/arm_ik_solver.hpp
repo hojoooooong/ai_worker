@@ -61,6 +61,7 @@ private:
   void checkCurrentJointLimits();
   void solveIK(const geometry_msgs::msg::PoseStamped & target_pose, const std::string & arm);
   void publishCurrentPoses();
+  void checkTopicWatchdog();
 
 private:
   // bool ik_toggle_;
@@ -155,6 +156,18 @@ private:
   bool setup_complete_;
   bool has_joint_states_;
   bool has_previous_solution_;
+
+  // Watchdog for slow start feature
+  rclcpp::Time right_last_target_pose_time_;
+  rclcpp::Time left_last_target_pose_time_;
+  bool slow_mode_active_;
+  rclcpp::Time slow_mode_start_time_;
+  rclcpp::TimerBase::SharedPtr watchdog_timer_;
+  double watchdog_timeout_sec_;
+  double slow_mode_constant_duration_;
+  double slow_mode_transition_duration_;
+  double slow_mode_initial_time_from_start_ms_;
+  bool was_in_timeout_;
 };
 
 #endif  // FFW_KINEMATICS__ARM_IK_SOLVER_HPP_

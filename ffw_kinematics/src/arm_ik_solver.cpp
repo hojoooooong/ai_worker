@@ -41,10 +41,10 @@ FfwArmIKSolver::FfwArmIKSolver()
   // Coordinate transformation parameters (lift_joint origin from URDF)
   this->declare_parameter<double>("lift_joint_x_offset", 0.0055);
   this->declare_parameter<double>("lift_joint_y_offset", 0.0);
-  this->declare_parameter<double>("lift_joint_z_offset", 1.6316);
+  this->declare_parameter<double>("lift_joint_z_offset", 1.4316);
 
   // IK solver parameters
-  this->declare_parameter<double>("max_joint_step_degrees", 50.0);
+  this->declare_parameter<double>("max_joint_step_degrees", 30.0);
   this->declare_parameter<int>("ik_max_iterations", 800);
   this->declare_parameter<double>("ik_tolerance", 1e-2);
 
@@ -54,10 +54,17 @@ FfwArmIKSolver::FfwArmIKSolver()
   this->declare_parameter<double>("previous_solution_weight", 0.5); // Weight for previous IK solution
 
   // Low-pass filter between current state and IK target
-  this->declare_parameter<double>("lpf_alpha", 0.8);
+  this->declare_parameter<double>("lpf_alpha", 0.2);
 
   // Joint limits parameters (can be overridden if needed)
   this->declare_parameter<bool>("use_hardcoded_joint_limits", true);
+
+  // Watchdog parameters for slow start feature
+  this->declare_parameter<double>("watchdog_timeout_sec", 1.0);
+  this->declare_parameter<double>("slow_mode_constant_duration_sec", 1.0);
+  this->declare_parameter<double>("slow_mode_transition_duration_sec", 4.0);
+  this->declare_parameter<double>("slow_mode_initial_time_from_start_ms", 300.0);
+  this->declare_parameter<int>("watchdog_check_period_ms", 100);
 
   base_link_ = this->get_parameter("base_link").as_string();
   arm_base_link_ = this->get_parameter("arm_base_link").as_string();
@@ -90,17 +97,30 @@ FfwArmIKSolver::FfwArmIKSolver()
 
   use_hardcoded_joint_limits_ = this->get_parameter("use_hardcoded_joint_limits").as_bool();
 
+  // Initialize watchdog parameters
+  watchdog_timeout_sec_ = this->get_parameter("watchdog_timeout_sec").as_double();
+  slow_mode_constant_duration_ = this->get_parameter("slow_mode_constant_duration_sec").as_double();
+  slow_mode_transition_duration_ = this->get_parameter("slow_mode_transition_duration_sec").as_double();
+  slow_mode_initial_time_from_start_ms_ = this->get_parameter("slow_mode_initial_time_from_start_ms").as_double();
+  int watchdog_check_period_ms = this->get_parameter("watchdog_check_period_ms").as_int();
+
+  // Initialize watchdog state
+  auto current_time = this->get_clock()->now();
+  right_last_target_pose_time_ = current_time;
+  left_last_target_pose_time_ = current_time;
+  slow_mode_active_ = false;
+  was_in_timeout_ = false;
+
+  // Create watchdog timer
+  watchdog_timer_ = this->create_wall_timer(
+    std::chrono::milliseconds(watchdog_check_period_ms),
+    std::bind(&FfwArmIKSolver::checkTopicWatchdog, this));
+
   RCLCPP_INFO(this->get_logger(), "🚀 Dual-Arm IK Solver starting...");
   RCLCPP_INFO(this->get_logger(), "Base link: %s", base_link_.c_str());
   RCLCPP_INFO(this->get_logger(), "Arm base link: %s", arm_base_link_.c_str());
   RCLCPP_INFO(this->get_logger(), "Right end effector link: %s", right_end_effector_link_.c_str());
   RCLCPP_INFO(this->get_logger(), "Left end effector link: %s", left_end_effector_link_.c_str());
-
-  // ik_toggle_ = false;
-
-  // toggle_sub_ = this->create_subscription<std_msgs::msg::Bool>(
-  //   "/teleop_control/toggle", 10,
-  //   std::bind(&FfwArmIKSolver::toggleCallback, this, std::placeholders::_1));
 
   robot_description_sub_ = this->create_subscription<std_msgs::msg::String>(
     "/robot_description", rclcpp::QoS(1).transient_local(),
@@ -166,12 +186,6 @@ FfwArmIKSolver::FfwArmIKSolver()
   RCLCPP_INFO(this->get_logger(), "Left arm: %s", left_current_pose_topic.c_str());
 }
 
-// void FfwArmIKSolver::toggleCallback(const std_msgs::msg::Bool::SharedPtr msg)
-// {
-//   RCLCPP_INFO(this->get_logger(), "Received toggle via topic");
-//   ik_toggle_ = msg->data;
-// }
-
 void FfwArmIKSolver::robotDescriptionCallback(const std_msgs::msg::String::SharedPtr msg)
 {
   RCLCPP_INFO(this->get_logger(), "Received robot_description via topic");
@@ -230,7 +244,7 @@ void FfwArmIKSolver::processRobotDescription(const std::string & robot_descripti
     // Initialize previous solution arrays
     right_previous_solution_.resize(right_chain_.getNrOfJoints());
     left_previous_solution_.resize(left_chain_.getNrOfJoints());
-
+    
     // Initialize with zero positions
     for (unsigned int i = 0; i < right_chain_.getNrOfJoints(); i++) {
       right_previous_solution_(i) = 0.0;
@@ -241,7 +255,7 @@ void FfwArmIKSolver::processRobotDescription(const std::string & robot_descripti
 
     setup_complete_ = true;
     RCLCPP_INFO(this->get_logger(), "🎉 IK solver setup complete!");
-    RCLCPP_INFO(this->get_logger(), "   Hybrid IK: %s (current: %.1f%%, previous: %.1f%%)",
+    RCLCPP_INFO(this->get_logger(), "   Hybrid IK: %s (current: %.1f%%, previous: %.1f%%)", 
                 use_hybrid_ik_ ? "enabled" : "disabled",
                 current_position_weight_ * 100.0, previous_solution_weight_ * 100.0);
   } catch (const std::exception & e) {
@@ -521,6 +535,9 @@ void FfwArmIKSolver::rightTargetPoseCallback(const geometry_msgs::msg::PoseStamp
     return;
   }
 
+  // Update watchdog timestamp
+  right_last_target_pose_time_ = this->get_clock()->now();
+
   // RCLCPP_INFO(this->get_logger(), "Received RIGHT arm target pose (base_link frame):");
   // RCLCPP_INFO(this->get_logger(), "Position: x=%.3f, y=%.3f, z=%.3f",
   //   msg->pose.position.x, msg->pose.position.y, msg->pose.position.z);
@@ -529,7 +546,6 @@ void FfwArmIKSolver::rightTargetPoseCallback(const geometry_msgs::msg::PoseStamp
   geometry_msgs::msg::PoseStamped arm_base_pose = *msg;
 
   // Transform: base_link -> arm_base_link using configured offsets
-  // Note: lift_joint_position_ is not used to make IK independent of lift height
   arm_base_pose.pose.position.x -= lift_joint_x_offset_;
   arm_base_pose.pose.position.y -= lift_joint_y_offset_;
   arm_base_pose.pose.position.z -= lift_joint_z_offset_;
@@ -561,6 +577,9 @@ void FfwArmIKSolver::leftTargetPoseCallback(const geometry_msgs::msg::PoseStampe
     return;
   }
 
+  // Update watchdog timestamp
+  left_last_target_pose_time_ = this->get_clock()->now();
+
   // RCLCPP_INFO(this->get_logger(), "🎯 Received LEFT arm target pose (base_link frame):");
   // RCLCPP_INFO(this->get_logger(), "   Position: x=%.3f, y=%.3f, z=%.3f",
   //                  msg->pose.position.x, msg->pose.position.y, msg->pose.position.z);
@@ -569,7 +588,6 @@ void FfwArmIKSolver::leftTargetPoseCallback(const geometry_msgs::msg::PoseStampe
   geometry_msgs::msg::PoseStamped arm_base_pose = *msg;
 
   // Transform: base_link -> arm_base_link using configured offsets
-  // Note: lift_joint_position_ is not used to make IK independent of lift height
   arm_base_pose.pose.position.x -= lift_joint_x_offset_;
   arm_base_pose.pose.position.y -= lift_joint_y_offset_;
   arm_base_pose.pose.position.z -= lift_joint_z_offset_;
@@ -633,11 +651,11 @@ void FfwArmIKSolver::solveIK(
   // Get initial guess using hybrid approach
   KDL::JntArray q_init(chain_ptr->getNrOfJoints());
   KDL::JntArray * previous_solution_ptr = (arm == "right") ? &right_previous_solution_ : &left_previous_solution_;
-
+  
   if (use_hybrid_ik_ && has_previous_solution_) {
     // Hybrid: weighted combination of current position and previous solution
     for (size_t i = 0; i < current_positions_ptr->size(); i++) {
-      q_init(i) = current_position_weight_ * (*current_positions_ptr)[i] +
+      q_init(i) = current_position_weight_ * (*current_positions_ptr)[i] + 
                   previous_solution_weight_ * (*previous_solution_ptr)(i);
     }
     RCLCPP_DEBUG(this->get_logger(), "Using hybrid initial guess for %s arm (%.1f%% current + %.1f%% previous)",
@@ -689,7 +707,7 @@ void FfwArmIKSolver::solveIK(
       auto initial_duration = end_time - initial_start_time;
       RCLCPP_ERROR(this->get_logger(), "%s arm IK failed with current guess (error: %d, %s), (time: %.3f ms, %.1f Hz), (initial time: %.3f ms, %.1f Hz)",
         arm.c_str(), ik_result, error_msg, duration.seconds() * 1000.0, 1.0 / duration.seconds(), initial_duration.seconds() * 1000.0, 1.0 / initial_duration.seconds());
-
+      
       if (initial_duration.seconds() > 0.03) {
         return;
       }
@@ -792,13 +810,29 @@ void FfwArmIKSolver::solveIK(
       point.positions[i] = q_filtered(i);
     }
 
-    // Set time from start (immediate execution)
-    point.time_from_start = rclcpp::Duration::from_nanoseconds(0);
+    // Set time from start with gradual transition for slow mode
+    if (slow_mode_active_) {
+      auto elapsed = (this->get_clock()->now() - slow_mode_start_time_).seconds();
+      double time_from_start_sec;
+      
+      if (elapsed < slow_mode_constant_duration_) {
+        // First phase: constant at initial time_from_start value (convert ms to sec)
+        time_from_start_sec = slow_mode_initial_time_from_start_ms_ / 1000.0;
+      } else if (elapsed < (slow_mode_constant_duration_ + slow_mode_transition_duration_)) {
+        // Second phase: linear transition from initial value to 0.0 (convert ms to sec)
+        double transition_progress = (elapsed - slow_mode_constant_duration_) / slow_mode_transition_duration_;
+        time_from_start_sec = (slow_mode_initial_time_from_start_ms_ / 1000.0) * (1.0 - transition_progress);
+      } else {
+        // Should not reach here (watchdog should disable slow_mode_active_)
+        time_from_start_sec = 0.0;
+      }
+      point.time_from_start = rclcpp::Duration::from_seconds(time_from_start_sec);
+    } else {
+      // Fast mode: immediate execution
+      point.time_from_start = rclcpp::Duration::from_nanoseconds(0);
+    }
     joint_trajectory.points.push_back(point);
 
-    // if (ik_toggle_) {
-    //   (*publisher_ptr)->publish(joint_trajectory);
-    // }
     (*publisher_ptr)->publish(joint_trajectory);
 
     // Log joint solution
@@ -885,6 +919,67 @@ void FfwArmIKSolver::publishCurrentPoses()
     left_pose.pose.orientation.w = qw;
 
     left_current_pose_pub_->publish(left_pose);
+  }
+}
+
+void FfwArmIKSolver::checkTopicWatchdog()
+{
+  if (!setup_complete_) {
+    return;
+  }
+
+  auto current_time = this->get_clock()->now();
+  
+  // Check if either topic has timed out
+  double right_elapsed = (current_time - right_last_target_pose_time_).seconds();
+  double left_elapsed = (current_time - left_last_target_pose_time_).seconds();
+  
+  bool right_timeout = right_elapsed > watchdog_timeout_sec_;
+  bool left_timeout = left_elapsed > watchdog_timeout_sec_;
+  
+  bool currently_in_timeout = right_timeout || left_timeout;
+  
+  // Enter slow mode if timeout detected and not already in slow mode
+  if (currently_in_timeout && !slow_mode_active_) {
+    slow_mode_active_ = true;
+    slow_mode_start_time_ = current_time;
+    was_in_timeout_ = true;
+    RCLCPP_WARN(this->get_logger(),
+      "⚠️ Topic watchdog triggered: %s timeout detected (Right: %.2f sec, Left: %.2f sec). Entering slow mode.",
+      right_timeout && left_timeout ? "Both arms" : (right_timeout ? "Right arm" : "Left arm"),
+      right_elapsed, left_elapsed);
+  }
+  
+  // If in slow mode, check transition status
+  if (slow_mode_active_) {
+    double elapsed_in_slow_mode = (current_time - slow_mode_start_time_).seconds();
+    double total_slow_duration = slow_mode_constant_duration_ + slow_mode_transition_duration_;
+    
+    // If both topics are receiving messages again (transitioned from timeout to no-timeout),
+    // reset the transition start time to begin the 5+5 second transition from now
+    if (!currently_in_timeout && was_in_timeout_) {
+      slow_mode_start_time_ = current_time;
+      was_in_timeout_ = false;
+      RCLCPP_INFO(this->get_logger(),
+        "✅ Both topics resumed. Starting slow->fast transition (5+5 sec from now).");
+    }
+    
+    // Update timeout state
+    if (currently_in_timeout) {
+      was_in_timeout_ = true;
+    }
+    
+    // Check if slow mode duration has completed (from when transition started/reset)
+    if (elapsed_in_slow_mode >= total_slow_duration) {
+      slow_mode_active_ = false;
+      was_in_timeout_ = false;
+      RCLCPP_INFO(this->get_logger(),
+        "✅ Slow mode transition complete (%.2f sec). Returning to fast mode.",
+        elapsed_in_slow_mode);
+    }
+  } else {
+    // Not in slow mode, reset timeout tracking
+    was_in_timeout_ = currently_in_timeout;
   }
 }
 

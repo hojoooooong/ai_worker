@@ -262,6 +262,13 @@ def generate_launch_description():
         package='ffw_kinematics',
         executable='ffw_arm_ik_solver',
         output='screen',
+        parameters=[{
+            'watchdog_timeout_sec': 1.0,
+            'slow_mode_constant_duration_sec': 5.0,
+            'slow_mode_transition_duration_sec': 5.0,
+            'slow_mode_initial_time_from_start_ms': 500.0,
+            'watchdog_check_period_ms': 100,
+        }],
     )
 
     pedal_launch_dir = PathJoinSubstitution([FindPackageShare('dynamixel_hardware_interface_example_2'), 'launch'])

@@ -4,7 +4,7 @@
     <ros2_control name="${name}" type="system">
       <hardware>
         <plugin>dynamixel_hardware_interface/DynamixelHardware</plugin>
-        <param name="port_name">/dev/ttyACM0</param>
+        <param name="port_name">/dev/serial/by-id/usb-ROBOTIS_OpenRB-150_2DFEE81F503059384C2E3120FF050A3D-if00</param>
         <param name="baud_rate">1000000</param>
         <param name="dynamixel_model_folder">/param/dxl_model</param>
         <param name="number_of_joints">1</param>
