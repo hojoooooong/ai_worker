@@ -72,6 +72,7 @@ def generate_launch_description():
             'joint_trajectory_command_broadcaster',
             'trigger_position_controller',
             'joystick_controller',
+            'ffw_joint_state_broadcaster',
         ],
         parameters=[robot_description],
     )
