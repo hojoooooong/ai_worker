@@ -46,7 +46,7 @@ def generate_launch_description():
             FindPackageShare('ffw_bringup'),
             'config',
             'ffw_lg2_rev2_leader',
-            'ffw_lg2_rev2_leader_ai_hardware_controller.yaml',
+            'ffw_lg2_leader_ai_hardware_controller.yaml',
         ]
     )
 
