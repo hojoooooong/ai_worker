@@ -29,7 +29,7 @@
          <collision>
             <origin xyz="0 0 0" rpy="0 0 0" />
             <geometry>
-               <mesh filename="${meshes_file_direction}/body_arm_assy.stl" scale="0.001 0.001 0.001" />
+               <cylinder radius="0.08" length="0.15" />
             </geometry>
          </collision>
          <inertial>
@@ -62,7 +62,7 @@
          <collision>
             <origin xyz="0 0 0" rpy="0 0 0" />
             <geometry>
-               <mesh filename="${meshes_file_direction}/head_link1.stl" scale="0.001 0.001 0.001" />
+               <cylinder radius="0.06" length="0.10" />
             </geometry>
          </collision>
          <inertial>
@@ -94,7 +94,7 @@
          <collision>
             <origin xyz="0 0 0" rpy="0 0 0" />
             <geometry>
-               <mesh filename="${meshes_file_direction}/head_link2.stl" scale="0.001 0.001 0.001" />
+               <cylinder radius="0.05" length="0.08" />
             </geometry>
          </collision>
          <inertial>
@@ -131,9 +131,9 @@
                </material>
          </visual>
          <collision>
-            <origin xyz="0 0 0" rpy="0 0 0" />
+            <origin xyz="0 0.0615 0" rpy="0 0 0" />
             <geometry>
-               <mesh filename="${meshes_file_direction}/arm_l_link1.stl" scale="0.001 0.001 0.001" />
+               <cylinder radius="0.04" length="0.123" />
             </geometry>
          </collision>
          <inertial>
@@ -163,9 +163,9 @@
                </material>
          </visual>
          <collision>
-            <origin xyz="0 0 0" rpy="0 0 0" />
+            <origin xyz="0 0 -0.0825" rpy="1.5708 0 0" />
             <geometry>
-               <mesh filename="${meshes_file_direction}/arm_l_link2.stl" scale="0.001 0.001 0.001" />
+               <cylinder radius="0.04" length="0.165" />
             </geometry>
          </collision>
          <inertial>
@@ -195,9 +195,9 @@
                </material>
          </visual>
          <collision>
-            <origin xyz="0 0 0" rpy="0 0 0" />
+            <origin xyz="0.0205 0 -0.0825" rpy="0 0 0" />
             <geometry>
-               <mesh filename="${meshes_file_direction}/arm_l_link3.stl" scale="0.001 0.001 0.001" />
+               <cylinder radius="0.035" length="0.135" />
             </geometry>
          </collision>
          <inertial>
@@ -227,9 +227,9 @@
                </material>
          </visual>
          <collision>
-            <origin xyz="0 0 0" rpy="0 0 0" />
+            <origin xyz="0 -0.0205 -0.07445" rpy="1.5708 0 0" />
             <geometry>
-               <mesh filename="${meshes_file_direction}/arm_l_link4.stl" scale="0.001 0.001 0.001" />
+               <cylinder radius="0.035" length="0.1489" />
             </geometry>
          </collision>
          <inertial>
@@ -259,9 +259,9 @@
                </material>
          </visual>
          <collision>
-            <origin xyz="0 0 0" rpy="0 0 0" />
+            <origin xyz="0 0 -0.05205" rpy="0 0 0" />
             <geometry>
-               <mesh filename="${meshes_file_direction}/arm_l_link5.stl" scale="0.001 0.001 0.001" />
+               <cylinder radius="0.03" length="0.1041" />
             </geometry>
          </collision>
          <inertial>
@@ -291,9 +291,9 @@
                </material>
          </visual>
          <collision>
-            <origin xyz="0 0 0" rpy="0 0 0" />
+            <origin xyz="0 0 -0.04425" rpy="1.5708 0 0" />
             <geometry>
-               <mesh filename="${meshes_file_direction}/arm_l_link6.stl" scale="0.001 0.001 0.001" />
+               <cylinder radius="0.03" length="0.0885" />
             </geometry>
          </collision>
          <inertial>
@@ -323,9 +323,9 @@
                </material>
          </visual>
          <collision>
-            <origin xyz="0 0 0" rpy="0 0 0" />
+            <origin xyz="0.01275 0 -0.0277" rpy="0 0 0" />
             <geometry>
-               <mesh filename="${meshes_file_direction}/arm_l_link7.stl" scale="0.001 0.001 0.001" />
+               <cylinder radius="0.025" length="0.055" />
             </geometry>
          </collision>
          <inertial>
@@ -360,9 +360,9 @@
                </material>
          </visual>
          <collision>
-            <origin xyz="0 0 0" rpy="0 0 0" />
+            <origin xyz="0 -0.0615 0" rpy="0 0 0" />
             <geometry>
-               <mesh filename="${meshes_file_direction}/arm_r_link1.stl" scale="0.001 0.001 0.001" />
+               <cylinder radius="0.04" length="0.123" />
             </geometry>
          </collision>
          <inertial>
@@ -392,9 +392,9 @@
                </material>
          </visual>
          <collision>
-            <origin xyz="0 0 0" rpy="0 0 0" />
+            <origin xyz="0 0 -0.0825" rpy="1.5708 0 0" />
             <geometry>
-               <mesh filename="${meshes_file_direction}/arm_r_link2.stl" scale="0.001 0.001 0.001" />
+               <cylinder radius="0.04" length="0.165" />
             </geometry>
          </collision>
          <inertial>
@@ -424,9 +424,9 @@
                </material>
          </visual>
          <collision>
-            <origin xyz="0 0 0" rpy="0 0 0" />
+            <origin xyz="0.0205 0 -0.0825" rpy="0 0 0" />
             <geometry>
-               <mesh filename="${meshes_file_direction}/arm_r_link3.stl" scale="0.001 0.001 0.001" />
+               <cylinder radius="0.035" length="0.135" />
             </geometry>
          </collision>
          <inertial>
@@ -456,9 +456,9 @@
                </material>
          </visual>
          <collision>
-            <origin xyz="0 0 0" rpy="0 0 0" />
+            <origin xyz="0 -0.0205 -0.07445" rpy="1.5708 0 0" />
             <geometry>
-               <mesh filename="${meshes_file_direction}/arm_r_link4.stl" scale="0.001 0.001 0.001" />
+               <cylinder radius="0.035" length="0.1489" />
             </geometry>
          </collision>
          <inertial>
@@ -488,9 +488,9 @@
                </material>
          </visual>
          <collision>
-            <origin xyz="0 0 0" rpy="0 0 0" />
+            <origin xyz="0 0 -0.05205" rpy="0 0 0" />
             <geometry>
-               <mesh filename="${meshes_file_direction}/arm_r_link5.stl" scale="0.001 0.001 0.001" />
+               <cylinder radius="0.03" length="0.1041" />
             </geometry>
          </collision>
          <inertial>
@@ -520,9 +520,9 @@
                </material>
          </visual>
          <collision>
-            <origin xyz="0 0 0" rpy="0 0 0" />
+            <origin xyz="0 0 -0.04425" rpy="1.5708 0 0" />
             <geometry>
-               <mesh filename="${meshes_file_direction}/arm_r_link6.stl" scale="0.001 0.001 0.001" />
+               <cylinder radius="0.03" length="0.0885" />
             </geometry>
          </collision>
          <inertial>
@@ -552,9 +552,9 @@
                </material>
          </visual>
          <collision>
-            <origin xyz="0 0 0" rpy="0 0 0" />
+            <origin xyz="0.01275 0 -0.0277" rpy="0 0 0" />
             <geometry>
-               <mesh filename="${meshes_file_direction}/arm_r_link7.stl" scale="0.001 0.001 0.001" />
+               <cylinder radius="0.025" length="0.055" />
             </geometry>
          </collision>
          <inertial>

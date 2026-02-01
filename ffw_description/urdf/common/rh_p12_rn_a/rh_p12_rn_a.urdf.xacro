@@ -18,9 +18,9 @@
     <!-- base -->
     <link name="${prefix}rh_p12_rn_base">
       <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <origin xyz="0 0 0.032" rpy="0 0 0"/>
         <geometry>
-          <mesh filename="${meshes_file_direction}/base.stl" scale="0.001 0.001 0.001"/>
+          <cylinder radius="0.03" length="0.064"/>
         </geometry>
       </collision>
 
@@ -54,9 +54,9 @@
     <!-- rh_p12_rn_r1 -->
     <link name="${prefix}rh_p12_rn_r1">
       <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <origin xyz="0 0.034 0.004" rpy="0 0 0"/>
         <geometry>
-          <mesh filename="${meshes_file_direction}/r1.stl" scale="0.001 0.001 0.001"/>
+          <cylinder radius="0.015" length="0.068"/>
         </geometry>
       </collision>
 
@@ -91,9 +91,9 @@
     <!-- rh_p12_rn_r2 -->
     <link name="${prefix}rh_p12_rn_r2">
       <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <origin xyz="0 0.006 0.011" rpy="0 0 0"/>
         <geometry>
-          <mesh filename="${meshes_file_direction}/r2.stl" scale="0.001 0.001 0.001"/>
+          <cylinder radius="0.01" length="0.022"/>
         </geometry>
       </collision>
 
@@ -128,9 +128,9 @@
     <!-- rh_p12_rn_l1 -->
     <link name="${prefix}rh_p12_rn_l1">
       <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <origin xyz="0 -0.034 0.004" rpy="0 0 0"/>
         <geometry>
-          <mesh filename="${meshes_file_direction}/l1.stl" scale="0.001 0.001 0.001"/>
+          <cylinder radius="0.015" length="0.068"/>
         </geometry>
       </collision>
 
@@ -165,9 +165,9 @@
     <!-- rh_p12_rn_l2 -->
     <link name="${prefix}rh_p12_rn_l2">
       <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <origin xyz="0 -0.006 0.011" rpy="0 0 0"/>
         <geometry>
-          <mesh filename="${meshes_file_direction}/l2.stl" scale="0.001 0.001 0.001"/>
+          <cylinder radius="0.01" length="0.022"/>
         </geometry>
       </collision>
 
