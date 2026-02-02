@@ -120,7 +120,7 @@
         <state_interface name="Present Position"/>
         <param name="Return Delay Time">0</param>
         <param name="[unit info]">
-          Present Position, 0.00038349519697141030,rad,signed,1.5707963268;
+          Present Position, 0.00038349519697141030,rad,signed,-4.7123889804;
         </param>
       </gpio>
       <gpio name="dxl5">
