@@ -1,4 +1,4 @@
-#!/usr/bin/with-contenv sh
+#!/command/with-contenv sh
 # Agent service finish script
 # Cleanup when service stops
 
