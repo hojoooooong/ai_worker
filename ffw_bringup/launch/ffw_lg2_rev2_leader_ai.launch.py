@@ -26,13 +26,8 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     declared_arguments = [
         DeclareLaunchArgument(
-            'model',
-            default_value='ffw_lg2_leader',
-            description='Robot model name.',
-        ),
-        DeclareLaunchArgument(
             'description_file',
-            default_value='ffw_lg2_leader.urdf.xacro',
+            default_value='ffw_lg2_rev2_leader.urdf.xacro',
             description='URDF/XACRO file for the robot model.',
         ),
         DeclareLaunchArgument(
@@ -42,32 +37,18 @@ def generate_launch_description():
         ),
     ]
 
-    model = LaunchConfiguration('model')
     description_file = LaunchConfiguration('description_file')
     use_mock_hardware = LaunchConfiguration('use_mock_hardware')
 
     # Robot controllers config file path
-    robot_controllers = PathJoinSubstitution([
-        FindPackageShare('ffw_bringup'),
-        'config',
-        model,
-        'ffw_lg2_leader_ai_hardware_controller.yaml',
-    ])
-
-    robot_description_content = Command([
-        PathJoinSubstitution([FindExecutable(name='xacro')]),
-        ' ',
-        PathJoinSubstitution([
-            FindPackageShare('ffw_description'),
-            'urdf',
-            model,
-            description_file,
-        ]),
-        ' ',
-        'use_mock_hardware:=', use_mock_hardware,
-    ])
-
-    robot_description = {'robot_description': robot_description_content}
+    robot_controllers = PathJoinSubstitution(
+        [
+            FindPackageShare('ffw_bringup'),
+            'config',
+            'ffw_lg2_rev2_leader',
+            'ffw_lg2_leader_ai_hardware_controller.yaml',
+        ]
+    )
 
     # ros2_control Node
     control_node = Node(
@@ -76,6 +57,19 @@ def generate_launch_description():
         parameters=[robot_controllers],
         output='both',
     )
+
+    robot_description_content = Command(
+        [
+            PathJoinSubstitution([FindExecutable(name='xacro')]),
+            ' ',
+            PathJoinSubstitution(
+                [FindPackageShare('ffw_description'), 'urdf', 'ffw_lg2_rev2_leader', description_file]
+            ),
+            ' ',
+            'use_mock_hardware:=', use_mock_hardware,
+        ]
+    )
+    robot_description = {'robot_description': robot_description_content}
 
     robot_controller_spawner = Node(
         package='controller_manager',
@@ -86,7 +80,6 @@ def generate_launch_description():
             'spring_actuator_controller_right',
             'joystick_controller',
             'joint_state_broadcaster',
-            'ffw_joint_state_broadcaster',
         ],
         parameters=[robot_description],
     )
@@ -108,4 +101,5 @@ def generate_launch_description():
         ]
     )
 
+    # Return combined LaunchDescription
     return LaunchDescription(declared_arguments + [leader_with_namespace])
