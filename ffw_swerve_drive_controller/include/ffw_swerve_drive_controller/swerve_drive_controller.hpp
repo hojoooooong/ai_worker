@@ -190,7 +190,6 @@ protected:
   Odometry odometry_;
   rclcpp::Publisher<OdomStateMsg>::SharedPtr odom_s_publisher_ = nullptr;
   std::unique_ptr<OdomStatePublisher> rt_odom_state_publisher_ = nullptr;
-  OdomStateMsg odom_msg_;
 
   // joint commander publisher
   using CommandedJointStatePublisher =
@@ -198,7 +197,6 @@ protected:
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr commanded_joint_state_publisher_ =
     nullptr;
   std::unique_ptr<CommandedJointStatePublisher> rt_commanded_joint_state_publisher_ = nullptr;
-  sensor_msgs::msg::JointState joint_state_msg_;
 
   // Odometry Parameters
   std::string odom_frame_id_;
@@ -212,7 +210,6 @@ protected:
   // TF Broadcaster
   rclcpp::Publisher<TfStateMsg>::SharedPtr tf_odom_s_publisher_;
   std::unique_ptr<TfStatePublisher> rt_tf_odom_state_publisher_;
-  TfStateMsg tf_msg_;
 
   // Visualization
   bool enable_visualization_;
@@ -229,7 +226,6 @@ protected:
   std::shared_ptr<realtime_tools::RealtimePublisher<geometry_msgs::msg::Twist>>
   realtime_limited_velocity_publisher_ =
     nullptr;
-  geometry_msgs::msg::Twist limited_velocity_msg_;
   std::queue<Twist> previous_commands_;
 
   SpeedLimiter limiter_linear_x_;
