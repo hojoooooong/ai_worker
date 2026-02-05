@@ -160,9 +160,12 @@ protected:
   double steering_angular_velocity_limit_;
 
   // 180° Rule: Smooth direction reversal state tracking per module
+  // Reversal phases: DECEL → STEERING → ACCEL
+  enum class ReversalPhase { NORMAL, DECELERATING, STEERING, ACCELERATING };
+  std::vector<ReversalPhase> reversal_phase_;              // Current phase per module
   std::vector<double> previous_wheel_rotation_direction_;  // Previous direction per module
-  std::vector<bool> is_direction_reversing_;               // True if currently reversing
   std::vector<double> wheel_speed_scale_;                  // Speed scale during reversal (0.0~1.0)
+  std::vector<double> reversal_target_steering_angle_;     // Target steering angle after reversal
   double steering_alignment_angle_error_threshold_;
   double steering_alignment_start_angle_error_threshold_;
   double steering_alignment_start_speed_error_threshold_;

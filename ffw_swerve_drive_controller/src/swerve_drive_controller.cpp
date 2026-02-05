@@ -499,9 +499,10 @@ CallbackReturn SwerveDriveController::on_configure(
   is_rotation_direction_ = Rotation::STOP;
 
   // Initialize 180° Rule smooth reversal state tracking
+  reversal_phase_.resize(num_modules_, ReversalPhase::NORMAL);
   previous_wheel_rotation_direction_.resize(num_modules_, 1.0);
-  is_direction_reversing_.resize(num_modules_, false);
   wheel_speed_scale_.resize(num_modules_, 1.0);
+  reversal_target_steering_angle_.resize(num_modules_, 0.0);
 
   RCLCPP_DEBUG(logger, "Configuration successful");
   return CallbackReturn::SUCCESS;
@@ -520,9 +521,10 @@ CallbackReturn SwerveDriveController::on_activate(
 
   // Reset 180° Rule smooth reversal state
   for (size_t i = 0; i < num_modules_; ++i) {
+    reversal_phase_[i] = ReversalPhase::NORMAL;
     previous_wheel_rotation_direction_[i] = 1.0;
-    is_direction_reversing_[i] = false;
     wheel_speed_scale_[i] = 1.0;
+    reversal_target_steering_angle_[i] = 0.0;
   }
 
   // --- Get and organize hardware interface handles ---
@@ -1018,57 +1020,93 @@ controller_interface::return_type SwerveDriveController::update(
         optimized_steering_angle * 180.0 / M_PI);
     }
 
-    // 4.3.1. Smooth direction reversal - decelerate to 0 before reversing
-    // Check if direction change is needed
+    // 4.3.1. Smooth direction reversal sequence: DECEL → STEERING → ACCEL
+    // Phase 1: Decelerate wheel to 0
+    // Phase 2: Rotate steering (wheel stopped)
+    // Phase 3: Accelerate wheel in new direction
+
     bool direction_changed = (wheel_rotation_direction != previous_wheel_rotation_direction_[i]);
 
-    if (direction_changed && !is_direction_reversing_[i]) {
-      // Start the reversal process
-      is_direction_reversing_[i] = true;
+    // Reversal parameters
+    constexpr double REVERSAL_DECEL_RATE = 5.0;   // Speed scale decrease rate per second
+    constexpr double REVERSAL_ACCEL_RATE = 3.0;   // Speed scale increase rate per second
+    constexpr double REVERSAL_THRESHOLD = 0.05;   // Threshold to consider speed as zero
+    constexpr double STEERING_TOLERANCE = 0.1;    // Steering angle tolerance (rad, ~5.7°)
+
+    // Start reversal sequence when direction changes
+    if (direction_changed && reversal_phase_[i] == ReversalPhase::NORMAL) {
+      reversal_phase_[i] = ReversalPhase::DECELERATING;
+      reversal_target_steering_angle_[i] = optimized_steering_angle;
       RCLCPP_DEBUG(
         get_node()->get_logger(),
-        "Module %zu: Starting smooth direction reversal", i);
+        "Module %zu: Phase 1 - Decelerating wheel before steering change", i);
     }
 
-    // Smooth speed scaling during reversal
-    constexpr double REVERSAL_DECEL_RATE = 5.0;  // Speed scale decrease rate per second
-    constexpr double REVERSAL_ACCEL_RATE = 3.0;  // Speed scale increase rate per second
-    constexpr double REVERSAL_THRESHOLD = 0.05;  // Threshold to consider speed as zero
+    // 4.4. Wrap-around steering angle to [-π, +π] range (-180° ~ +180°)
+    double limited_steering_cmd = normalize_angle(optimized_steering_angle);
 
-    if (is_direction_reversing_[i]) {
-      // Decelerating phase: reduce speed scale towards 0
-      wheel_speed_scale_[i] -= REVERSAL_DECEL_RATE * time_gap;
+    // Determine steering command based on reversal phase
+    double steering_target_for_this_cycle = limited_steering_cmd;
 
-      if (wheel_speed_scale_[i] <= REVERSAL_THRESHOLD) {
-        // Speed is now essentially zero, complete the direction change
-        wheel_speed_scale_[i] = 0.0;
-        previous_wheel_rotation_direction_[i] = wheel_rotation_direction;
-        is_direction_reversing_[i] = false;
+    switch (reversal_phase_[i]) {
+      case ReversalPhase::DECELERATING:
+        // Phase 1: Keep current steering, decelerate wheel
+        steering_target_for_this_cycle = current_steering_angle;  // Hold steering position
+        wheel_speed_scale_[i] -= REVERSAL_DECEL_RATE * time_gap;
 
-        RCLCPP_DEBUG(
-          get_node()->get_logger(),
-          "Module %zu: Direction reversal complete, now accelerating", i);
-      }
-    } else {
-      // Normal operation or accelerating after reversal
-      if (wheel_speed_scale_[i] < 1.0) {
-        // Accelerating phase: increase speed scale towards 1
+        if (wheel_speed_scale_[i] <= REVERSAL_THRESHOLD) {
+          wheel_speed_scale_[i] = 0.0;
+          reversal_phase_[i] = ReversalPhase::STEERING;
+          RCLCPP_DEBUG(
+            get_node()->get_logger(),
+            "Module %zu: Phase 2 - Wheel stopped, now rotating steering", i);
+        }
+        break;
+
+      case ReversalPhase::STEERING:
+        // Phase 2: Wheel stopped, rotate steering to target
+        steering_target_for_this_cycle = reversal_target_steering_angle_[i];
+        wheel_speed_scale_[i] = 0.0;  // Keep wheel stopped
+
+        // Check if steering reached target
+        {
+          double steering_error = std::fabs(
+            shortest_angular_distance(current_steering_angle, reversal_target_steering_angle_[i]));
+          if (steering_error < STEERING_TOLERANCE) {
+            // Steering complete, update direction and start acceleration
+            previous_wheel_rotation_direction_[i] = wheel_rotation_direction;
+            reversal_phase_[i] = ReversalPhase::ACCELERATING;
+            RCLCPP_DEBUG(
+              get_node()->get_logger(),
+              "Module %zu: Phase 3 - Steering complete, now accelerating", i);
+          }
+        }
+        break;
+
+      case ReversalPhase::ACCELERATING:
+        // Phase 3: Accelerate wheel in new direction
         wheel_speed_scale_[i] += REVERSAL_ACCEL_RATE * time_gap;
-        wheel_speed_scale_[i] = std::min(wheel_speed_scale_[i], 1.0);
-      }
+        if (wheel_speed_scale_[i] >= 1.0) {
+          wheel_speed_scale_[i] = 1.0;
+          reversal_phase_[i] = ReversalPhase::NORMAL;
+          RCLCPP_DEBUG(
+            get_node()->get_logger(),
+            "Module %zu: Reversal complete, back to normal operation", i);
+        }
+        break;
+
+      case ReversalPhase::NORMAL:
+      default:
+        // Normal operation - maintain full speed
+        wheel_speed_scale_[i] = 1.0;
+        break;
     }
 
     // Clamp speed scale to valid range
     wheel_speed_scale_[i] = std::clamp(wheel_speed_scale_[i], 0.0, 1.0);
 
-    // 4.4. Wrap-around steering angle to [-π, +π] range (-180° ~ +180°)
-    // normalize_angle handles wrap-around: -181° → +179°, +181° → -179°
-    double limited_steering_cmd = normalize_angle(optimized_steering_angle);
-
     // 4.5. Apply steering angular velocity limit for smooth control
-    // Always apply velocity limiting for smooth wheel steering regardless of the flag
     {
-      // Use steering_angular_velocity_limit_ if valid, otherwise use a default safe value
       double effective_steering_vel_limit = steering_angular_velocity_limit_;
       if (effective_steering_vel_limit <= 0.0 ||
         effective_steering_vel_limit >= std::numeric_limits<double>::max())
@@ -1078,13 +1116,12 @@ controller_interface::return_type SwerveDriveController::update(
 
       double max_allowed_steering_change_this_dt = effective_steering_vel_limit * time_gap;
 
-      // Calculate the shortest angular distance to target (handles wrap-around automatically)
-      // e.g., from +170° to -170° takes the short path of 20° instead of 340°
+      // Calculate the shortest angular distance to target
       double desired_steering_change_rad = shortest_angular_distance(
         current_steering_angle,
-        limited_steering_cmd);
+        steering_target_for_this_cycle);
 
-      // Clamp the change to the maximum allowed per time step for smooth movement
+      // Clamp the change to the maximum allowed per time step
       double actual_steering_change_this_dt = std::clamp(
         desired_steering_change_rad,
         -max_allowed_steering_change_this_dt,
@@ -1092,14 +1129,13 @@ controller_interface::return_type SwerveDriveController::update(
       );
 
       // Apply the limited change and wrap-around to [-π, +π] range
-      // normalize_angle handles wrap-around: -181° → +179°, +181° → -179°
       optimized_steering_angle = normalize_angle(
         current_steering_angle + actual_steering_change_this_dt);
     }
 
-    // 4.6. Calculate the final wheel velocity command with smooth reversal
-    // Apply the current direction (use previous direction during reversal decel phase)
-    double effective_direction = is_direction_reversing_[i] ?
+    // 4.6. Calculate the final wheel velocity command
+    // Use previous direction during DECEL phase, new direction after STEERING phase
+    double effective_direction = (reversal_phase_[i] == ReversalPhase::DECELERATING) ?
       previous_wheel_rotation_direction_[i] : wheel_rotation_direction;
     double final_wheel_vel_cmd = effective_direction * target_wheel_speed *
       wheel_speed_scale_[i] / wheel_radius_;
