@@ -497,6 +497,12 @@ CallbackReturn SwerveDriveController::on_configure(
   previous_commands_.emplace(empty_twist);
   previoud_steering_commands_.reserve(num_modules_);
   is_rotation_direction_ = Rotation::STOP;
+
+  // Initialize 180° Rule smooth reversal state tracking
+  previous_wheel_rotation_direction_.resize(num_modules_, 1.0);
+  is_direction_reversing_.resize(num_modules_, false);
+  wheel_speed_scale_.resize(num_modules_, 1.0);
+
   RCLCPP_DEBUG(logger, "Configuration successful");
   return CallbackReturn::SUCCESS;
 }
@@ -511,6 +517,13 @@ CallbackReturn SwerveDriveController::on_activate(
   target_vy_ = 0.0;
   target_wz_ = 0.0;
   last_cmd_vel_time_ = get_node()->now();
+
+  // Reset 180° Rule smooth reversal state
+  for (size_t i = 0; i < num_modules_; ++i) {
+    previous_wheel_rotation_direction_[i] = 1.0;
+    is_direction_reversing_[i] = false;
+    wheel_speed_scale_[i] = 1.0;
+  }
 
   // --- Get and organize hardware interface handles ---
   module_handles_.clear();
@@ -980,131 +993,116 @@ controller_interface::return_type SwerveDriveController::update(
       continue;
     }
 
-    // 4.3.check if fliped steering is allowed
+    // 4.3. Apply 180° Rule (Steering Flip Optimization)
+    // Instead of turning 270°, turn -90° and reverse the drive motor direction
+    // This ensures wheels always take the shortest path (≤90°) to target angle
     double optimized_steering_angle = target_steering_joint_angle;
     double wheel_rotation_direction = 1.0;
 
-    if (enabled_steering_flip_) {
-      double angle_diff = shortest_angular_distance(
-        current_steering_angle,
-        target_steering_joint_angle);
+    // Calculate the shortest angular distance from current to target
+    double angle_diff = shortest_angular_distance(
+      current_steering_angle,
+      target_steering_joint_angle);
 
-      if (std::fabs(angle_diff) > M_PI * 0.5) {
-        if (normalize_angle(target_steering_joint_angle + M_PI) > limit_lower &&
-          normalize_angle(target_steering_joint_angle + M_PI) < limit_upper)
-        {
-          // Flip the steering angle by adding M_PI
-          optimized_steering_angle = normalize_angle(target_steering_joint_angle + M_PI);
-          wheel_rotation_direction = -1.0;
-        }
-      } else {
-        if (target_steering_joint_angle < limit_lower ||
-          target_steering_joint_angle > limit_upper)
-        {
-          if (normalize_angle(target_steering_joint_angle + M_PI) > limit_lower &&
-            normalize_angle(target_steering_joint_angle + M_PI) < limit_upper)
-          {
-            // Flip the steering angle by adding M_PI
-            optimized_steering_angle = normalize_angle(target_steering_joint_angle + M_PI);
-            wheel_rotation_direction = -1.0;
-          }
-        }
-      }
-    }
+    // If rotation would be more than 90°, flip the steering and reverse motor
+    if (std::fabs(angle_diff) > M_PI * 0.5) {
+      // Flip steering angle by 180° and reverse wheel direction
+      optimized_steering_angle = normalize_angle(target_steering_joint_angle + M_PI);
+      wheel_rotation_direction = -1.0;
 
-    // 4.4. check if the target steering angle is within the limits
-    bool is_no_limitation = false;
-    double limited_steering_cmd = optimized_steering_angle;
-    if (limit_lower <= -M_PI && limit_upper >= M_PI) {
-      // Special case: limits cross -pi/pi boundary
-      is_no_limitation = true;
-    } else if (limited_steering_cmd < limit_lower || limited_steering_cmd > limit_upper) {
-      // Normal case
-      RCLCPP_ERROR(
+      RCLCPP_DEBUG_THROTTLE(
         get_node()->get_logger(),
-        "Module %zu: Target steering angle %.2f outside limits [%.2f, %.2f]. Stopping.",
-        i, limited_steering_cmd, limit_lower, limit_upper);
-      return controller_interface::return_type::ERROR;
+        *get_node()->get_clock(), 1000,
+        "Module %zu: 180° Rule applied. Original: %.1f°, Optimized: %.1f°, Motor reversed",
+        i, target_steering_joint_angle * 180.0 / M_PI,
+        optimized_steering_angle * 180.0 / M_PI);
     }
 
-    // 4.5. limit the steering angular velocity
-    if (enabled_steering_angular_velocity_limit_) {
-      if (steering_angular_velocity_limit_ < std::numeric_limits<double>::max() &&
-        steering_angular_velocity_limit_ > 0.0)
-      {
-        double max_allowed_steering_change_this_dt = steering_angular_velocity_limit_ *
-          time_gap;
+    // 4.3.1. Smooth direction reversal - decelerate to 0 before reversing
+    // Check if direction change is needed
+    bool direction_changed = (wheel_rotation_direction != previous_wheel_rotation_direction_[i]);
 
-        if (is_in_alignment_mode_) {
-          target_wheel_speed = 0.0;
-          optimized_steering_angle = alignment_target_angle_;
+    if (direction_changed && !is_direction_reversing_[i]) {
+      // Start the reversal process
+      is_direction_reversing_[i] = true;
+      RCLCPP_DEBUG(
+        get_node()->get_logger(),
+        "Module %zu: Starting smooth direction reversal", i);
+    }
 
-          double current_error = shortest_angular_distance(
-            current_steering_angle,
-            alignment_target_angle_);
-          const double ALIGNMENT_TOLERANCE = 0.1;
-          if (std::abs(current_error) < ALIGNMENT_TOLERANCE) {
-            RCLCPP_INFO(
-              get_node()->get_logger(),
-              "Steering alignment complete. Resuming normal operation.");
-            is_in_alignment_mode_ = false;
-          }
+    // Smooth speed scaling during reversal
+    constexpr double REVERSAL_DECEL_RATE = 5.0;  // Speed scale decrease rate per second
+    constexpr double REVERSAL_ACCEL_RATE = 3.0;  // Speed scale increase rate per second
+    constexpr double REVERSAL_THRESHOLD = 0.05;  // Threshold to consider speed as zero
 
-        } else {
-          if (is_no_limitation) {
-            // If no limitation, just use the optimized steering angle
-            double absolute_current_steering_angle = std::fmod(current_steering_angle, 2.0 * M_PI);
-            double desired_steering_change_rad =
-              shortest_angular_distance(
-              absolute_current_steering_angle,
-              limited_steering_cmd);
-            double actual_steering_change_this_dt = std::clamp(
-              desired_steering_change_rad,
-              -max_allowed_steering_change_this_dt,
-              max_allowed_steering_change_this_dt
-            );
+    if (is_direction_reversing_[i]) {
+      // Decelerating phase: reduce speed scale towards 0
+      wheel_speed_scale_[i] -= REVERSAL_DECEL_RATE * time_gap;
 
-            // If the desired steering change is larger than the maximum allowed change,
-            optimized_steering_angle = current_steering_angle + actual_steering_change_this_dt;
+      if (wheel_speed_scale_[i] <= REVERSAL_THRESHOLD) {
+        // Speed is now essentially zero, complete the direction change
+        wheel_speed_scale_[i] = 0.0;
+        previous_wheel_rotation_direction_[i] = wheel_rotation_direction;
+        is_direction_reversing_[i] = false;
 
-            if (optimized_steering_angle >= limit_upper ||
-              optimized_steering_angle <= limit_lower)
-            {
-              RCLCPP_WARN(
-                get_node()->get_logger(),
-                "Steering (%.2f) exceeds limits [%.2f, %.2f]. Stopping wheel, adjusting angle.",
-                optimized_steering_angle, limit_lower, limit_upper);
-
-              target_wheel_speed = 0.0;
-
-              if (optimized_steering_angle > limit_upper) {
-                optimized_steering_angle -= M_PI;
-              } else {
-                optimized_steering_angle += M_PI;
-              }
-              is_in_alignment_mode_ = true;
-              alignment_target_angle_ = optimized_steering_angle;
-            }
-          } else {
-            double desired_steering_change_rad = shortest_angular_distance(
-              current_steering_angle,
-              limited_steering_cmd);
-
-            double actual_steering_change_this_dt = std::clamp(
-              desired_steering_change_rad,
-              -max_allowed_steering_change_this_dt,
-              max_allowed_steering_change_this_dt
-            );
-
-            optimized_steering_angle = normalize_angle(
-              current_steering_angle + actual_steering_change_this_dt);
-          }
-        }
+        RCLCPP_DEBUG(
+          get_node()->get_logger(),
+          "Module %zu: Direction reversal complete, now accelerating", i);
+      }
+    } else {
+      // Normal operation or accelerating after reversal
+      if (wheel_speed_scale_[i] < 1.0) {
+        // Accelerating phase: increase speed scale towards 1
+        wheel_speed_scale_[i] += REVERSAL_ACCEL_RATE * time_gap;
+        wheel_speed_scale_[i] = std::min(wheel_speed_scale_[i], 1.0);
       }
     }
 
-    // 4.6. calculate the final wheel velocity command
-    double final_wheel_vel_cmd = wheel_rotation_direction * target_wheel_speed / wheel_radius_;
+    // Clamp speed scale to valid range
+    wheel_speed_scale_[i] = std::clamp(wheel_speed_scale_[i], 0.0, 1.0);
+
+    // 4.4. Wrap-around steering angle to [-π, +π] range (-180° ~ +180°)
+    // normalize_angle handles wrap-around: -181° → +179°, +181° → -179°
+    double limited_steering_cmd = normalize_angle(optimized_steering_angle);
+
+    // 4.5. Apply steering angular velocity limit for smooth control
+    // Always apply velocity limiting for smooth wheel steering regardless of the flag
+    {
+      // Use steering_angular_velocity_limit_ if valid, otherwise use a default safe value
+      double effective_steering_vel_limit = steering_angular_velocity_limit_;
+      if (effective_steering_vel_limit <= 0.0 ||
+        effective_steering_vel_limit >= std::numeric_limits<double>::max())
+      {
+        effective_steering_vel_limit = 2.0;  // Default: 2.0 rad/s for smooth control
+      }
+
+      double max_allowed_steering_change_this_dt = effective_steering_vel_limit * time_gap;
+
+      // Calculate the shortest angular distance to target (handles wrap-around automatically)
+      // e.g., from +170° to -170° takes the short path of 20° instead of 340°
+      double desired_steering_change_rad = shortest_angular_distance(
+        current_steering_angle,
+        limited_steering_cmd);
+
+      // Clamp the change to the maximum allowed per time step for smooth movement
+      double actual_steering_change_this_dt = std::clamp(
+        desired_steering_change_rad,
+        -max_allowed_steering_change_this_dt,
+        max_allowed_steering_change_this_dt
+      );
+
+      // Apply the limited change and wrap-around to [-π, +π] range
+      // normalize_angle handles wrap-around: -181° → +179°, +181° → -179°
+      optimized_steering_angle = normalize_angle(
+        current_steering_angle + actual_steering_change_this_dt);
+    }
+
+    // 4.6. Calculate the final wheel velocity command with smooth reversal
+    // Apply the current direction (use previous direction during reversal decel phase)
+    double effective_direction = is_direction_reversing_[i] ?
+      previous_wheel_rotation_direction_[i] : wheel_rotation_direction;
+    double final_wheel_vel_cmd = effective_direction * target_wheel_speed *
+      wheel_speed_scale_[i] / wheel_radius_;
 
     // 4.7. save the commands in order to send the hardware interface
     // and stop the wheel when steering is not aligned
