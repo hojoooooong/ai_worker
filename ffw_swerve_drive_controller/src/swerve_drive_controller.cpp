@@ -1043,8 +1043,9 @@ controller_interface::return_type SwerveDriveController::update(
     }
 
     // Update reversal target during reversal if command changes significantly
-    // This prevents sudden steering jumps after reversal completes
-    if (reversal_phase_[i] != ReversalPhase::NORMAL) {
+    // Only update when 180° Rule is still being applied (wheel_rotation_direction < 0)
+    // This prevents sudden steering jumps when command changes direction
+    if (reversal_phase_[i] != ReversalPhase::NORMAL && wheel_rotation_direction < 0.0) {
       double target_diff = std::fabs(
         shortest_angular_distance(reversal_target_steering_angle_[i], optimized_steering_angle));
       constexpr double TARGET_UPDATE_THRESHOLD = 0.15;  // ~8.6 degrees
@@ -1114,8 +1115,12 @@ controller_interface::return_type SwerveDriveController::update(
       default:
         // Normal operation - maintain full speed
         wheel_speed_scale_[i] = 1.0;
-        // Track current direction for future reversal detection
-        previous_wheel_rotation_direction_[i] = wheel_rotation_direction;
+        // Only update previous direction when 180° Rule is NOT applied
+        // (i.e., when wheel is not reversed and steering took shorter path)
+        // This prevents direction flip-flop at 180° Rule boundary
+        if (wheel_rotation_direction > 0.0) {
+          previous_wheel_rotation_direction_[i] = wheel_rotation_direction;
+        }
         break;
     }
 
