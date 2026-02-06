@@ -914,7 +914,7 @@ double SwerveDriveController::shortest_angular_distance(double from, double to)
       if (effective_steering_vel_limit <= 0.0 ||
         effective_steering_vel_limit >= std::numeric_limits<double>::max())
       {
-        effective_steering_vel_limit = 1.0;  // Default: 2.0 rad/s
+        effective_steering_vel_limit = 0.5;  // Default: 2.0 rad/s
       }
 
       const double max_change = effective_steering_vel_limit * time_gap;
