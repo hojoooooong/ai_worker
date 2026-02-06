@@ -236,9 +236,17 @@ CallbackReturn SwerveDriveController::on_configure(
      steering_angular_velocity_limit_ =
        get_node()->get_parameter("steering_angular_velocity_limit").as_double();
     enabled_open_loop_ = get_node()->get_parameter("enabled_open_loop").as_bool();
-     enabled_steering_angular_velocity_limit_ =
-       get_node()->get_parameter("enabled_steering_angular_velocity_limit").as_bool();
-     steering_alignment_angle_error_threshold_ = get_node()->get_parameter(
+    enabled_steering_angular_velocity_limit_ =
+      get_node()->get_parameter("enabled_steering_angular_velocity_limit").as_bool();
+
+    // DEBUG: Log steering velocity limit parameters
+    RCLCPP_WARN(get_node()->get_logger(),
+      "[DEBUG] Steering Velocity Limit Config: enabled=%s, limit=%.2f rad/s (%.1f deg/s)",
+      enabled_steering_angular_velocity_limit_ ? "TRUE" : "FALSE",
+      steering_angular_velocity_limit_,
+      steering_angular_velocity_limit_ * 57.2958);
+
+    steering_alignment_angle_error_threshold_ = get_node()->get_parameter(
        "steering_alignment_angle_error_threshold").as_double();
      steering_alignment_start_angle_error_threshold_ = get_node()->get_parameter(
        "steering_alignment_start_angle_error_threshold").as_double();
@@ -824,6 +832,10 @@ double SwerveDriveController::shortest_angular_distance(double from, double to)
     if (std::fabs(angle_diff) > kPiHalf) {
       optimized_steering_angle = normalize_angle(target_steering_joint_angle + M_PI);
       wheel_rotation_direction = -1.0;
+      RCLCPP_WARN_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 500,
+        "[DEBUG][%zu] 180° FLIP! cur=%.1f°, orig_tgt=%.1f°, new_tgt=%.1f°, diff=%.1f°",
+        i, current_steering_angle * 57.2958, target_steering_joint_angle * 57.2958,
+        optimized_steering_angle * 57.2958, angle_diff * 57.2958);
     }
  
     // 4.3.1. Handle mechanical steering limit at ±π (±180°)
@@ -838,6 +850,10 @@ double SwerveDriveController::shortest_angular_distance(double from, double to)
         (current_steering_angle < 0 && optimized_steering_angle > 0 && angle_diff_after_opt < 0);
 
       if (crosses_boundary) {
+        RCLCPP_WARN_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 500,
+          "[DEBUG][%zu] BOUNDARY FLIP! cur=%.1f°, before=%.1f°, after=%.1f°",
+          i, current_steering_angle * 57.2958, optimized_steering_angle * 57.2958,
+          normalize_angle(optimized_steering_angle + M_PI) * 57.2958);
         optimized_steering_angle = normalize_angle(optimized_steering_angle + M_PI);
         wheel_rotation_direction *= -1.0;
       }
@@ -909,12 +925,24 @@ double SwerveDriveController::shortest_angular_distance(double from, double to)
       const double max_change = effective_steering_vel_limit * time_gap;
       const double desired_change = shortest_angular_distance(
         current_steering_angle, steering_target_for_this_cycle);
+      const double actual_change = std::clamp(desired_change, -max_change, max_change);
 
-      optimized_steering_angle = normalize_angle(
-        current_steering_angle + std::clamp(desired_change, -max_change, max_change));
+      // DEBUG: Monitor steering velocity limit behavior
+      if (std::abs(desired_change) > max_change * 1.01) {  // Only log when clamping occurs
+        RCLCPP_WARN_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 200,
+          "[DEBUG][%zu] CLAMPED! limit=%.1f rad/s, dt=%.4fs, max_change=%.3f rad(%.1f°), "
+          "cur=%.2f°, tgt=%.2f°, desired=%.2f°, actual=%.2f°",
+          i, effective_steering_vel_limit, time_gap, max_change, max_change * 57.2958,
+          current_steering_angle * 57.2958, steering_target_for_this_cycle * 57.2958,
+          desired_change * 57.2958, actual_change * 57.2958);
+      }
+
+      optimized_steering_angle = normalize_angle(current_steering_angle + actual_change);
     } else {
       // No velocity limit - directly use target angle
       optimized_steering_angle = steering_target_for_this_cycle;
+      RCLCPP_WARN_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 2000,
+        "[DEBUG] Steering velocity limit DISABLED - using direct target");
     }
  
      // 4.6. Calculate the final wheel velocity command
@@ -998,6 +1026,18 @@ double SwerveDriveController::shortest_angular_distance(double from, double to)
     // Update the final commands
     for (size_t i = 0; i < num_modules_; ++i) {
       auto & handle = module_handles_[i];
+
+      // DEBUG: Log final steering command vs current position
+      auto cur_steer = handle.steering_state_pos.get().get_optional();
+      const double cur_pos = cur_steer.value_or(0.0);
+      const double cmd_diff = final_steering_commands_[i] - cur_pos;
+      if (std::abs(cmd_diff) > 0.1) {  // Only log if significant difference (>5.7°)
+        RCLCPP_WARN_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 200,
+          "[DEBUG][%zu] FINAL CMD: cur=%.1f°, cmd=%.1f°, diff=%.1f° (%.2f rad)",
+          i, cur_pos * 57.2958, final_steering_commands_[i] * 57.2958,
+          cmd_diff * 57.2958, cmd_diff);
+      }
+
       handle.steering_cmd_pos.get().set_value(final_steering_commands_[i]);
       previoud_steering_commands_[i] = final_steering_commands_[i];
 
