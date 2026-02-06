@@ -504,6 +504,7 @@
   wheel_speed_scale_.resize(num_modules_, 1.0);
   reversal_target_steering_angle_.resize(num_modules_, 0.0);
   is_steering_flipped_.resize(num_modules_, false);
+  is_boundary_flipped_.resize(num_modules_, false);
  
    RCLCPP_DEBUG(logger, "Configuration successful");
    return CallbackReturn::SUCCESS;
@@ -527,6 +528,7 @@
     wheel_speed_scale_[i] = 1.0;
     reversal_target_steering_angle_[i] = 0.0;
     is_steering_flipped_[i] = false;
+    is_boundary_flipped_[i] = false;
   }
  
    // --- Get and organize hardware interface handles ---
@@ -1038,43 +1040,69 @@
       is_steering_flipped_[i] = false;
     }
  
-     // 4.3.1. Handle mechanical steering limit at ±π (±180°)
-     // The steering mechanism cannot physically cross the ±180° boundary
-     // If the shortest path would cross this boundary, flip the steering instead
-     {
-       double angle_diff_after_opt = shortest_angular_distance(
-         current_steering_angle, optimized_steering_angle);
- 
-       bool crosses_boundary = false;
- 
-       // Crossing +π boundary: positive current, negative target, positive angle_diff
-       // Example: current=170°, target=-170°, shortest path is +20° through +180°
-       if (current_steering_angle > 0 && optimized_steering_angle < 0 && angle_diff_after_opt > 0) {
-         crosses_boundary = true;
-       }
-       // Crossing -π boundary: negative current, positive target, negative angle_diff
-       // Example: current=-170°, target=170°, shortest path is -20° through -180°
-       else if (current_steering_angle < 0 && optimized_steering_angle > 0 &&
-         angle_diff_after_opt < 0)
-       {
-         crosses_boundary = true;
-       }
- 
-       if (crosses_boundary) {
-         // Flip steering by 180° and reverse motor direction to avoid boundary crossing
-         optimized_steering_angle = normalize_angle(optimized_steering_angle + M_PI);
-         wheel_rotation_direction *= -1.0;
- 
-         RCLCPP_DEBUG_THROTTLE(
-           get_node()->get_logger(),
-           *get_node()->get_clock(), 1000,
-           "Module %zu: Boundary flip applied. Cannot cross ±180° mechanical limit. "
-           "Current: %.1f°, New target: %.1f°, Motor %s",
-           i, current_steering_angle * 180.0 / M_PI,
-           optimized_steering_angle * 180.0 / M_PI,
-           wheel_rotation_direction > 0 ? "forward" : "reversed");
-       }
-     }
+    // 4.3.1. Handle mechanical steering limit at ±π (±180°) with Hysteresis
+    // The steering mechanism cannot physically cross the ±180° boundary
+    // If the shortest path would cross this boundary, flip the steering instead
+    {
+      double angle_diff_after_opt = shortest_angular_distance(
+        current_steering_angle, optimized_steering_angle);
+
+      // Hysteresis thresholds for boundary crossing
+      constexpr double BOUNDARY_NEAR_THRESHOLD = 2.8;   // ~160° - consider near boundary
+      constexpr double BOUNDARY_FAR_THRESHOLD = 2.5;    // ~143° - consider far from boundary
+
+      bool would_cross_boundary = false;
+
+      // Check if we would cross +π boundary
+      if (current_steering_angle > 0 && optimized_steering_angle < 0 && angle_diff_after_opt > 0) {
+        would_cross_boundary = true;
+      }
+      // Check if we would cross -π boundary
+      else if (current_steering_angle < 0 && optimized_steering_angle > 0 &&
+        angle_diff_after_opt < 0)
+      {
+        would_cross_boundary = true;
+      }
+
+      bool should_boundary_flip;
+      if (is_boundary_flipped_[i]) {
+        // Currently boundary-flipped: only unflip when clearly not crossing
+        // Check if current angle is far enough from boundary
+        bool far_from_boundary = (std::fabs(current_steering_angle) < BOUNDARY_FAR_THRESHOLD);
+        should_boundary_flip = would_cross_boundary || !far_from_boundary;
+      } else {
+        // Currently not boundary-flipped: flip only when clearly crossing
+        should_boundary_flip = would_cross_boundary &&
+          (std::fabs(current_steering_angle) > BOUNDARY_NEAR_THRESHOLD);
+      }
+
+      if (should_boundary_flip && !is_boundary_flipped_[i]) {
+        // Flip steering by 180° and reverse motor direction to avoid boundary crossing
+        optimized_steering_angle = normalize_angle(optimized_steering_angle + M_PI);
+        wheel_rotation_direction *= -1.0;
+        is_boundary_flipped_[i] = true;
+
+        RCLCPP_DEBUG_THROTTLE(
+          get_node()->get_logger(),
+          *get_node()->get_clock(), 1000,
+          "Module %zu: Boundary flip applied. Current: %.1f°, New target: %.1f°",
+          i, current_steering_angle * 180.0 / M_PI,
+          optimized_steering_angle * 180.0 / M_PI);
+      } else if (!should_boundary_flip && is_boundary_flipped_[i]) {
+        // Unflip - need to reverse the flip that was applied
+        optimized_steering_angle = normalize_angle(optimized_steering_angle + M_PI);
+        wheel_rotation_direction *= -1.0;
+        is_boundary_flipped_[i] = false;
+
+        RCLCPP_DEBUG_THROTTLE(
+          get_node()->get_logger(),
+          *get_node()->get_clock(), 1000,
+          "Module %zu: Boundary unflip applied. Current: %.1f°, New target: %.1f°",
+          i, current_steering_angle * 180.0 / M_PI,
+          optimized_steering_angle * 180.0 / M_PI);
+      }
+      // If state unchanged, keep current flipped state without additional flip
+    }
  
      // 4.3.2. Smooth direction reversal sequence: DECEL → STEERING → ACCEL
      // Phase 1: Decelerate wheel to 0
