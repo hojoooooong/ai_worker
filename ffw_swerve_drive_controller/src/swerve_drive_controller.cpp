@@ -1042,22 +1042,6 @@ controller_interface::return_type SwerveDriveController::update(
         "Module %zu: Phase 1 - Decelerating wheel before steering change", i);
     }
 
-    // Update reversal target during reversal if command changes significantly
-    // Only update when 180° Rule is still being applied (wheel_rotation_direction < 0)
-    // This prevents sudden steering jumps when command changes direction
-    if (reversal_phase_[i] != ReversalPhase::NORMAL && wheel_rotation_direction < 0.0) {
-      double target_diff = std::fabs(
-        shortest_angular_distance(reversal_target_steering_angle_[i], optimized_steering_angle));
-      constexpr double TARGET_UPDATE_THRESHOLD = 0.15;  // ~8.6 degrees
-      if (target_diff > TARGET_UPDATE_THRESHOLD) {
-        reversal_target_steering_angle_[i] = optimized_steering_angle;
-        RCLCPP_DEBUG(
-          get_node()->get_logger(),
-          "Module %zu: Reversal target updated to %.2f rad during reversal",
-          i, optimized_steering_angle);
-      }
-    }
-
     // 4.4. Wrap-around steering angle to [-π, +π] range (-180° ~ +180°)
     double limited_steering_cmd = normalize_angle(optimized_steering_angle);
 
@@ -1115,12 +1099,6 @@ controller_interface::return_type SwerveDriveController::update(
       default:
         // Normal operation - maintain full speed
         wheel_speed_scale_[i] = 1.0;
-        // Only update previous direction when 180° Rule is NOT applied
-        // (i.e., when wheel is not reversed and steering took shorter path)
-        // This prevents direction flip-flop at 180° Rule boundary
-        if (wheel_rotation_direction > 0.0) {
-          previous_wheel_rotation_direction_[i] = wheel_rotation_direction;
-        }
         break;
     }
 
