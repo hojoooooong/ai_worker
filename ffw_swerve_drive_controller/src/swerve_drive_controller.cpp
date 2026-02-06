@@ -919,25 +919,44 @@ double SwerveDriveController::shortest_angular_distance(double from, double to)
       if (effective_steering_vel_limit <= 0.0 ||
         effective_steering_vel_limit >= std::numeric_limits<double>::max())
       {
-        effective_steering_vel_limit = 1.0;  // Default: 2.0 rad/s
+        effective_steering_vel_limit = 1.0;  // Default: 1.0 rad/s
       }
 
       const double max_change = effective_steering_vel_limit * time_gap;
       const double desired_change = shortest_angular_distance(
         current_steering_angle, steering_target_for_this_cycle);
-      const double actual_change = std::clamp(desired_change, -max_change, max_change);
 
-      // DEBUG: Monitor steering velocity limit behavior
-      if (std::abs(desired_change) > max_change * 1.01) {  // Only log when clamping occurs
+      // If we can reach target in this cycle, use target directly (avoid normalize jump)
+      if (std::abs(desired_change) <= max_change) {
+        optimized_steering_angle = steering_target_for_this_cycle;
+      } else {
+        // Move max_change toward target direction
+        const double direction = (desired_change > 0) ? 1.0 : -1.0;
+        const double new_angle = current_steering_angle + direction * max_change;
+
+        // Normalize but check for ±π boundary jump
+        const double normalized = normalize_angle(new_angle);
+        const double jump_check = std::abs(normalized - current_steering_angle);
+
+        // If normalize caused a large jump (crossing ±π boundary), use raw value clamped
+        if (jump_check > M_PI) {
+          // Clamp to ±π instead of jumping
+          optimized_steering_angle = (new_angle > 0) ? M_PI : -M_PI;
+          RCLCPP_WARN_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 200,
+            "[DEBUG][%zu] BOUNDARY CLAMP: raw=%.1f°, clamped=%.1f°",
+            i, new_angle * 57.2958, optimized_steering_angle * 57.2958);
+        } else {
+          optimized_steering_angle = normalized;
+        }
+
+        // DEBUG: Monitor steering velocity limit behavior
         RCLCPP_WARN_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 200,
-          "[DEBUG][%zu] CLAMPED! limit=%.1f rad/s, dt=%.4fs, max_change=%.3f rad(%.1f°), "
-          "cur=%.2f°, tgt=%.2f°, desired=%.2f°, actual=%.2f°",
-          i, effective_steering_vel_limit, time_gap, max_change, max_change * 57.2958,
+          "[DEBUG][%zu] CLAMPED! limit=%.1f rad/s, dt=%.4fs, max=%.1f°, "
+          "cur=%.1f°, tgt=%.1f°, desired=%.1f°, result=%.1f°",
+          i, effective_steering_vel_limit, time_gap, max_change * 57.2958,
           current_steering_angle * 57.2958, steering_target_for_this_cycle * 57.2958,
-          desired_change * 57.2958, actual_change * 57.2958);
+          desired_change * 57.2958, optimized_steering_angle * 57.2958);
       }
-
-      optimized_steering_angle = normalize_angle(current_steering_angle + actual_change);
     } else {
       // No velocity limit - directly use target angle
       optimized_steering_angle = steering_target_for_this_cycle;
