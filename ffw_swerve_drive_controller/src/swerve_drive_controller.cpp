@@ -67,33 +67,28 @@
 CallbackReturn SwerveDriveController::on_init()
 {
   try {
-     // ***** declare parameters *****
-     auto_declare<std::string>("ffw_type", "ffw_v2");
-     auto_declare<std::vector<std::string>>("steering_joint_names", std::vector<std::string>{});
-     auto_declare<std::vector<std::string>>("wheel_joint_names", std::vector<std::string>{});
-     auto_declare<double>("wheel_radius", 0.05);
-     auto_declare<std::vector<double>>("module_x_offsets", std::vector<double>{});
-     auto_declare<std::vector<double>>("module_y_offsets", std::vector<double>{});
-     auto_declare<std::vector<double>>("module_angle_offsets", std::vector<double>{});
-     auto_declare<std::vector<double>>("module_steering_limit_lower", std::vector<double>{});
-     auto_declare<std::vector<double>>("module_steering_limit_upper", std::vector<double>{});
-     auto_declare<std::vector<double>>("module_wheel_speed_limit_lower", std::vector<double>{});
-     auto_declare<std::vector<double>>("module_wheel_speed_limit_upper", std::vector<double>{});
-     auto_declare<bool>("enabled_steering_flip", false);
-     auto_declare<bool>("enabled_open_loop", false);
-     auto_declare<bool>("enabled_steering_angular_velocity_limit", true);
-     auto_declare<bool>("enabled_sync_steering_angular_velocity", false);
-     auto_declare<bool>("enabled_steering_angular_limit", true);
-     auto_declare<double>("steering_angular_velocity_limit", 0.05);
-     auto_declare<double>("steering_alignment_angle_error_threshold", 0.1);
-     auto_declare<double>("steering_alignment_start_angle_error_threshold", 0.1);
-     auto_declare<double>("steering_alignment_start_speed_error_threshold", 0.1);
-     auto_declare<double>("linear_vel_deadband", 0.1);
-     auto_declare<double>("angular_vel_deadband", 0.1);
- 
-     auto_declare<std::string>("cmd_vel_topic", "/cmd_vel");
-     auto_declare<bool>("use_stamped_cmd_vel", false);
-     auto_declare<double>("cmd_vel_timeout", 500.0);
+    // ***** declare parameters *****
+    auto_declare<std::vector<std::string>>("steering_joint_names", std::vector<std::string>{});
+    auto_declare<std::vector<std::string>>("wheel_joint_names", std::vector<std::string>{});
+    auto_declare<double>("wheel_radius", 0.05);
+    auto_declare<std::vector<double>>("module_x_offsets", std::vector<double>{});
+    auto_declare<std::vector<double>>("module_y_offsets", std::vector<double>{});
+    auto_declare<std::vector<double>>("module_angle_offsets", std::vector<double>{});
+    auto_declare<std::vector<double>>("module_steering_limit_lower", std::vector<double>{});
+    auto_declare<std::vector<double>>("module_steering_limit_upper", std::vector<double>{});
+    auto_declare<std::vector<double>>("module_wheel_speed_limit_lower", std::vector<double>{});
+    auto_declare<std::vector<double>>("module_wheel_speed_limit_upper", std::vector<double>{});
+    auto_declare<bool>("enabled_open_loop", false);
+    auto_declare<bool>("enabled_steering_angular_velocity_limit", true);
+    auto_declare<double>("steering_angular_velocity_limit", 1.0);
+    auto_declare<double>("steering_alignment_angle_error_threshold", 0.1);
+    auto_declare<double>("steering_alignment_start_angle_error_threshold", 0.1);
+    auto_declare<double>("steering_alignment_start_speed_error_threshold", 0.1);
+    auto_declare<double>("linear_vel_deadband", 0.1);
+    auto_declare<double>("angular_vel_deadband", 0.1);
+
+    auto_declare<std::string>("cmd_vel_topic", "/cmd_vel");
+    auto_declare<double>("cmd_vel_timeout", 500.0);
  
      // Odometry parameters
      auto_declare<std::string>("odom_solver_method", "svd");
@@ -240,8 +235,7 @@ CallbackReturn SwerveDriveController::on_configure(
        get_node()->get_parameter("module_wheel_speed_limit_upper").as_double_array();
      steering_angular_velocity_limit_ =
        get_node()->get_parameter("steering_angular_velocity_limit").as_double();
-     enabled_steering_flip_ = get_node()->get_parameter("enabled_steering_flip").as_bool();
-     enabled_open_loop_ = get_node()->get_parameter("enabled_open_loop").as_bool();
+    enabled_open_loop_ = get_node()->get_parameter("enabled_open_loop").as_bool();
      enabled_steering_angular_velocity_limit_ =
        get_node()->get_parameter("enabled_steering_angular_velocity_limit").as_bool();
      steering_alignment_angle_error_threshold_ = get_node()->get_parameter(
@@ -256,9 +250,8 @@ CallbackReturn SwerveDriveController::on_configure(
      angular_vel_deadband_ = get_node()->get_parameter(
        "angular_vel_deadband").as_double();
  
-     cmd_vel_topic_ = get_node()->get_parameter("cmd_vel_topic").as_string();
-     use_stamped_cmd_vel_ = get_node()->get_parameter("use_stamped_cmd_vel").as_bool();
-     cmd_vel_timeout_ = get_node()->get_parameter("cmd_vel_timeout").as_double();
+    cmd_vel_topic_ = get_node()->get_parameter("cmd_vel_topic").as_string();
+    cmd_vel_timeout_ = get_node()->get_parameter("cmd_vel_timeout").as_double();
      odom_frame_id_ = get_node()->get_parameter("odom_frame_id").as_string();
      base_frame_id_ = get_node()->get_parameter("base_frame_id").as_string();
      enable_odom_tf_ = get_node()->get_parameter("enable_odom_tf").as_bool();
@@ -466,10 +459,9 @@ CallbackReturn SwerveDriveController::on_configure(
    const Twist empty_twist;
    // Fill last two commands with default constructed commands
    previous_commands_.emplace(empty_twist);
-   previous_commands_.emplace(empty_twist);
-   previoud_steering_commands_.reserve(num_modules_);
-   is_rotation_direction_ = Rotation::STOP;
- 
+  previous_commands_.emplace(empty_twist);
+  previoud_steering_commands_.reserve(num_modules_);
+
   // Initialize 180° Rule smooth reversal state tracking
   reversal_phase_.resize(num_modules_, ReversalPhase::NORMAL);
   previous_wheel_rotation_direction_.resize(num_modules_, 1.0);
@@ -674,10 +666,7 @@ double SwerveDriveController::shortest_angular_distance(double from, double to)
        new_wz = 0.0;
      }
  
-     if (target_vx_ != new_vx || target_vy_ != new_vy || target_wz_ != new_wz) {
-       is_rotation_direction_ = Rotation::STOP;
-     }
-     target_vx_ = new_vx;
+    target_vx_ = new_vx;
      target_vy_ = new_vy;
      target_wz_ = new_wz;
    }
@@ -914,7 +903,7 @@ double SwerveDriveController::shortest_angular_distance(double from, double to)
       if (effective_steering_vel_limit <= 0.0 ||
         effective_steering_vel_limit >= std::numeric_limits<double>::max())
       {
-        effective_steering_vel_limit = 0.5;  // Default: 2.0 rad/s
+        effective_steering_vel_limit = 1.0;  // Default: 2.0 rad/s
       }
 
       const double max_change = effective_steering_vel_limit * time_gap;
@@ -992,19 +981,20 @@ double SwerveDriveController::shortest_angular_distance(double from, double to)
    }
    // End of module loop
  
-  // --- 5. send the commands to the hardware interface ---
-  if (target_vx_ == 0.0 && target_vy_ == 0.0 && target_wz_ == 0.0) {
-    // Robot halted - hold steering, stop wheels
-    for (size_t i = 0; i < num_modules_; ++i) {
-      auto & handle = module_handles_[i];
-      auto steering_val = handle.steering_state_pos.get().get_optional();
-      const double hold_angle = steering_val.value_or(0.0);
-      handle.steering_cmd_pos.get().set_value(hold_angle);
-      handle.wheel_cmd_vel.get().set_value(0.0);
-      final_steering_commands_[i] = hold_angle;
-      final_wheel_velocity_commands_[i] = 0.0;
-    }
-  } else {
+ // --- 5. send the commands to the hardware interface ---
+ if (target_vx_ == 0.0 && target_vy_ == 0.0 && target_wz_ == 0.0) {
+   // Robot halted - hold steering, stop wheels
+   for (size_t i = 0; i < num_modules_; ++i) {
+     auto & handle = module_handles_[i];
+     auto steering_val = handle.steering_state_pos.get().get_optional();
+     const double hold_angle = steering_val.value_or(0.0);
+     handle.steering_cmd_pos.get().set_value(hold_angle);
+     handle.wheel_cmd_vel.get().set_value(0.0);
+     final_steering_commands_[i] = hold_angle;
+     final_wheel_velocity_commands_[i] = 0.0;
+     previoud_steering_commands_[i] = hold_angle;  // Sync for open loop mode
+   }
+ } else {
     // Update the final commands
     for (size_t i = 0; i < num_modules_; ++i) {
       auto & handle = module_handles_[i];

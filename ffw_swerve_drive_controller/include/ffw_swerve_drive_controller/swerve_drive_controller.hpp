@@ -67,9 +67,6 @@ using TfStateMsg = tf2_msgs::msg::TFMessage;
 using OdomStatePublisher = realtime_tools::RealtimePublisher<OdomStateMsg>;
 using TfStatePublisher = realtime_tools::RealtimePublisher<TfStateMsg>;
 
-// Enum definitions
-enum Rotation { CCW, CW, STOP };
-
 // Structure to hold module information for easier access
 struct ModuleHandles
 {
@@ -152,10 +149,8 @@ protected:
   std::vector<double> module_steering_limit_upper_;
   std::vector<double> module_wheel_speed_limit_lower_;
   std::vector<double> module_wheel_speed_limit_upper_;
-  bool enabled_steering_flip_;
   bool enabled_steering_angular_velocity_limit_;
   bool enabled_open_loop_;
-  uint is_rotation_direction_;
   std::vector<double> previoud_steering_commands_;
   double steering_angular_velocity_limit_;
 
@@ -166,18 +161,14 @@ protected:
   std::vector<double> previous_wheel_rotation_direction_;  // Previous direction per module
   std::vector<double> wheel_speed_scale_;                  // Speed scale during reversal (0.0~1.0)
   std::vector<double> reversal_target_steering_angle_;     // Target steering angle after reversal
-  std::vector<double> reversal_target_wheel_direction_;    // Target wheel direction after reversal
   double steering_alignment_angle_error_threshold_;
   double steering_alignment_start_angle_error_threshold_;
   double steering_alignment_start_speed_error_threshold_;
   double linear_vel_deadband_;
   double angular_vel_deadband_;
   std::string odom_solver_method_str_;
-  bool is_in_alignment_mode_ = false;
-  double alignment_target_angle_;
 
   std::string cmd_vel_topic_;
-  bool use_stamped_cmd_vel_;
   double cmd_vel_timeout_;
   rclcpp::Duration ref_timeout_;
 
@@ -247,9 +238,6 @@ protected:
   // Flag to check if stopping due to timeout
   double wheel_saturation_scale_factor_ = 1.0;
   bool enabled_wheel_saturation_scaling_ = false;
-
-  // Open Loop ctrl
-  std::vector<double> previous_wheel_directions_;
 
   // Pre-allocated vectors for update() to avoid heap allocation in real-time loop
   std::vector<double> current_wheel_velocities_;
