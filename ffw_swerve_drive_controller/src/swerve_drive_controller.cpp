@@ -1020,7 +1020,45 @@ controller_interface::return_type SwerveDriveController::update(
         optimized_steering_angle * 180.0 / M_PI);
     }
 
-    // 4.3.1. Smooth direction reversal sequence: DECEL → STEERING → ACCEL
+    // 4.3.1. Handle mechanical steering limit at ±π (±180°)
+    // The steering mechanism cannot physically cross the ±180° boundary
+    // If the shortest path would cross this boundary, flip the steering instead
+    {
+      double angle_diff_after_opt = shortest_angular_distance(
+        current_steering_angle, optimized_steering_angle);
+
+      bool crosses_boundary = false;
+
+      // Crossing +π boundary: positive current, negative target, positive angle_diff
+      // Example: current=170°, target=-170°, shortest path is +20° through +180°
+      if (current_steering_angle > 0 && optimized_steering_angle < 0 && angle_diff_after_opt > 0) {
+        crosses_boundary = true;
+      }
+      // Crossing -π boundary: negative current, positive target, negative angle_diff
+      // Example: current=-170°, target=170°, shortest path is -20° through -180°
+      else if (current_steering_angle < 0 && optimized_steering_angle > 0 &&
+        angle_diff_after_opt < 0)
+      {
+        crosses_boundary = true;
+      }
+
+      if (crosses_boundary) {
+        // Flip steering by 180° and reverse motor direction to avoid boundary crossing
+        optimized_steering_angle = normalize_angle(optimized_steering_angle + M_PI);
+        wheel_rotation_direction *= -1.0;
+
+        RCLCPP_DEBUG_THROTTLE(
+          get_node()->get_logger(),
+          *get_node()->get_clock(), 1000,
+          "Module %zu: Boundary flip applied. Cannot cross ±180° mechanical limit. "
+          "Current: %.1f°, New target: %.1f°, Motor %s",
+          i, current_steering_angle * 180.0 / M_PI,
+          optimized_steering_angle * 180.0 / M_PI,
+          wheel_rotation_direction > 0 ? "forward" : "reversed");
+      }
+    }
+
+    // 4.3.2. Smooth direction reversal sequence: DECEL → STEERING → ACCEL
     // Phase 1: Decelerate wheel to 0
     // Phase 2: Rotate steering (wheel stopped)
     // Phase 3: Accelerate wheel in new direction
