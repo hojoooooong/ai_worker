@@ -64,10 +64,9 @@
  {}
  // *****************************************
  
- CallbackReturn SwerveDriveController::on_init()
- {
-   RCLCPP_DEBUG(get_node()->get_logger(), "Initializing SwerveDriveController");
-   try {
+CallbackReturn SwerveDriveController::on_init()
+{
+  try {
      // ***** declare parameters *****
      auto_declare<std::string>("ffw_type", "ffw_v2");
      auto_declare<std::vector<std::string>>("steering_joint_names", std::vector<std::string>{});
@@ -82,7 +81,7 @@
      auto_declare<std::vector<double>>("module_wheel_speed_limit_upper", std::vector<double>{});
      auto_declare<bool>("enabled_steering_flip", false);
      auto_declare<bool>("enabled_open_loop", false);
-     auto_declare<bool>("enabled_steering_angular_velocity_limit", false);
+     auto_declare<bool>("enabled_steering_angular_velocity_limit", true);
      auto_declare<bool>("enabled_sync_steering_angular_velocity", false);
      auto_declare<bool>("enabled_steering_angular_limit", true);
      auto_declare<double>("steering_angular_velocity_limit", 0.05);
@@ -119,15 +118,12 @@
      param_listener_ = std::make_shared<ParamListener>(get_node());
      params_ = param_listener_->get_params();
    } catch (const std::exception & e) {
-     RCLCPP_FATAL(
-       get_node()->get_logger(),
-       "Exception during parameter declaration: %s",
-       e.what());
-     return CallbackReturn::ERROR;
-   }
-   RCLCPP_DEBUG(get_node()->get_logger(), "Parameter declaration successful");
-   return CallbackReturn::SUCCESS;
- }
+    RCLCPP_FATAL(
+      get_node()->get_logger(), "Parameter declaration failed: %s", e.what());
+    return CallbackReturn::ERROR;
+  }
+  return CallbackReturn::SUCCESS;
+}
  
  // command_interface_configuration, state_interface_configuration
  controller_interface::InterfaceConfiguration
@@ -216,17 +212,15 @@
    return conf;
  }
  
- CallbackReturn SwerveDriveController::on_configure(
-   const rclcpp_lifecycle::State & /*previous_state*/)
- {
-   auto logger = get_node()->get_logger();
-   RCLCPP_DEBUG(logger, "Configuring Swerve Drive Controller...");
- 
-   // update parameters if they have changed
-   if (param_listener_->is_old(params_)) {
-     params_ = param_listener_->get_params();
-     RCLCPP_INFO(logger, "Parameters were updated");
-   }
+CallbackReturn SwerveDriveController::on_configure(
+  const rclcpp_lifecycle::State & /*previous_state*/)
+{
+  auto logger = get_node()->get_logger();
+
+  // update parameters if they have changed
+  if (param_listener_->is_old(params_)) {
+    params_ = param_listener_->get_params();
+  }
  
    // Get parameters
    try {
@@ -344,20 +338,16 @@
    }
  
    // --- Setup Subscriber ---
-   cmd_vel_subscriber_ = get_node()->create_subscription<CmdVelMsg>(
-     cmd_vel_topic_, rclcpp::SystemDefaultsQoS(),
-     std::bind(&SwerveDriveController::reference_callback, this, std::placeholders::_1)
-   );
- 
-   // Initialize the buffer
-   auto initial_cmd = std::make_shared<CmdVelMsg>();
-   reset_controller_reference_msg(initial_cmd);
-   cmd_vel_buffer_.initRT(initial_cmd);
-   last_cmd_vel_time_ = get_node()->now();
- 
-   RCLCPP_DEBUG(
-     logger, "Subscribed to %s (expecting geometry_msgs/msg/Twist)",
-     cmd_vel_topic_.c_str());
+  cmd_vel_subscriber_ = get_node()->create_subscription<CmdVelMsg>(
+    cmd_vel_topic_, rclcpp::SystemDefaultsQoS(),
+    std::bind(&SwerveDriveController::reference_callback, this, std::placeholders::_1)
+  );
+
+  // Initialize the buffer
+  auto initial_cmd = std::make_shared<CmdVelMsg>();
+  reset_controller_reference_msg(initial_cmd);
+  cmd_vel_buffer_.initRT(initial_cmd);
+  last_cmd_vel_time_ = get_node()->now();
  
    // Publisher
    try {
@@ -425,23 +415,19 @@
        e.what());
      return controller_interface::CallbackReturn::ERROR;
    }
-   rt_tf_odom_state_publisher_->lock();
-   rt_tf_odom_state_publisher_->msg_.transforms.resize(1);
-   rt_tf_odom_state_publisher_->msg_.transforms[0].header.stamp = get_node()->now();
-   rt_tf_odom_state_publisher_->msg_.transforms[0].header.frame_id = odom_frame_id_;
-   rt_tf_odom_state_publisher_->msg_.transforms[0].child_frame_id = base_frame_id_;
-   rt_tf_odom_state_publisher_->msg_.transforms[0].transform.translation.z = 0.0;
-   rt_tf_odom_state_publisher_->unlock();
- 
-   RCLCPP_DEBUG(logger, "Subscribed to %s", cmd_vel_topic_.c_str());
-   RCLCPP_DEBUG(logger, "Publishing odometry to ~/odometry");
- 
-   // ***** joint commander publisher *****
-   commanded_joint_state_publisher_ = get_node()->create_publisher<sensor_msgs::msg::JointState>(
-     "joint_commanders", rclcpp::SystemDefaultsQoS());
-   rt_commanded_joint_state_publisher_ = std::make_unique<CommandedJointStatePublisher>(
-     commanded_joint_state_publisher_);
-   RCLCPP_DEBUG(logger, "Publishing joint commands to /joint_commanders");
+  rt_tf_odom_state_publisher_->lock();
+  rt_tf_odom_state_publisher_->msg_.transforms.resize(1);
+  rt_tf_odom_state_publisher_->msg_.transforms[0].header.stamp = get_node()->now();
+  rt_tf_odom_state_publisher_->msg_.transforms[0].header.frame_id = odom_frame_id_;
+  rt_tf_odom_state_publisher_->msg_.transforms[0].child_frame_id = base_frame_id_;
+  rt_tf_odom_state_publisher_->msg_.transforms[0].transform.translation.z = 0.0;
+  rt_tf_odom_state_publisher_->unlock();
+
+  // ***** joint commander publisher *****
+  commanded_joint_state_publisher_ = get_node()->create_publisher<sensor_msgs::msg::JointState>(
+    "joint_commanders", rclcpp::SystemDefaultsQoS());
+  rt_commanded_joint_state_publisher_ = std::make_unique<CommandedJointStatePublisher>(
+    commanded_joint_state_publisher_);
    // ***** realtime joint commander publisher *****
    if (rt_commanded_joint_state_publisher_) {
      rt_commanded_joint_state_publisher_->lock();
@@ -459,30 +445,16 @@
      rt_commanded_joint_state_publisher_->unlock();
    }
  
-   // ***** Visualizer *****
-   if (enable_visualization_) {
-     visualizer_ = std::make_unique<MarkerVisualize>();
-     // get_node() returns a shared pointer to the node.
-     visualization_update_time_ = get_node()->get_parameter("visualization_update_time").as_double();
-     if (visualization_update_time_ < 0.0) {
-       RCLCPP_WARN(
-         logger,
-         "visualization_update_time (%.3f) is negative. Setting to 0.0 (publish every update).",
-         visualization_update_time_);
-       visualization_update_time_ = 0.0;
-     }
-     if (get_node()) {
-       last_visualization_publish_time_ = get_node()->now() - rclcpp::Duration::from_seconds(
-         visualization_update_time_ + 1.0);
-     } else {
-       // no initialization, set to 0
-       last_visualization_publish_time_ = rclcpp::Time(0, 0, RCL_ROS_TIME);
-     }
- 
-     visualizer_->init(
-       this->get_node(), base_frame_id_, visualization_marker_topic_, num_modules_,
-       visualization_update_time_);
-   }
+  // ***** Visualizer *****
+  if (enable_visualization_) {
+    visualizer_ = std::make_unique<MarkerVisualize>();
+    visualization_update_time_ = std::max(0.0, visualization_update_time_);
+    last_visualization_publish_time_ = get_node()->now() - rclcpp::Duration::from_seconds(
+      visualization_update_time_ + 1.0);
+    visualizer_->init(
+      this->get_node(), base_frame_id_, visualization_marker_topic_, num_modules_,
+      visualization_update_time_);
+  }
  
    // ---publish_limited_velocity  ---
    if (publish_limited_velocity_) {
@@ -503,263 +475,162 @@
   previous_wheel_rotation_direction_.resize(num_modules_, 1.0);
   wheel_speed_scale_.resize(num_modules_, 1.0);
   reversal_target_steering_angle_.resize(num_modules_, 0.0);
-  reversal_target_wheel_direction_.resize(num_modules_, 1.0);
- 
-   RCLCPP_DEBUG(logger, "Configuration successful");
-   return CallbackReturn::SUCCESS;
+
+  // Pre-allocate vectors for update() loop to avoid real-time heap allocation
+  current_wheel_velocities_.resize(num_modules_, 0.0);
+  corrected_steering_positions_.resize(num_modules_, 0.0);
+  final_steering_commands_.resize(num_modules_, 0.0);
+  final_wheel_velocity_commands_.resize(num_modules_, 0.0);
+  robot_frame_steering_angles_for_viz_.resize(num_modules_, 0.0);
+  wheel_linear_vels_for_viz_.resize(num_modules_, 0.0);
+  previoud_steering_commands_.resize(num_modules_, 0.0);
+
+  RCLCPP_INFO(logger, "Configuration complete: %zu modules, wheel_radius=%.3f",
+    num_modules_, wheel_radius_);
+  return CallbackReturn::SUCCESS;
  }
  
  CallbackReturn SwerveDriveController::on_activate(
    const rclcpp_lifecycle::State & /*previous_state*/)
  {
-   RCLCPP_DEBUG(get_node()->get_logger(), "Activating Swerve Drive Controller...");
- 
-   // Reset internal state variables
-   target_vx_ = 0.0;
-   target_vy_ = 0.0;
-   target_wz_ = 0.0;
-   last_cmd_vel_time_ = get_node()->now();
- 
+  // Reset internal state variables
+  target_vx_ = 0.0;
+  target_vy_ = 0.0;
+  target_wz_ = 0.0;
+  last_cmd_vel_time_ = get_node()->now();
+
   // Reset 180° Rule smooth reversal state
   for (size_t i = 0; i < num_modules_; ++i) {
     reversal_phase_[i] = ReversalPhase::NORMAL;
     previous_wheel_rotation_direction_[i] = 1.0;
     wheel_speed_scale_[i] = 1.0;
     reversal_target_steering_angle_[i] = 0.0;
-    reversal_target_wheel_direction_[i] = 1.0;
   }
+
+  // --- Get and organize hardware interface handles ---
+  module_handles_.clear();
+  module_handles_.reserve(num_modules_);
+
+  for (size_t i = 0; i < num_modules_; ++i) {
+    const auto & steering_joint = steering_joint_names_[i];
+    const auto & wheel_joint = wheel_joint_names_[i];
+
+    // --- Find state interface for Steering Position
+    const hardware_interface::LoanedStateInterface * steering_state_pos_ptr = nullptr;
+    const std::string expected_steering_state_name = steering_joint;
+    const std::string expected_steering_state_if_name = HW_IF_POSITION;
+
+    // -- Find the state interface for wheel velocity state
+    const hardware_interface::LoanedStateInterface * wheel_state_vel_ptr = nullptr;
+    const std::string expected_position_state_name = steering_joint_names_[i] + "/" + HW_IF_POSITION;
+    const std::string expected_speed_state_name = wheel_joint_names_[i] + "/" + HW_IF_VELOCITY;
+
+    // Find state interfaces for steering position and wheel velocity
+    for (const auto & state_if : state_interfaces_) {
+      const auto & name = state_if.get_name();
+      if (name == expected_position_state_name) {
+        steering_state_pos_ptr = &state_if;
+      } else if (name == expected_speed_state_name) {
+        wheel_state_vel_ptr = &state_if;
+      }
+    }
+
+    if (!steering_state_pos_ptr || !wheel_state_vel_ptr) {
+      RCLCPP_ERROR(
+        get_node()->get_logger(),
+        "State interface not found for module %zu (steering: %s, wheel: %s)",
+        i, steering_state_pos_ptr ? "OK" : "MISSING", wheel_state_vel_ptr ? "OK" : "MISSING");
+      return CallbackReturn::ERROR;
+    }
+
+    // --- Find command interfaces ---
+    hardware_interface::LoanedCommandInterface * steering_cmd_pos_ptr = nullptr;
+    hardware_interface::LoanedCommandInterface * wheel_cmd_vel_ptr = nullptr;
+    const std::string expected_steering_cmd_name = steering_joint_names_[i] + "/" + HW_IF_POSITION;
+    const std::string expected_wheel_cmd_name = wheel_joint_names_[i] + "/" + HW_IF_VELOCITY;
+
+    for (auto & cmd_if : command_interfaces_) {
+      const auto & name = cmd_if.get_name();
+      if (name == expected_steering_cmd_name) {
+        steering_cmd_pos_ptr = &cmd_if;
+      } else if (name == expected_wheel_cmd_name) {
+        wheel_cmd_vel_ptr = &cmd_if;
+      }
+    }
+
+    if (!steering_cmd_pos_ptr || !wheel_cmd_vel_ptr) {
+      RCLCPP_ERROR(
+        get_node()->get_logger(),
+        "Command interface not found for module %zu (steering: %s, wheel: %s)",
+        i, steering_cmd_pos_ptr ? "OK" : "MISSING", wheel_cmd_vel_ptr ? "OK" : "MISSING");
+      return CallbackReturn::ERROR;
+    }
  
-   // --- Get and organize hardware interface handles ---
-   module_handles_.clear();
-   module_handles_.reserve(num_modules_);
- 
-   RCLCPP_DEBUG(get_node()->get_logger(), "Attempting to claim %zu modules.", num_modules_);
-   RCLCPP_DEBUG(
-     get_node()->get_logger(), "Available command interfaces (%zu):", command_interfaces_.size());
-   RCLCPP_DEBUG(
-     get_node()->get_logger(), "Available state interfaces (%zu):",
-     state_interfaces_.size());
- 
-   for (size_t i = 0; i < num_modules_; ++i) {
-     // ***** find the steering and wheel joint names according to the module index *****
-     const auto & steering_joint = steering_joint_names_[i];
-     const auto & wheel_joint = wheel_joint_names_[i];
-     RCLCPP_DEBUG(
-       get_node()->get_logger(), "Processing module %zu:"
-       " Expected Steering='%s', Expected Wheel='%s'",
-       i, steering_joint.c_str(), wheel_joint.c_str());
-     // **********************************
- 
-     // --- Find state interface for Steering Position
-     const hardware_interface::LoanedStateInterface * steering_state_pos_ptr = nullptr;
-     const std::string expected_steering_state_name = steering_joint;
-     const std::string expected_steering_state_if_name = HW_IF_POSITION;
- 
-     // -- Find the state interface for wheel velocity state
-     const hardware_interface::LoanedStateInterface * wheel_state_vel_ptr = nullptr;
- 
-     RCLCPP_DEBUG(
-       get_node()->get_logger(), "Searching for State Interface: Joint='%s', Type='%s'",
-       expected_steering_state_name.c_str(), expected_steering_state_if_name.c_str());
-     bool state_found = false;
-     const std::string expected_position_state_name = steering_joint_names_[i] + "/" +
-       HW_IF_POSITION;
-     const std::string expected_speed_state_name = wheel_joint_names_[i] + "/" + HW_IF_VELOCITY;
- 
-     // Find the state interface for steering joint state
-     // w.r.t position and wheel joint state w.r.t joint velocity
-     for (const auto & state_if : state_interfaces_) {
-       if (state_if.get_name() == expected_position_state_name) {
-         steering_state_pos_ptr = &state_if;
-         state_found = true;
-       }
-       if (state_if.get_name() == expected_speed_state_name) {
-         wheel_state_vel_ptr = &state_if;
-         state_found = true;
-       }
-     }
-     if (!state_found) {
-       RCLCPP_ERROR_THROTTLE(
-         get_node()->get_logger(),
-         *get_node()->get_clock(),
-         1000,
-         "State interface '%s' not found in state_interfaces_ list during update.",
-         expected_position_state_name.c_str());
-       return CallbackReturn::ERROR;
-     }
- 
-     // --- Find command interface (Steering Position) ---
-     hardware_interface::LoanedCommandInterface * steering_cmd_pos_ptr = nullptr;
-     const std::string expected_steering_cmd_name = steering_joint_names_[i] + "/" + HW_IF_POSITION;
-     const std::string expected_steering_cmd_if_name = HW_IF_POSITION;
- 
-     RCLCPP_DEBUG(
-       get_node()->get_logger(), "  Searching for Command Interface: Joint='%s', Type='%s'",
-       expected_steering_cmd_name.c_str(), expected_steering_cmd_if_name.c_str());
- 
-     bool cmd_steering_found = false;
-     for (auto & cmd_if : command_interfaces_) {
-       // compare the name of the command interface with the expected name
-       if (cmd_if.get_name() == expected_steering_cmd_name) {
-         steering_cmd_pos_ptr = &cmd_if;
-         cmd_steering_found = true;
-         break;
-       }
-     }
-     if (!cmd_steering_found) {
-       RCLCPP_ERROR_THROTTLE(
-         get_node()->get_logger(),
-         *get_node()->get_clock(),
-         1000,
-         "Command interface '%s' not found in command_interfaces_ list during update.",
-         expected_steering_cmd_name.c_str());
-       return CallbackReturn::ERROR;
-     }
- 
-     // --- Find command interface (Wheel Velocity) ---
-     hardware_interface::LoanedCommandInterface * wheel_cmd_vel_ptr = nullptr;
-     const std::string expected_wheel_cmd_name = wheel_joint_names_[i] + "/" + HW_IF_VELOCITY;
-     const std::string expected_wheel_cmd_if_name = HW_IF_VELOCITY;
- 
-     // Find the command interface for wheel velocity
-     bool cmd_wheel_found = false;
-     RCLCPP_DEBUG(
-       get_node()->get_logger(), "  Searching for Command Interface: Joint='%s', Type='%s'",
-       expected_wheel_cmd_name.c_str(), expected_wheel_cmd_if_name.c_str());
- 
-     for (auto & cmd_if : command_interfaces_) {
-       // compare the name of the command interface with the expected name
-       if (cmd_if.get_name() == expected_wheel_cmd_name) {
-         wheel_cmd_vel_ptr = &cmd_if;
-         cmd_wheel_found = true;
-         break;
-       }
-     }
- 
-     if (!cmd_wheel_found) {
-       RCLCPP_ERROR_THROTTLE(
-         get_node()->get_logger(),
-         *get_node()->get_clock(),
-         1000,
-         "Command interface '%s' not found in command_interfaces_ list during update.",
-         expected_wheel_cmd_name.c_str());
-       // return controller_interface::return_type::ERROR;
-     }
- 
-     // --- Add found handles and params to module_handles_ vector ---
-     try {
-       module_handles_.emplace_back(
-         ModuleHandles{
-           std::cref(*steering_state_pos_ptr),
-           std::ref(*steering_cmd_pos_ptr),
-           std::cref(*wheel_state_vel_ptr),
-           std::ref(*wheel_cmd_vel_ptr),
-           module_x_offsets_[i],
-           module_y_offsets_[i],
-           module_angle_offsets_[i],
-           module_steering_limit_lower_[i],
-           module_steering_limit_upper_[i]
-         });
-       RCLCPP_DEBUG(
-         get_node()->get_logger(), "Successfully processed interfaces for module %zu.",
-         i);
-     } catch (const std::exception & e) {
-       RCLCPP_ERROR(
-         get_node()->get_logger(),
-         "Exception while adding module handles for module %zu: %s", i,
-         e.what());
-       module_handles_.clear();
-       return CallbackReturn::ERROR;
-     }
-   }
-   // End of module loop
- 
-   // ... (Final check and Activation successful log) ...
-   return CallbackReturn::SUCCESS;
+    // --- Add found handles and params to module_handles_ vector ---
+    module_handles_.emplace_back(
+      ModuleHandles{
+        std::cref(*steering_state_pos_ptr),
+        std::ref(*steering_cmd_pos_ptr),
+        std::cref(*wheel_state_vel_ptr),
+        std::ref(*wheel_cmd_vel_ptr),
+        module_x_offsets_[i],
+        module_y_offsets_[i],
+        module_angle_offsets_[i],
+        module_steering_limit_lower_[i],
+        module_steering_limit_upper_[i]
+      });
+  }
+
+  RCLCPP_INFO(get_node()->get_logger(), "Activation successful with %zu modules", num_modules_);
+  return CallbackReturn::SUCCESS;
  }
  
- CallbackReturn SwerveDriveController::on_deactivate(
-   const rclcpp_lifecycle::State & /*previous_state*/)
- {
-   RCLCPP_INFO(get_node()->get_logger(), "Deactivating Swerve Drive Controller...");
-   // Stop the robot
-   for (size_t i = 0; i < num_modules_; ++i) {
-     try {
-       // Use module_handles if available and initialized correctly
-       if (!module_handles_.empty() && i < module_handles_.size()) {
-         // Optionally set steering to current pos
-         auto get_steering_val = module_handles_[i].steering_state_pos.get().get_optional();
-         if (!module_handles_[i].steering_cmd_pos.get().set_value(get_steering_val.value())) {
-           RCLCPP_WARN(
-             get_node()->get_logger(), "Failed to set value for interface %s",
-             module_handles_[i].steering_cmd_pos.get().get_name().c_str());
-         }
-       } else {
-         RCLCPP_WARN(
-           get_node()->get_logger(),
-           "Module handles not available during deactivation for index %ld.",
-           i);
-         // Fallback (less safe)
-         for (auto & iface : command_interfaces_) {
-           // Check if wheel_joint_names_ is still valid and index is within bounds
-           if (i < wheel_joint_names_.size() && iface.get_name() == wheel_joint_names_[i] &&
-             iface.get_interface_name() == HW_IF_VELOCITY)
-           {
-             if (!iface.set_value(0.0)) {
-               RCLCPP_WARN(
-                 get_node()->get_logger(), "Failed to set value for interface %s",
-                 iface.get_name().c_str());
-             }
-             break;
-           }
-         }
-       }
-     } catch (const std::exception & e) {
-       RCLCPP_ERROR(
-         get_node()->get_logger(),
-         "Error setting command interface values during deactivation for module %zu: %s", i,
-         e.what());
-     } catch (...) {
-       RCLCPP_ERROR(
-         get_node()->get_logger(),
-         "Unknown error setting command interface values during deactivation for module %zu",
-         i);
-     }
-   }
-   RCLCPP_DEBUG(get_node()->get_logger(), "Deactivation successful");
-   return CallbackReturn::SUCCESS;
- }
+CallbackReturn SwerveDriveController::on_deactivate(
+  const rclcpp_lifecycle::State & /*previous_state*/)
+{
+  // Stop the robot - hold current steering position
+  if (!module_handles_.empty()) {
+    for (size_t i = 0; i < std::min(num_modules_, module_handles_.size()); ++i) {
+      try {
+        auto steering_val = module_handles_[i].steering_state_pos.get().get_optional();
+        module_handles_[i].steering_cmd_pos.get().set_value(steering_val.value());
+        module_handles_[i].wheel_cmd_vel.get().set_value(0.0);
+      } catch (const std::exception & e) {
+        RCLCPP_ERROR_THROTTLE(
+          get_node()->get_logger(), *get_node()->get_clock(), 1000,
+          "Deactivation error for module %zu: %s", i, e.what());
+      }
+    }
+  }
+  RCLCPP_INFO(get_node()->get_logger(), "Deactivation complete");
+  return CallbackReturn::SUCCESS;
+}
  
- // helper function to normalize angles to [0, 2*pi)
- double SwerveDriveController::normalize_angle(double angle_rad)
- {
-   // Use fmod for potentially better performance and handling edge cases
-   double remainder = std::fmod(angle_rad + M_PI, 2.0 * M_PI);
-   if (remainder < 0.0) {
-     remainder += 2.0 * M_PI;
-   }
-   return remainder - M_PI;
- }
- 
- // helper function to calculate the shortest angular distance
- double SwerveDriveController::normalize_angle_positive(double angle)
- {
-   // Use fmod and add 2*PI to handle negative results correctly
-   return std::fmod(std::fmod(angle, 2.0 * M_PI) + 2.0 * M_PI, 2.0 * M_PI);
- }
- 
- double SwerveDriveController::shortest_angular_distance(double from, double to)
- {
-   // Ensure angles are normalized between 0 and 2*pi for correct subtraction
-   double result = normalize_angle_positive(to) - normalize_angle_positive(from);
-   // Adjust the result to be in [-pi, pi]
-   if (result > M_PI) {
-     result -= 2.0 * M_PI;
-   } else if (result < -M_PI) {
-     result += 2.0 * M_PI;
-   }
-   return result;
- }
+// helper function to normalize angles to [-π, +π]
+double SwerveDriveController::normalize_angle(double angle_rad)
+{
+  double remainder = std::fmod(angle_rad + M_PI, kTwoPi);
+  return (remainder < 0.0 ? remainder + kTwoPi : remainder) - M_PI;
+}
+
+// helper function to normalize angles to [0, 2π)
+double SwerveDriveController::normalize_angle_positive(double angle)
+{
+  double result = std::fmod(angle, kTwoPi);
+  return result < 0.0 ? result + kTwoPi : result;
+}
+
+// helper function to calculate the shortest angular distance
+double SwerveDriveController::shortest_angular_distance(double from, double to)
+{
+  double result = normalize_angle_positive(to) - normalize_angle_positive(from);
+  if (result > M_PI) {
+    return result - kTwoPi;
+  } else if (result < -M_PI) {
+    return result + kTwoPi;
+  }
+  return result;
+}
  
  controller_interface::return_type SwerveDriveController::update(
    const rclcpp::Time & time, const rclcpp::Duration & period)
@@ -780,16 +651,11 @@
      timeout = true;
    }
  
-   if (timeout) {
-     target_vx_ = 0.0;
-     target_vy_ = 0.0;
-     target_wz_ = 0.0;
- 
-     // Reset accumulators in odometry if timeout occurs
-     RCLCPP_DEBUG_THROTTLE(
-       get_node()->get_logger(),
-       *get_node()->get_clock(), 1000, "Resetting odometry accumulators due to timeout.");
-     odometry_.resetAccumulators();
+  if (timeout) {
+    target_vx_ = 0.0;
+    target_vy_ = 0.0;
+    target_wz_ = 0.0;
+    odometry_.resetAccumulators();
    } else if (current_cmd_vel_ptr && *current_cmd_vel_ptr) {
      // Valid command pointer received
      const auto & current_cmd_vel = **current_cmd_vel_ptr;
@@ -873,107 +739,66 @@
      }
    }
  
-   // --- 2. align the steering w.r.t offset and set the value ---
-   double current_steering_positions;
-   std::vector<double> current_wheel_velocities;
-   std::vector<double> corrected_steering_positions;
+  // --- 2. align the steering w.r.t offset and set the value ---
+  // Early validation: check module_handles_ once instead of per iteration
+  const size_t handle_count = module_handles_.size();
+  if (handle_count != num_modules_) {
+    RCLCPP_ERROR_THROTTLE(
+      get_node()->get_logger(), *get_node()->get_clock(), 1000,
+      "Module handles count (%zu) doesn't match num_modules (%zu)", handle_count, num_modules_);
+    return controller_interface::return_type::ERROR;
+  }
+
+  bool all_states_read = true;
+  for (size_t i = 0; i < num_modules_; ++i) {
+    try {
+      const auto & handle = module_handles_[i];
+      auto cur_steering_get_val = handle.steering_state_pos.get().get_optional();
+      auto cur_wheel_get_val = handle.wheel_state_vel.get().get_optional();
+
+      double current_steering_pos = enabled_open_loop_ ?
+        previoud_steering_commands_[i] : cur_steering_get_val.value();
+
+      corrected_steering_positions_[i] = current_steering_pos + handle.angle_offset;
+      current_wheel_velocities_[i] = cur_wheel_get_val.value();
+    } catch (const std::exception & e) {
+      RCLCPP_ERROR_THROTTLE(
+        get_node()->get_logger(), *get_node()->get_clock(), 1000,
+        "Exception reading state for module %zu: %s", i, e.what());
+      all_states_read = false;
+      break;
+    }
+  }
  
-   current_wheel_velocities.reserve(num_modules_);
-   corrected_steering_positions.reserve(num_modules_);
-   bool all_states_read = true;
-   RCLCPP_DEBUG_THROTTLE(
-     get_node()->get_logger(),
-     *get_node()->get_clock(), 1000, "Number of modules: %zu", num_modules_);
-   for (size_t i = 0; i < num_modules_; ++i) {
-     RCLCPP_DEBUG(get_node()->get_logger(), "Reading state for module %zu", i);
-     try {
-       // validate module_handles_ before accessing it
-       RCLCPP_DEBUG(get_node()->get_logger(), "Module handles size: %zu", module_handles_.size());
-       if (module_handles_.empty() || i >= module_handles_.size()) {
-         RCLCPP_ERROR_THROTTLE(
-           get_node()->get_logger(),
-           *get_node()->get_clock(), 1000,
-           "Module handles not ready for index %zu in state reading.",
-           i);
-         all_states_read = false;
-         break;
-       }
-       auto cur_steering_get_val = module_handles_[i].steering_state_pos.get().get_optional();
-       auto cur_wheel_get_val = module_handles_[i].wheel_state_vel.get().get_optional();
+  // --- 3. update the odometry ---
+  if (all_states_read) {
+    bool odom_ok = (odom_source_ == "command") ?
+      odometry_.update(target_vx_, target_vy_, target_wz_, time_gap) :
+      odometry_.update(corrected_steering_positions_, current_wheel_velocities_, time_gap);
+
+    if (!odom_ok) {
+      RCLCPP_WARN_THROTTLE(
+        get_node()->get_logger(), *get_node()->get_clock(), 5000,
+        "Odometry update failed (dt=%.6f)", time_gap);
+    }
+  }
  
-       if (enabled_open_loop_) {
-         current_steering_positions = previoud_steering_commands_[i];
-       } else {
-         current_steering_positions = cur_steering_get_val.value();
-       }
- 
-       corrected_steering_positions.push_back(
-         current_steering_positions + module_handles_[i].angle_offset);
-       current_wheel_velocities.push_back(cur_wheel_get_val.value());
-     } catch (const std::exception & e) {
-       RCLCPP_ERROR_THROTTLE(
-         get_node()->get_logger(),
-         *get_node()->get_clock(), 1000,
-         "Exception reading state for module %zu during odometry update: %s", i, e.what());
-       all_states_read = false;
-       break;
-     }
-   }
- 
-   // --- 3. update the odometry ---
-   if (all_states_read) {
-     const double dt = time_gap;
- 
-     // Compute and store orientation info
-     if (odom_source_ == "command") {
-       // update the odometry using just target velocities(command), it will be not good
-       if (!odometry_.update(target_vx_, target_vy_, target_wz_, dt)) {
-         RCLCPP_WARN_THROTTLE(
-           get_node()->get_logger(),
-           *get_node()->get_clock(), 1000, "Odometry update failed, dt might be too small (%.6f).",
-           dt);
-       }
-     } else if (odom_source_ == "feedback") {
-       // calcuate the odometry using the kinematics from the steering and wheel velocities
-       if (!odometry_.update(corrected_steering_positions, current_wheel_velocities, dt)) {
-         RCLCPP_WARN_THROTTLE(
-           get_node()->get_logger(),
-           *get_node()->get_clock(), 1000, "Odometry update failed, dt might be too small (%.6f).",
-           dt);
-       }
-     } else {
-       RCLCPP_ERROR(get_node()->get_logger(), "Invalid odometry source selected.");
-     }
-   }
- 
-   // --- 4. calculate the wheel velocities and steering angles based on the inverse kinematics ---
-   bool is_steering_aligned = false;
- 
-   std::vector<double> final_steering_commands(num_modules_);
-   std::vector<double> final_wheel_velocity_commands(num_modules_);
-   for (size_t i = 0; i < num_modules_; ++i) {
-     // Check if module_handles_ is populated correctly
-     if (module_handles_.empty() || i >= module_handles_.size()) {
-       RCLCPP_ERROR_THROTTLE(
-         get_node()->get_logger(),
-         *get_node()->get_clock(), 1000, "Module handles not initialized correctly for index %zu",
-         i);
-       continue;
-     }
- 
-     const double module_x = module_handles_[i].x_offset;
-     const double module_y = module_handles_[i].y_offset;
-     const double angle_offset = module_handles_[i].angle_offset;
-     const double limit_lower = module_handles_[i].steering_limit_lower;
-     const double limit_upper = module_handles_[i].steering_limit_upper;
- 
-     // 4.1.derivate the each wheel velocity and steering angle
-     double wheel_vel_x = target_vx_ - target_wz_ * module_y;
-     double wheel_vel_y = target_vy_ + target_wz_ * module_x;
-     double target_steering_angle_robot = std::atan2(wheel_vel_y, wheel_vel_x + 1e-9);
-     double target_wheel_speed = std::sqrt(wheel_vel_x * wheel_vel_x + wheel_vel_y * wheel_vel_y);
-     double target_steering_joint_angle =
-       normalize_angle(target_steering_angle_robot - angle_offset);
+  // --- 4. calculate the wheel velocities and steering angles based on the inverse kinematics ---
+  bool is_steering_aligned = false;
+
+  for (size_t i = 0; i < num_modules_; ++i) {
+    const auto & handle = module_handles_[i];
+    const double module_x = handle.x_offset;
+    const double module_y = handle.y_offset;
+    const double angle_offset = handle.angle_offset;
+
+    // 4.1. Compute wheel velocity vector and target steering angle
+    const double wheel_vel_x = target_vx_ - target_wz_ * module_y;
+    const double wheel_vel_y = target_vy_ + target_wz_ * module_x;
+    const double target_steering_angle_robot = std::atan2(wheel_vel_y, wheel_vel_x + kEpsilon);
+    const double target_wheel_speed = std::hypot(wheel_vel_x, wheel_vel_y);
+    const double target_steering_joint_angle =
+      normalize_angle(target_steering_angle_robot - angle_offset);
  
      // 4.2. read the current steering angle from the hardware interface
      double current_steering_angle = 0.0;
@@ -997,204 +822,116 @@
        continue;
      }
  
-     // 4.3. Apply 180° Rule (Steering Flip Optimization)
-     // Instead of turning 270°, turn -90° and reverse the drive motor direction
-     // This ensures wheels always take the shortest path (≤90°) to target angle
-     double optimized_steering_angle = target_steering_joint_angle;
-     double wheel_rotation_direction = 1.0;
+    // 4.3. Apply 180° Rule (Steering Flip Optimization)
+    // Instead of turning 270°, turn -90° and reverse the drive motor direction
+    double optimized_steering_angle = target_steering_joint_angle;
+    double wheel_rotation_direction = 1.0;
+
+    // Calculate the shortest angular distance from current to target
+    const double angle_diff = shortest_angular_distance(
+      current_steering_angle, target_steering_joint_angle);
+
+    // If rotation would be more than 90°, flip the steering and reverse motor
+    if (std::fabs(angle_diff) > kPiHalf) {
+      optimized_steering_angle = normalize_angle(target_steering_joint_angle + M_PI);
+      wheel_rotation_direction = -1.0;
+    }
  
-     // Calculate the shortest angular distance from current to target
-     double angle_diff = shortest_angular_distance(
-       current_steering_angle,
-       target_steering_joint_angle);
- 
-     // If rotation would be more than 90°, flip the steering and reverse motor
-     if (std::fabs(angle_diff) > M_PI * 0.5) {
-       // Flip steering angle by 180° and reverse wheel direction
-       optimized_steering_angle = normalize_angle(target_steering_joint_angle + M_PI);
-       wheel_rotation_direction = -1.0;
- 
-       RCLCPP_DEBUG_THROTTLE(
-         get_node()->get_logger(),
-         *get_node()->get_clock(), 1000,
-         "Module %zu: 180° Rule applied. Original: %.1f°, Optimized: %.1f°, Motor reversed",
-         i, target_steering_joint_angle * 180.0 / M_PI,
-         optimized_steering_angle * 180.0 / M_PI);
-     }
- 
-     // 4.3.1. Handle mechanical steering limit at ±π (±180°)
-     // The steering mechanism cannot physically cross the ±180° boundary
-     // If the shortest path would cross this boundary, flip the steering instead
-     {
-       double angle_diff_after_opt = shortest_angular_distance(
-         current_steering_angle, optimized_steering_angle);
- 
-       bool crosses_boundary = false;
- 
-       // Crossing +π boundary: positive current, negative target, positive angle_diff
-       // Example: current=170°, target=-170°, shortest path is +20° through +180°
-       if (current_steering_angle > 0 && optimized_steering_angle < 0 && angle_diff_after_opt > 0) {
-         crosses_boundary = true;
-       }
-       // Crossing -π boundary: negative current, positive target, negative angle_diff
-       // Example: current=-170°, target=170°, shortest path is -20° through -180°
-       else if (current_steering_angle < 0 && optimized_steering_angle > 0 &&
-         angle_diff_after_opt < 0)
-       {
-         crosses_boundary = true;
-       }
- 
-       if (crosses_boundary) {
-         // Flip steering by 180° and reverse motor direction to avoid boundary crossing
-         optimized_steering_angle = normalize_angle(optimized_steering_angle + M_PI);
-         wheel_rotation_direction *= -1.0;
- 
-         RCLCPP_DEBUG_THROTTLE(
-           get_node()->get_logger(),
-           *get_node()->get_clock(), 1000,
-           "Module %zu: Boundary flip applied. Cannot cross ±180° mechanical limit. "
-           "Current: %.1f°, New target: %.1f°, Motor %s",
-           i, current_steering_angle * 180.0 / M_PI,
-           optimized_steering_angle * 180.0 / M_PI,
-           wheel_rotation_direction > 0 ? "forward" : "reversed");
-       }
-     }
- 
-     // 4.3.2. Smooth direction reversal sequence: DECEL → STEERING → ACCEL
-     // Phase 1: Decelerate wheel to 0
-     // Phase 2: Rotate steering (wheel stopped)
-     // Phase 3: Accelerate wheel in new direction
- 
-     bool direction_changed = (wheel_rotation_direction != previous_wheel_rotation_direction_[i]);
- 
-     // Reversal parameters
-     constexpr double REVERSAL_DECEL_RATE = 5.0;   // Speed scale decrease rate per second
-     constexpr double REVERSAL_ACCEL_RATE = 3.0;   // Speed scale increase rate per second
-     constexpr double REVERSAL_THRESHOLD = 0.05;   // Threshold to consider speed as zero
-     constexpr double STEERING_TOLERANCE = 0.1;    // Steering angle tolerance (rad, ~5.7°)
- 
+    // 4.3.1. Handle mechanical steering limit at ±π (±180°)
+    // If the shortest path would cross this boundary, flip the steering instead
+    {
+      const double angle_diff_after_opt = shortest_angular_distance(
+        current_steering_angle, optimized_steering_angle);
+
+      // Check if path crosses ±π boundary
+      const bool crosses_boundary =
+        (current_steering_angle > 0 && optimized_steering_angle < 0 && angle_diff_after_opt > 0) ||
+        (current_steering_angle < 0 && optimized_steering_angle > 0 && angle_diff_after_opt < 0);
+
+      if (crosses_boundary) {
+        optimized_steering_angle = normalize_angle(optimized_steering_angle + M_PI);
+        wheel_rotation_direction *= -1.0;
+      }
+    }
+
+    // 4.3.2. Smooth direction reversal sequence: DECEL → STEERING → ACCEL
+    const bool direction_changed =
+      (wheel_rotation_direction != previous_wheel_rotation_direction_[i]);
+
     // Start reversal sequence when direction changes
     if (direction_changed && reversal_phase_[i] == ReversalPhase::NORMAL) {
       reversal_phase_[i] = ReversalPhase::DECELERATING;
       reversal_target_steering_angle_[i] = optimized_steering_angle;
-      reversal_target_wheel_direction_[i] = wheel_rotation_direction;  // Save target direction
-      RCLCPP_DEBUG(
-        get_node()->get_logger(),
-        "Module %zu: Phase 1 - Decelerating wheel before steering change (target dir: %.1f)",
-        i, wheel_rotation_direction);
     }
  
      // 4.4. Wrap-around steering angle to [-π, +π] range (-180° ~ +180°)
      double limited_steering_cmd = normalize_angle(optimized_steering_angle);
  
-     // Determine steering command based on reversal phase
-     double steering_target_for_this_cycle = limited_steering_cmd;
- 
-     switch (reversal_phase_[i]) {
-       case ReversalPhase::DECELERATING:
-         // Phase 1: Keep current steering, decelerate wheel
-         steering_target_for_this_cycle = current_steering_angle;  // Hold steering position
-         wheel_speed_scale_[i] -= REVERSAL_DECEL_RATE * time_gap;
- 
-         if (wheel_speed_scale_[i] <= REVERSAL_THRESHOLD) {
-           wheel_speed_scale_[i] = 0.0;
-           reversal_phase_[i] = ReversalPhase::STEERING;
-           RCLCPP_DEBUG(
-             get_node()->get_logger(),
-             "Module %zu: Phase 2 - Wheel stopped, now rotating steering", i);
-         }
-         break;
- 
-      case ReversalPhase::STEERING:
-        // Phase 2: Wheel stopped, rotate steering to target
-        steering_target_for_this_cycle = reversal_target_steering_angle_[i];
-        wheel_speed_scale_[i] = 0.0;  // Keep wheel stopped
+    // Determine steering command based on reversal phase
+    double steering_target_for_this_cycle = limited_steering_cmd;
 
-        // Check if steering reached target
+    switch (reversal_phase_[i]) {
+      case ReversalPhase::DECELERATING:
+        steering_target_for_this_cycle = current_steering_angle;
+        wheel_speed_scale_[i] -= kReversalDecelRate * time_gap;
+        if (wheel_speed_scale_[i] <= kReversalThreshold) {
+          wheel_speed_scale_[i] = 0.0;
+          reversal_phase_[i] = ReversalPhase::STEERING;
+        }
+        break;
+
+      case ReversalPhase::STEERING:
+        steering_target_for_this_cycle = reversal_target_steering_angle_[i];
+        wheel_speed_scale_[i] = 0.0;
         {
-          double steering_error = std::fabs(
+          const double steering_error = std::fabs(
             shortest_angular_distance(current_steering_angle, reversal_target_steering_angle_[i]));
-          if (steering_error < STEERING_TOLERANCE) {
-            // Steering complete, update direction using saved target direction and start accel
-            previous_wheel_rotation_direction_[i] = reversal_target_wheel_direction_[i];
+          if (steering_error < kSteeringTolerance) {
+            previous_wheel_rotation_direction_[i] = wheel_rotation_direction;
             reversal_phase_[i] = ReversalPhase::ACCELERATING;
-            RCLCPP_DEBUG(
-              get_node()->get_logger(),
-              "Module %zu: Phase 3 - Steering complete, now accelerating (dir: %.1f)",
-              i, reversal_target_wheel_direction_[i]);
           }
         }
         break;
- 
-       case ReversalPhase::ACCELERATING:
-         // Phase 3: Accelerate wheel in new direction
-         wheel_speed_scale_[i] += REVERSAL_ACCEL_RATE * time_gap;
-         if (wheel_speed_scale_[i] >= 1.0) {
-           wheel_speed_scale_[i] = 1.0;
-           reversal_phase_[i] = ReversalPhase::NORMAL;
-           RCLCPP_DEBUG(
-             get_node()->get_logger(),
-             "Module %zu: Reversal complete, back to normal operation", i);
-         }
-         break;
- 
-       case ReversalPhase::NORMAL:
-       default:
-         // Normal operation - maintain full speed
-         wheel_speed_scale_[i] = 1.0;
-         break;
-     }
- 
-     // Clamp speed scale to valid range
-     wheel_speed_scale_[i] = std::clamp(wheel_speed_scale_[i], 0.0, 1.0);
- 
-     // 4.5. Apply steering angular velocity limit for smooth control
-     {
-       double effective_steering_vel_limit = steering_angular_velocity_limit_;
-       if (effective_steering_vel_limit <= 0.0 ||
-         effective_steering_vel_limit >= std::numeric_limits<double>::max())
-       {
-         effective_steering_vel_limit = 2.0;  // Default: 2.0 rad/s for smooth control
-       }
- 
-       double max_allowed_steering_change_this_dt = effective_steering_vel_limit * time_gap;
- 
-       // Calculate the shortest angular distance to target
-       double desired_steering_change_rad = shortest_angular_distance(
-         current_steering_angle,
-         steering_target_for_this_cycle);
- 
-       // Clamp the change to the maximum allowed per time step
-       double actual_steering_change_this_dt = std::clamp(
-         desired_steering_change_rad,
-         -max_allowed_steering_change_this_dt,
-         max_allowed_steering_change_this_dt
-       );
- 
-       // Apply the limited change and wrap-around to [-π, +π] range
-       optimized_steering_angle = normalize_angle(
-         current_steering_angle + actual_steering_change_this_dt);
-     }
- 
-    // 4.6. Calculate the final wheel velocity command
-    // Use previous direction during DECEL phase, saved target direction during STEERING/ACCEL
-    double effective_direction;
-    switch (reversal_phase_[i]) {
-      case ReversalPhase::DECELERATING:
-        // Use previous direction while decelerating
-        effective_direction = previous_wheel_rotation_direction_[i];
-        break;
-      case ReversalPhase::STEERING:
+
       case ReversalPhase::ACCELERATING:
-        // Use saved target direction during steering and acceleration
-        effective_direction = reversal_target_wheel_direction_[i];
+        wheel_speed_scale_[i] += kReversalAccelRate * time_gap;
+        if (wheel_speed_scale_[i] >= 1.0) {
+          wheel_speed_scale_[i] = 1.0;
+          reversal_phase_[i] = ReversalPhase::NORMAL;
+        }
         break;
-      case ReversalPhase::NORMAL:
+
       default:
-        // Normal operation - use current calculated direction
-        effective_direction = wheel_rotation_direction;
+        wheel_speed_scale_[i] = 1.0;
         break;
     }
+
+    wheel_speed_scale_[i] = std::clamp(wheel_speed_scale_[i], 0.0, 1.0);
+ 
+    // 4.5. Apply steering angular velocity limit for smooth control
+    if (enabled_steering_angular_velocity_limit_) {
+      double effective_steering_vel_limit = steering_angular_velocity_limit_;
+      if (effective_steering_vel_limit <= 0.0 ||
+        effective_steering_vel_limit >= std::numeric_limits<double>::max())
+      {
+        effective_steering_vel_limit = 1.0;  // Default: 2.0 rad/s
+      }
+
+      const double max_change = effective_steering_vel_limit * time_gap;
+      const double desired_change = shortest_angular_distance(
+        current_steering_angle, steering_target_for_this_cycle);
+
+      optimized_steering_angle = normalize_angle(
+        current_steering_angle + std::clamp(desired_change, -max_change, max_change));
+    } else {
+      // No velocity limit - directly use target angle
+      optimized_steering_angle = steering_target_for_this_cycle;
+    }
+ 
+     // 4.6. Calculate the final wheel velocity command
+     // Use previous direction during DECEL phase, new direction after STEERING phase
+     double effective_direction = (reversal_phase_[i] == ReversalPhase::DECELERATING) ?
+       previous_wheel_rotation_direction_[i] : wheel_rotation_direction;
      double final_wheel_vel_cmd = effective_direction * target_wheel_speed *
        wheel_speed_scale_[i] / wheel_radius_;
  
@@ -1226,138 +963,59 @@
          }
        }
  
-       // Limit the wheel velocity command
-       if (final_wheel_vel_cmd < module_wheel_speed_limit_lower_[i] ||
-         final_wheel_vel_cmd > module_wheel_speed_limit_upper_[i])
-       {
-         RCLCPP_WARN(
-           get_node()->get_logger(),
-           "Module %zu: Wheel velocity command %.2f outside limits [%.2f, %.2f]. Clamping.",
-           i, final_wheel_vel_cmd, module_wheel_speed_limit_lower_[i],
-           module_wheel_speed_limit_upper_[i]);
+      // Limit the wheel velocity command
+      if (final_wheel_vel_cmd < module_wheel_speed_limit_lower_[i] ||
+        final_wheel_vel_cmd > module_wheel_speed_limit_upper_[i])
+      {
+        const double clipped_wheel_vel_cmd = std::clamp(
+          final_wheel_vel_cmd,
+          module_wheel_speed_limit_lower_[i],
+          module_wheel_speed_limit_upper_[i]);
+
+        if (enabled_wheel_saturation_scaling_) {
+          wheel_saturation_scale_factor_ = std::min(
+            wheel_saturation_scale_factor_,
+            clipped_wheel_vel_cmd / final_wheel_vel_cmd);
+        }
+      }
  
-         double clipped_wheel_vel_cmd;
-         clipped_wheel_vel_cmd = std::clamp(
-           final_wheel_vel_cmd,
-           module_wheel_speed_limit_lower_[i],
-           module_wheel_speed_limit_upper_[i]);
- 
-         if (enabled_wheel_saturation_scaling_) {
-           wheel_saturation_scale_factor_ = std::min(
-             wheel_saturation_scale_factor_,
-             clipped_wheel_vel_cmd / final_wheel_vel_cmd);
-           RCLCPP_WARN(
-             get_node()->get_logger(),
-             "min scale factor: %.2f, final_wheel_vel_cmd: %.2f, clipped_wheel_vel_cmd: %.2f",
-             wheel_saturation_scale_factor_, final_wheel_vel_cmd, clipped_wheel_vel_cmd);
-         } else {
-           wheel_saturation_scale_factor_ = 1.0;
-         }
-       }
- 
-       // joints commands
-       final_steering_commands[i] = optimized_steering_angle;
-       final_wheel_velocity_commands[i] = final_wheel_vel_cmd;
-     } catch (const std::exception & e) {
-       RCLCPP_ERROR_THROTTLE(
-         get_node()->get_logger(),
-         *get_node()->get_clock(), 1000,
-         "Exception writing commands for module %zu: %s", i, e.what());
-       try {
-         // Attempt to set safe values
-         if (!module_handles_[i].steering_cmd_pos.get().set_value(current_steering_angle)) {
-           RCLCPP_WARN(
-             get_node()->get_logger(), "Failed to set value for interface %s",
-             module_handles_[i].steering_cmd_pos.get().get_name().c_str());
-         }
-         if (!module_handles_[i].wheel_cmd_vel.get().set_value(0.0)) {
-           RCLCPP_WARN(
-             get_node()->get_logger(), "Failed to set value for interface %s",
-             module_handles_[i].wheel_cmd_vel.get().get_name().c_str());
-         }
- 
-         // joints commands
-         final_steering_commands[i] = current_steering_angle;
-         final_wheel_velocity_commands[i] = 0.0;
-       } catch (...) {
-       }
-       continue;
-     } catch (...) {
-       RCLCPP_ERROR_THROTTLE(
-         get_node()->get_logger(), *get_node()->get_clock(), 1000,
-         "Unknown exception writing commands for module %zu", i);
-       continue;
-     }
+     // joints commands
+     final_steering_commands_[i] = optimized_steering_angle;
+     final_wheel_velocity_commands_[i] = final_wheel_vel_cmd;
+    } catch (...) {
+      // Fallback to safe values on any exception
+      module_handles_[i].steering_cmd_pos.get().set_value(current_steering_angle);
+      module_handles_[i].wheel_cmd_vel.get().set_value(0.0);
+      final_steering_commands_[i] = current_steering_angle;
+      final_wheel_velocity_commands_[i] = 0.0;
+    }
    }
    // End of module loop
  
-   // --- 5. send the commands to the hardware interface ---
-   if (target_vx_ == 0.00 && target_vy_ == 0.00 && target_wz_ == 0.00) {
-     RCLCPP_DEBUG(
-       get_node()->get_logger(),
-       "Robot is halted. Commanding zero wheel velocity and holding current steering.");
-     for (size_t i = 0; i < num_modules_; ++i) {
-       if (module_handles_.empty() || i >= module_handles_.size()) {continue;}
-       double current_steering_angle_for_hold = 0.0;
-       try {
-         auto cur_steering_get_val = module_handles_[i].steering_state_pos.get().get_optional();
-         current_steering_angle_for_hold = cur_steering_get_val.value();
- 
-         if (!module_handles_[i].steering_cmd_pos.get().set_value(current_steering_angle_for_hold)) {
-           RCLCPP_WARN(
-             get_node()->get_logger(), "Failed to set value for interface %s",
-             module_handles_[i].steering_cmd_pos.get().get_name().c_str());
-         }
- 
-         if (!module_handles_[i].wheel_cmd_vel.get().set_value(0.0)) {
-           RCLCPP_WARN(
-             get_node()->get_logger(), "Failed to set value for interface %s",
-             module_handles_[i].wheel_cmd_vel.get().get_name().c_str());
-         }
- 
-         if (i < final_steering_commands.size()) {
-           final_steering_commands[i] = current_steering_angle_for_hold;
-         }
-         if (i < final_wheel_velocity_commands.size()) {
-           final_wheel_velocity_commands[i] = 0.0;
-         }
-       } catch (const std::exception & e) {
-         RCLCPP_ERROR_THROTTLE(
-           get_node()->get_logger(),
-           *get_node()->get_clock(),
-           1000,
-           "Exception during halted command writing for module %zu: %s", i, e.what());
-       }
-     }
-   } else {
-     // Update the final commands
-     for (size_t i = 0; i < num_modules_; ++i) {
-       // Set the steering and wheel commands
-       if (!module_handles_[i].steering_cmd_pos.get().set_value(final_steering_commands[i])) {
-         RCLCPP_WARN(
-           get_node()->get_logger(), "Failed to set value for interface %s",
-           module_handles_[i].steering_cmd_pos.get().get_name().c_str());
-       }
-       previoud_steering_commands_[i] = final_steering_commands[i];
-       if (is_steering_aligned) {
-         if (!module_handles_[i].wheel_cmd_vel.get().set_value(
-             final_wheel_velocity_commands[i] *
-             wheel_saturation_scale_factor_))
-         {
-           RCLCPP_WARN(
-             get_node()->get_logger(), "Failed to set value for interface %s",
-             module_handles_[i].wheel_cmd_vel.get().get_name().c_str());
-         }
-       } else {
-         // If steering is not aligned, stop the wheel
-         if (!module_handles_[i].wheel_cmd_vel.get().set_value(0.0)) {
-           RCLCPP_WARN(
-             get_node()->get_logger(), "Failed to set value for interface %s",
-             module_handles_[i].wheel_cmd_vel.get().get_name().c_str());
-         }
-       }
-     }
-   }
+  // --- 5. send the commands to the hardware interface ---
+  if (target_vx_ == 0.0 && target_vy_ == 0.0 && target_wz_ == 0.0) {
+    // Robot halted - hold steering, stop wheels
+    for (size_t i = 0; i < num_modules_; ++i) {
+      auto & handle = module_handles_[i];
+      auto steering_val = handle.steering_state_pos.get().get_optional();
+      const double hold_angle = steering_val.value_or(0.0);
+      handle.steering_cmd_pos.get().set_value(hold_angle);
+      handle.wheel_cmd_vel.get().set_value(0.0);
+      final_steering_commands_[i] = hold_angle;
+      final_wheel_velocity_commands_[i] = 0.0;
+    }
+  } else {
+    // Update the final commands
+    for (size_t i = 0; i < num_modules_; ++i) {
+      auto & handle = module_handles_[i];
+      handle.steering_cmd_pos.get().set_value(final_steering_commands_[i]);
+      previoud_steering_commands_[i] = final_steering_commands_[i];
+
+      const double wheel_vel = is_steering_aligned ?
+        final_wheel_velocity_commands_[i] * wheel_saturation_scale_factor_ : 0.0;
+      handle.wheel_cmd_vel.get().set_value(wheel_vel);
+    }
+  }
    wheel_saturation_scale_factor_ = 1.0;
  
    // --- 6. publish odometry message and TF and joint commadns and marker visualization---
@@ -1384,75 +1042,45 @@
      rt_tf_odom_state_publisher_->unlockAndPublish();
    }
  
-   // Publish joint commands in order to compare the actual joint states
-   if (rt_commanded_joint_state_publisher_ && rt_commanded_joint_state_publisher_->trylock()) {
-     auto & msg = rt_commanded_joint_state_publisher_->msg_;
-     msg.header.stamp = time;
+  // Publish joint commands in order to compare the actual joint states
+  if (rt_commanded_joint_state_publisher_ && rt_commanded_joint_state_publisher_->trylock()) {
+    auto & msg = rt_commanded_joint_state_publisher_->msg_;
+    msg.header.stamp = time;
+
+    constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
+    for (size_t i = 0; i < num_modules_; ++i) {
+      msg.position[i] = final_steering_commands_[i];
+      msg.velocity[i] = kNaN;
+      msg.position[i + num_modules_] = kNaN;
+      msg.velocity[i + num_modules_] = final_wheel_velocity_commands_[i];
+    }
+    rt_commanded_joint_state_publisher_->unlockAndPublish();
+  }
  
-     for (size_t i = 0; i < num_modules_; ++i) {
-       msg.position[i] = final_steering_commands[i];
-       msg.velocity[i] = std::numeric_limits<double>::quiet_NaN();
- 
-       msg.position[i + num_modules_] = std::numeric_limits<double>::quiet_NaN();
-       msg.velocity[i + num_modules_] = final_wheel_velocity_commands[i];
-     }
-     rt_commanded_joint_state_publisher_->unlockAndPublish();
-   }
- 
-   // publish visualization markers
-   if (enable_visualization_ && visualizer_) {
-     if ((time - last_visualization_publish_time_).seconds() >= visualization_update_time_) {
-       std::vector<double> robot_frame_steering_angles_for_viz(num_modules_);
-       std::vector<double> wheel_linear_vels_for_viz(num_modules_);
- 
-       for (size_t i = 0; i < num_modules_; ++i) {
-         // set the steering angles and wheel velocities for visualization considering the offsets
-         if (i < final_steering_commands.size() && i < module_angle_offsets_.size()) {
-           robot_frame_steering_angles_for_viz[i] = (
-             final_steering_commands[i] + module_angle_offsets_[i]);
-         } else {
-           robot_frame_steering_angles_for_viz[i] = 0.0;
-         }
-         if (i < final_wheel_velocity_commands.size()) {
-           wheel_linear_vels_for_viz[i] = final_wheel_velocity_commands[i] * wheel_radius_;
-         } else {
-           wheel_linear_vels_for_viz[i] = 0.0;
-         }
-       }
- 
-       if (robot_frame_steering_angles_for_viz.size() == num_modules_) {
-         visualizer_->publish_markers(
-           time,
-           target_vx_, target_vy_, target_wz_,
-           module_x_offsets_, module_y_offsets_,
-           robot_frame_steering_angles_for_viz,
-           wheel_linear_vels_for_viz
-         );
-         last_visualization_publish_time_ = time;
-       } else {
-         RCLCPP_WARN_THROTTLE(
-           get_node()->get_logger(),
-           *get_node()->get_clock(), 1000,
-           "command/steering vectors not ready or size mismatch for publishing.");
-       }
-     }
-   }
+  // publish visualization markers
+  if (enable_visualization_ && visualizer_ &&
+    (time - last_visualization_publish_time_).seconds() >= visualization_update_time_)
+  {
+    for (size_t i = 0; i < num_modules_; ++i) {
+      robot_frame_steering_angles_for_viz_[i] =
+        final_steering_commands_[i] + module_angle_offsets_[i];
+      wheel_linear_vels_for_viz_[i] = final_wheel_velocity_commands_[i] * wheel_radius_;
+    }
+
+    visualizer_->publish_markers(
+      time, target_vx_, target_vy_, target_wz_,
+      module_x_offsets_, module_y_offsets_,
+      robot_frame_steering_angles_for_viz_, wheel_linear_vels_for_viz_);
+    last_visualization_publish_time_ = time;
+  }
    return controller_interface::return_type::OK;
  }
  
- // reference_callback (Corrected type and logic)
- void SwerveDriveController::reference_callback(const std::shared_ptr<CmdVelMsg> msg)
- {
-   // Directly store the Twist message shared pointer
-   last_cmd_vel_time_ = this->get_node()->now();
-   // Only write if not halted (prevents buffer filling while stopped)
-   cmd_vel_buffer_.writeFromNonRT(msg);
- 
-   RCLCPP_DEBUG(
-     get_node()->get_logger(), "Received new command: vx=%.2f, vy=%.2f, wz=%.2f",
-     msg->linear.x, msg->linear.y, msg->angular.z);
-   // Timeout logic removed from here, handled in update
- }
+void SwerveDriveController::reference_callback(const std::shared_ptr<CmdVelMsg> msg)
+{
+  last_cmd_vel_time_ = this->get_node()->now();
+  cmd_vel_buffer_.writeFromNonRT(msg);
+}
  
  }  // namespace ffw_swerve_drive_controller
  
