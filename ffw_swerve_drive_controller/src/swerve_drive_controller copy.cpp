@@ -503,7 +503,6 @@ CallbackReturn SwerveDriveController::on_configure(
   previous_wheel_rotation_direction_.resize(num_modules_, 1.0);
   wheel_speed_scale_.resize(num_modules_, 1.0);
   reversal_target_steering_angle_.resize(num_modules_, 0.0);
-  reversal_intended_wheel_direction_.resize(num_modules_, 1.0);
 
   RCLCPP_DEBUG(logger, "Configuration successful");
   return CallbackReturn::SUCCESS;
@@ -526,7 +525,6 @@ CallbackReturn SwerveDriveController::on_activate(
     previous_wheel_rotation_direction_[i] = 1.0;
     wheel_speed_scale_[i] = 1.0;
     reversal_target_steering_angle_[i] = 0.0;
-    reversal_intended_wheel_direction_[i] = 1.0;
   }
 
   // --- Get and organize hardware interface handles ---
@@ -1031,23 +1029,14 @@ controller_interface::return_type SwerveDriveController::update(
 
       bool crosses_boundary = false;
 
-      // Only consider boundary crossing if BOTH current and target are near the ±180° limits
-      // This prevents false triggers from numerical oscillations in the middle angle range
-      constexpr double BOUNDARY_PROXIMITY_THRESHOLD = M_PI * 0.75;  // ~135° from center
-
-      bool current_near_positive_limit = current_steering_angle > BOUNDARY_PROXIMITY_THRESHOLD;
-      bool current_near_negative_limit = current_steering_angle < -BOUNDARY_PROXIMITY_THRESHOLD;
-      bool target_near_positive_limit = optimized_steering_angle > BOUNDARY_PROXIMITY_THRESHOLD;
-      bool target_near_negative_limit = optimized_steering_angle < -BOUNDARY_PROXIMITY_THRESHOLD;
-
-      // Crossing +π boundary: current near +180°, target near -180°, moving in positive direction
+      // Crossing +π boundary: positive current, negative target, positive angle_diff
       // Example: current=170°, target=-170°, shortest path is +20° through +180°
-      if (current_near_positive_limit && target_near_negative_limit && angle_diff_after_opt > 0) {
+      if (current_steering_angle > 0 && optimized_steering_angle < 0 && angle_diff_after_opt > 0) {
         crosses_boundary = true;
       }
-      // Crossing -π boundary: current near -180°, target near +180°, moving in negative direction
+      // Crossing -π boundary: negative current, positive target, negative angle_diff
       // Example: current=-170°, target=170°, shortest path is -20° through -180°
-      else if (current_near_negative_limit && target_near_positive_limit &&
+      else if (current_steering_angle < 0 && optimized_steering_angle > 0 &&
         angle_diff_after_opt < 0)
       {
         crosses_boundary = true;
@@ -1086,13 +1075,9 @@ controller_interface::return_type SwerveDriveController::update(
     if (direction_changed && reversal_phase_[i] == ReversalPhase::NORMAL) {
       reversal_phase_[i] = ReversalPhase::DECELERATING;
       reversal_target_steering_angle_[i] = optimized_steering_angle;
-      // Save the intended wheel direction at the start of reversal
-      // This prevents oscillation during the reversal sequence
-      reversal_intended_wheel_direction_[i] = wheel_rotation_direction;
       RCLCPP_DEBUG(
         get_node()->get_logger(),
-        "Module %zu: Phase 1 - Decelerating wheel before steering change (direction: %.1f)",
-        i, wheel_rotation_direction);
+        "Module %zu: Phase 1 - Decelerating wheel before steering change", i);
     }
 
     // 4.4. Wrap-around steering angle to [-π, +π] range (-180° ~ +180°)
@@ -1126,14 +1111,12 @@ controller_interface::return_type SwerveDriveController::update(
           double steering_error = std::fabs(
             shortest_angular_distance(current_steering_angle, reversal_target_steering_angle_[i]));
           if (steering_error < STEERING_TOLERANCE) {
-            // Steering complete, use the saved intended direction (not current calculated direction)
-            // This prevents direction oscillation during reversal
-            previous_wheel_rotation_direction_[i] = reversal_intended_wheel_direction_[i];
+            // Steering complete, update direction and start acceleration
+            previous_wheel_rotation_direction_[i] = wheel_rotation_direction;
             reversal_phase_[i] = ReversalPhase::ACCELERATING;
             RCLCPP_DEBUG(
               get_node()->get_logger(),
-              "Module %zu: Phase 3 - Steering complete, now accelerating (direction: %.1f)",
-              i, reversal_intended_wheel_direction_[i]);
+              "Module %zu: Phase 3 - Steering complete, now accelerating", i);
           }
         }
         break;
@@ -1144,8 +1127,6 @@ controller_interface::return_type SwerveDriveController::update(
         if (wheel_speed_scale_[i] >= 1.0) {
           wheel_speed_scale_[i] = 1.0;
           reversal_phase_[i] = ReversalPhase::NORMAL;
-          // Sync previous direction with intended direction in case of any drift
-          previous_wheel_rotation_direction_[i] = reversal_intended_wheel_direction_[i];
           RCLCPP_DEBUG(
             get_node()->get_logger(),
             "Module %zu: Reversal complete, back to normal operation", i);
@@ -1156,9 +1137,6 @@ controller_interface::return_type SwerveDriveController::update(
       default:
         // Normal operation - maintain full speed
         wheel_speed_scale_[i] = 1.0;
-        // Keep previous direction in sync with current direction during normal operation
-        // This ensures proper direction tracking and prevents false direction_changed triggers
-        previous_wheel_rotation_direction_[i] = wheel_rotation_direction;
         break;
     }
 
@@ -1194,20 +1172,9 @@ controller_interface::return_type SwerveDriveController::update(
     }
 
     // 4.6. Calculate the final wheel velocity command
-    // Use appropriate direction based on reversal phase to prevent oscillation:
-    // - DECELERATING: use previous direction (slowing down in old direction)
-    // - STEERING/ACCELERATING: use saved intended direction (consistent throughout reversal)
-    // - NORMAL: use current calculated direction
-    double effective_direction;
-    if (reversal_phase_[i] == ReversalPhase::DECELERATING) {
-      effective_direction = previous_wheel_rotation_direction_[i];
-    } else if (reversal_phase_[i] == ReversalPhase::STEERING ||
-      reversal_phase_[i] == ReversalPhase::ACCELERATING)
-    {
-      effective_direction = reversal_intended_wheel_direction_[i];
-    } else {
-      effective_direction = wheel_rotation_direction;
-    }
+    // Use previous direction during DECEL phase, new direction after STEERING phase
+    double effective_direction = (reversal_phase_[i] == ReversalPhase::DECELERATING) ?
+      previous_wheel_rotation_direction_[i] : wheel_rotation_direction;
     double final_wheel_vel_cmd = effective_direction * target_wheel_speed *
       wheel_speed_scale_[i] / wheel_radius_;
 
