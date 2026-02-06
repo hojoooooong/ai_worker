@@ -166,6 +166,7 @@ protected:
   std::vector<double> previous_wheel_rotation_direction_;  // Previous direction per module
   std::vector<double> wheel_speed_scale_;                  // Speed scale during reversal (0.0~1.0)
   std::vector<double> reversal_target_steering_angle_;     // Target steering angle after reversal
+  std::vector<bool> is_steering_flipped_;                  // Hysteresis state for 180° Rule
   double steering_alignment_angle_error_threshold_;
   double steering_alignment_start_angle_error_threshold_;
   double steering_alignment_start_speed_error_threshold_;

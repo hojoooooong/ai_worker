@@ -498,11 +498,12 @@
    previoud_steering_commands_.reserve(num_modules_);
    is_rotation_direction_ = Rotation::STOP;
  
-   // Initialize 180° Rule smooth reversal state tracking
-   reversal_phase_.resize(num_modules_, ReversalPhase::NORMAL);
-   previous_wheel_rotation_direction_.resize(num_modules_, 1.0);
-   wheel_speed_scale_.resize(num_modules_, 1.0);
-   reversal_target_steering_angle_.resize(num_modules_, 0.0);
+  // Initialize 180° Rule smooth reversal state tracking
+  reversal_phase_.resize(num_modules_, ReversalPhase::NORMAL);
+  previous_wheel_rotation_direction_.resize(num_modules_, 1.0);
+  wheel_speed_scale_.resize(num_modules_, 1.0);
+  reversal_target_steering_angle_.resize(num_modules_, 0.0);
+  is_steering_flipped_.resize(num_modules_, false);
  
    RCLCPP_DEBUG(logger, "Configuration successful");
    return CallbackReturn::SUCCESS;
@@ -519,13 +520,14 @@
    target_wz_ = 0.0;
    last_cmd_vel_time_ = get_node()->now();
  
-   // Reset 180° Rule smooth reversal state
-   for (size_t i = 0; i < num_modules_; ++i) {
-     reversal_phase_[i] = ReversalPhase::NORMAL;
-     previous_wheel_rotation_direction_[i] = 1.0;
-     wheel_speed_scale_[i] = 1.0;
-     reversal_target_steering_angle_[i] = 0.0;
-   }
+  // Reset 180° Rule smooth reversal state
+  for (size_t i = 0; i < num_modules_; ++i) {
+    reversal_phase_[i] = ReversalPhase::NORMAL;
+    previous_wheel_rotation_direction_[i] = 1.0;
+    wheel_speed_scale_[i] = 1.0;
+    reversal_target_steering_angle_[i] = 0.0;
+    is_steering_flipped_[i] = false;
+  }
  
    // --- Get and organize hardware interface handles ---
    module_handles_.clear();
@@ -995,30 +997,46 @@
        continue;
      }
  
-     // 4.3. Apply 180° Rule (Steering Flip Optimization)
-     // Instead of turning 270°, turn -90° and reverse the drive motor direction
-     // This ensures wheels always take the shortest path (≤90°) to target angle
-     double optimized_steering_angle = target_steering_joint_angle;
-     double wheel_rotation_direction = 1.0;
- 
-     // Calculate the shortest angular distance from current to target
-     double angle_diff = shortest_angular_distance(
-       current_steering_angle,
-       target_steering_joint_angle);
- 
-     // If rotation would be more than 90°, flip the steering and reverse motor
-     if (std::fabs(angle_diff) > M_PI * 0.5) {
-       // Flip steering angle by 180° and reverse wheel direction
-       optimized_steering_angle = normalize_angle(target_steering_joint_angle + M_PI);
-       wheel_rotation_direction = -1.0;
- 
-       RCLCPP_DEBUG_THROTTLE(
-         get_node()->get_logger(),
-         *get_node()->get_clock(), 1000,
-         "Module %zu: 180° Rule applied. Original: %.1f°, Optimized: %.1f°, Motor reversed",
-         i, target_steering_joint_angle * 180.0 / M_PI,
-         optimized_steering_angle * 180.0 / M_PI);
-     }
+    // 4.3. Apply 180° Rule (Steering Flip Optimization) with Hysteresis
+    // Instead of turning 270°, turn -90° and reverse the drive motor direction
+    // This ensures wheels always take the shortest path (≤90°) to target angle
+    // Hysteresis prevents oscillation at the 90° boundary
+    double optimized_steering_angle = target_steering_joint_angle;
+    double wheel_rotation_direction = 1.0;
+
+    // Calculate the shortest angular distance from current to target
+    double angle_diff = shortest_angular_distance(
+      current_steering_angle,
+      target_steering_joint_angle);
+
+    // Hysteresis thresholds: flip at 90°, unflip only when below ~80°
+    constexpr double FLIP_ON_THRESHOLD = M_PI * 0.5;    // 90° - original threshold
+    constexpr double FLIP_OFF_THRESHOLD = M_PI * 0.44;  // ~80° - unflip threshold
+
+    bool should_flip;
+    if (is_steering_flipped_[i]) {
+      // Currently flipped: only unflip when angle drops below 80°
+      should_flip = (std::fabs(angle_diff) >= FLIP_OFF_THRESHOLD);
+    } else {
+      // Currently not flipped: flip when angle exceeds 90°
+      should_flip = (std::fabs(angle_diff) > FLIP_ON_THRESHOLD);
+    }
+
+    if (should_flip) {
+      // Flip steering angle by 180° and reverse wheel direction
+      optimized_steering_angle = normalize_angle(target_steering_joint_angle + M_PI);
+      wheel_rotation_direction = -1.0;
+      is_steering_flipped_[i] = true;
+
+      RCLCPP_DEBUG_THROTTLE(
+        get_node()->get_logger(),
+        *get_node()->get_clock(), 1000,
+        "Module %zu: 180° Rule applied. Original: %.1f°, Optimized: %.1f°, Motor reversed",
+        i, target_steering_joint_angle * 180.0 / M_PI,
+        optimized_steering_angle * 180.0 / M_PI);
+    } else {
+      is_steering_flipped_[i] = false;
+    }
  
      // 4.3.1. Handle mechanical steering limit at ±π (±180°)
      // The steering mechanism cannot physically cross the ±180° boundary
