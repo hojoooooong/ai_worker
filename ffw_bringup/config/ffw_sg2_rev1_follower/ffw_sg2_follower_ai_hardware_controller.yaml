@@ -126,8 +126,8 @@
       module_steering_limit_upper: [  6.28,  6.28,  6.28] # maximum steering angle [rad]
       steering_to_wheel_y_offsets: [ 0.0, -0.0, 0.0 ] # offset between steering angle joint and wheel joint (Y-axis) [m]
 
-      module_wheel_speed_limit_lower: [ -50.0, -50.0, -50.0 ] # wheel speed [rad/s] => x * wheel_radius [m/s]
-      module_wheel_speed_limit_upper: [ 50.0, 50.0, 50.0 ] # wheel speed  [rad/s]
+      module_wheel_speed_limit_lower: [ -70.0, -70.0, -70.0 ] # wheel speed [rad/s] => x * wheel_radius [m/s]
+      module_wheel_speed_limit_upper: [ 70.0, 70.0, 70.0 ] # wheel speed  [rad/s]
 
       # Steering control parameters
       enabled_steering_flip: true # select the shortest steering direciton or not, true or false
