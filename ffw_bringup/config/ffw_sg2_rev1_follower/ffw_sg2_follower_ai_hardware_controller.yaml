@@ -175,8 +175,8 @@
           max_velocity           : 2.50  # m/s
           min_velocity           : -2.50 # m/s
           has_acceleration_limits: true
-          max_acceleration       : 0.50  # m/s^2
-          min_acceleration       : -0.50 # m/s^2
+          max_acceleration       : 1.50  # m/s^2
+          min_acceleration       : -1.50 # m/s^2
           has_jerk_limits        : true
           max_jerk               : 1.0  # m/s^3
           min_jerk               : -1.0  # m/s^3
