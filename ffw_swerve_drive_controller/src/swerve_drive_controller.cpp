@@ -664,15 +664,13 @@ double SwerveDriveController::shortest_angular_distance(double from, double to)
      double new_vy = current_cmd_vel.linear.y;
      double new_wz = current_cmd_vel.angular.z;
  
-     if (std::abs(new_vx) < linear_vel_deadband_) {
-       new_vx = 0.0;
-     }
-     if (std::abs(new_vy) < linear_vel_deadband_) {
-       new_vy = 0.01;
-     }
-     if (std::abs(new_wz) < angular_vel_deadband_) {
-       new_wz = 0.0;
-     }
+    // Unified deadband: if overall command is tiny, zero all speeds but keep steering heading
+    const double planar_norm = std::hypot(new_vx, new_vy);
+    if (planar_norm < linear_vel_deadband_ && std::abs(new_wz) < angular_vel_deadband_) {
+      new_vx = 0.0;
+      new_vy = 0.0;
+      new_wz = 0.0;
+    }
  
     target_vx_ = new_vx;
      target_vy_ = new_vy;
