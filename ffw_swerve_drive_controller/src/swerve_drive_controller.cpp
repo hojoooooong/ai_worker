@@ -668,7 +668,7 @@ double SwerveDriveController::shortest_angular_distance(double from, double to)
        new_vx = 0.0;
      }
      if (std::abs(new_vy) < linear_vel_deadband_) {
-       new_vy = 0.0;
+       new_vy = 0.01;
      }
      if (std::abs(new_wz) < angular_vel_deadband_) {
        new_wz = 0.0;
