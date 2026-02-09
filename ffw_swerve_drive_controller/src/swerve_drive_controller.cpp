@@ -744,6 +744,11 @@ double SwerveDriveController::shortest_angular_distance(double from, double to)
     return controller_interface::return_type::ERROR;
   }
 
+  // Command magnitude for heading-hold logic
+  const double planar_cmd_norm = std::hypot(target_vx_, target_vy_);
+  const bool heading_hold = (planar_cmd_norm < linear_vel_deadband_) &&
+    (std::abs(target_wz_) < angular_vel_deadband_);
+
   bool all_states_read = true;
   for (size_t i = 0; i < num_modules_; ++i) {
     try {
@@ -788,12 +793,23 @@ double SwerveDriveController::shortest_angular_distance(double from, double to)
     const double angle_offset = handle.angle_offset;
 
     // 4.1. Compute wheel velocity vector and target steering angle
-    const double wheel_vel_x = target_vx_ - target_wz_ * module_y;
-    const double wheel_vel_y = target_vy_ + target_wz_ * module_x;
-    const double target_steering_angle_robot = std::atan2(wheel_vel_y, wheel_vel_x + kEpsilon);
-    const double target_wheel_speed = std::hypot(wheel_vel_x, wheel_vel_y);
-    const double target_steering_joint_angle =
-      normalize_angle(target_steering_angle_robot - angle_offset);
+    double wheel_vel_x = target_vx_ - target_wz_ * module_y;
+    double wheel_vel_y = target_vy_ + target_wz_ * module_x;
+    double target_steering_joint_angle;
+    double target_wheel_speed;
+
+    // When command is essentially zero, hold current steering and stop wheels
+    if (heading_hold) {
+      target_wheel_speed = 0.0;
+      target_steering_joint_angle = previoud_steering_commands_[i];
+      wheel_vel_x = 0.0;
+      wheel_vel_y = 0.0;
+    } else {
+      const double target_steering_angle_robot = std::atan2(wheel_vel_y, wheel_vel_x + kEpsilon);
+      target_wheel_speed = std::hypot(wheel_vel_x, wheel_vel_y);
+      target_steering_joint_angle =
+        normalize_angle(target_steering_angle_robot - angle_offset);
+    }
  
      // 4.2. read the current steering angle from the hardware interface
      double current_steering_angle = 0.0;
