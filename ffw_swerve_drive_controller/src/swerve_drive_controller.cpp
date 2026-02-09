@@ -706,7 +706,7 @@ double SwerveDriveController::shortest_angular_distance(double from, double to)
      limiter_linear_x_.limit(
        target_vx_, previous_cmd.linear.x, pprevious_cmd.linear.x,
        time_gap);
-     limiter_linear_x_.limit(
+     limiter_linear_y_.limit(
        target_vy_, previous_cmd.linear.y, pprevious_cmd.linear.y,
        time_gap);
      limiter_angular_z_.limit(
