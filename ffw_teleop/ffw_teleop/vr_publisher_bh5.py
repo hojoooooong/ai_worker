@@ -21,6 +21,7 @@ import math
 import os
 import socket
 import threading
+import traceback
 
 from geometry_msgs.msg import Point, Pose, PoseArray, PoseStamped, Quaternion
 import nest_asyncio
@@ -30,11 +31,99 @@ from rclpy.node import Node
 from scipy.spatial.transform import Rotation as R
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from vuer import Vuer
-from vuer.schemas import Hands
+from vuer.base import Server
+from vuer.schemas import Hands, Body
 from std_msgs.msg import Bool
 
 # Allow nested asyncio execution
 nest_asyncio.apply()
+
+# WebXR Body Tracking joint order (XRBodyJoint enum)
+BODY_JOINT_KEYS = [
+    "hips",
+    "spine-lower",
+    "spine-middle",
+    "spine-upper",
+    "chest",
+    "neck",
+    "head",
+    "left-shoulder",
+    "left-scapula",
+    "left-arm-upper",
+    "left-arm-lower",
+    "left-hand-wrist-twist",
+    "right-shoulder",
+    "right-scapula",
+    "right-arm-upper",
+    "right-arm-lower",
+    "right-hand-wrist-twist",
+    "left-hand-palm",
+    "left-hand-wrist",
+    "left-hand-thumb-metacarpal",
+    "left-hand-thumb-phalanx-proximal",
+    "left-hand-thumb-phalanx-distal",
+    "left-hand-thumb-tip",
+    "left-hand-index-metacarpal",
+    "left-hand-index-phalanx-proximal",
+    "left-hand-index-phalanx-intermediate",
+    "left-hand-index-phalanx-distal",
+    "left-hand-index-tip",
+    "left-hand-middle-phalanx-metacarpal",
+    "left-hand-middle-phalanx-proximal",
+    "left-hand-middle-phalanx-intermediate",
+    "left-hand-middle-phalanx-distal",
+    "left-hand-middle-tip",
+    "left-hand-ring-metacarpal",
+    "left-hand-ring-phalanx-proximal",
+    "left-hand-ring-phalanx-intermediate",
+    "left-hand-ring-phalanx-distal",
+    "left-hand-ring-tip",
+    "left-hand-little-metacarpal",
+    "left-hand-little-phalanx-proximal",
+    "left-hand-little-phalanx-intermediate",
+    "left-hand-little-phalanx-distal",
+    "left-hand-little-tip",
+    "right-hand-palm",
+    "right-hand-wrist",
+    "right-hand-thumb-metacarpal",
+    "right-hand-thumb-phalanx-proximal",
+    "right-hand-thumb-phalanx-distal",
+    "right-hand-thumb-tip",
+    "right-hand-index-metacarpal",
+    "right-hand-index-phalanx-proximal",
+    "right-hand-index-phalanx-intermediate",
+    "right-hand-index-phalanx-distal",
+    "right-hand-index-tip",
+    "right-hand-middle-metacarpal",
+    "right-hand-middle-phalanx-proximal",
+    "right-hand-middle-phalanx-intermediate",
+    "right-hand-middle-phalanx-distal",
+    "right-hand-middle-tip",
+    "right-hand-ring-metacarpal",
+    "right-hand-ring-phalanx-proximal",
+    "right-hand-ring-phalanx-intermediate",
+    "right-hand-ring-phalanx-distal",
+    "right-hand-ring-tip",
+    "right-hand-little-metacarpal",
+    "right-hand-little-phalanx-proximal",
+    "right-hand-little-phalanx-intermediate",
+    "right-hand-little-phalanx-distal",
+    "right-hand-little-tip",
+    "left-upper-leg",
+    "left-lower-leg",
+    "left-foot-ankle-twist",
+    "left-foot-ankle",
+    "left-foot-subtalar",
+    "left-foot-transverse",
+    "left-foot-ball",
+    "right-upper-leg",
+    "right-lower-leg",
+    "right-foot-ankle-twist",
+    "right-foot-ankle",
+    "right-foot-subtalar",
+    "right-foot-transverse",
+    "right-foot-ball",
+]
 
 
 class VRTrajectoryPublisher(Node):
@@ -44,7 +133,7 @@ class VRTrajectoryPublisher(Node):
         self.get_logger().set_level(rclpy.logging.LoggingSeverity.INFO)
 
         # VR publishing control flag
-        self.vr_publishing_enabled = False  # Default: disabled
+        self.vr_publishing_enabled = True  # Default: disabled
 
         # VR Server setup
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -69,6 +158,7 @@ class VRTrajectoryPublisher(Node):
         # VR event handlers
         self.vuer.add_handler('HAND_MOVE')(self.on_hand_move)
         self.vuer.add_handler('CAMERA_MOVE')(self.on_camera_move)
+        self.vuer.add_handler('BODY_MOVE')(self.on_body_tracking_move)
 
         # Hand joint configuration
         self.left_joint_names = [
@@ -122,8 +212,12 @@ class VRTrajectoryPublisher(Node):
             '/leader/joystick_controller_left/joint_trajectory',
             10
         )
-        self.left_wrist_rviz_pub = self.create_publisher(PoseStamped, '/vr_hand/left_wrist', 10)
-        self.right_wrist_rviz_pub = self.create_publisher(PoseStamped, '/vr_hand/right_wrist', 10)
+        # self.left_wrist_rviz_pub = self.create_publisher(PoseStamped, '/vr_hand/left_wrist', 10)
+        # self.right_wrist_rviz_pub = self.create_publisher(PoseStamped, '/vr_hand/right_wrist', 10)
+        self.left_wrist_rviz_pub = self.create_publisher(PoseStamped, '/l_goal_pose', 10)
+        self.right_wrist_rviz_pub = self.create_publisher(PoseStamped, '/r_goal_pose', 10)
+        self.left_elbow_pub = self.create_publisher(PoseStamped, '/l_elbow_pose', 10)
+        self.right_elbow_pub = self.create_publisher(PoseStamped, '/r_elbow_pose', 10)
 
         self.left_thumb_pub = self.create_publisher(PoseArray, '/vr_hand/left_thumb', 10)
         self.right_thumb_pub = self.create_publisher(PoseArray, '/vr_hand/right_thumb', 10)
@@ -141,12 +235,27 @@ class VRTrajectoryPublisher(Node):
         self.right_hand_data = None
         self.head_transform_matrix = np.eye(4)
         self.head_inverse_matrix = np.eye(4)
+        self.hand_pose_is_head_relative = self.declare_parameter(
+            'hand_pose_is_head_relative', True
+        ).value
+        self.zero_z_on_start = self.declare_parameter(
+            'zero_z_on_start', True
+        ).value
+        self.z_calibrated = False
+        self.z_calibration_offset = 0.0
 
         # Low-pass filter settings
-        self.low_pass_filter_alpha = 0.3
+        self.low_pass_filter_alpha = 1.0
+        self.pose_filters = {}
+        self.max_elbow_wrist_distance = 0.4
+        self.max_wrist_angle_step_deg = 30.0
 
         # Scaling VR data
         self.scaling_vr = 1.1
+        self.wrist_vr_scale = 1.4
+        self.elbow_vr_scale = 1.4
+        self.wrist_offsets = {'x': -0.14, 'y': 0.0, 'z': 1.0}
+        self.elbow_offsets = {'x': -0.14, 'y': 0.0, 'z': 1.0}
 
         # Head pitch offset configuration
         self.pitch_offset = -0.5  # Adjustable pitch offset in radians
@@ -164,9 +273,7 @@ class VRTrajectoryPublisher(Node):
         self.head_log_counter = 0
         self.log_every_n = self.fps
 
-        # Async setup
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
+        # Start Vuer server in background thread
         self.start_vuer_server()
 
         self.get_logger().info('VR Trajectory Publisher node has been started')
@@ -198,13 +305,13 @@ class VRTrajectoryPublisher(Node):
         left_data_status = "Available" if self.left_hand_data is not None else "None"
         right_data_status = "Available" if self.right_hand_data is not None else "None"
 
-        self.get_logger().info(f'Hand data: Left={left_data_status}, Right={right_data_status}')
+        # self.get_logger().info(f'Hand data: Left={left_data_status}, Right={right_data_status}')
 
         # Check joint positions
-        if self.left_joint_positions and any(pos != 0.0 for pos in self.left_joint_positions):
-            self.get_logger().info(f'Left joint positions: {self.left_joint_positions[:5]}...')
-        if self.right_joint_positions and any(pos != 0.0 for pos in self.right_joint_positions):
-            self.get_logger().info(f'Right joint positions: {self.right_joint_positions[:5]}...')
+        # if self.left_joint_positions and any(pos != 0.0 for pos in self.left_joint_positions):
+        #     self.get_logger().info(f'Left joint positions: {self.left_joint_positions[:5]}...')
+        # if self.right_joint_positions and any(pos != 0.0 for pos in self.right_joint_positions):
+        #     self.get_logger().info(f'Right joint positions: {self.right_joint_positions[:5]}...')
 
 
     def is_valid_float(self, value):
@@ -298,21 +405,19 @@ class VRTrajectoryPublisher(Node):
         return ros_pos, ros_quat
 
     def transform_and_publish_pose(self, pose_array_msg, publisher, hand_name, vr_scale=1.0):
-        """Transform pose from head relative coordinates to base_link and publish."""
+        """Transform wrist pose from head relative coordinates to base_link and publish."""
         if not pose_array_msg.poses:
             return
 
         # Assume the first pose in the array is the wrist pose (head relative, ROS coordinates)
         wrist_pose_relative = pose_array_msg.poses[0]
 
-        # Extract relative position (head/camera relative, already in ROS coordinate system)
         camera_relative_position = np.array([
-            wrist_pose_relative.position.x * vr_scale,
-            wrist_pose_relative.position.y * vr_scale,
-            wrist_pose_relative.position.z * vr_scale
+            wrist_pose_relative.position.x,
+            wrist_pose_relative.position.y,
+            wrist_pose_relative.position.z
         ], dtype=np.float64)
 
-        # Extract relative orientation (head/camera relative, already in ROS coordinate system)
         camera_relative_quaternion = np.array([
             wrist_pose_relative.orientation.x,
             wrist_pose_relative.orientation.y,
@@ -320,6 +425,34 @@ class VRTrajectoryPublisher(Node):
             wrist_pose_relative.orientation.w
         ], dtype=np.float64)
 
+        apply_right_z_flip = (hand_name == 'right')
+        self.publish_relative_pose(
+            camera_relative_position,
+            camera_relative_quaternion,
+            publisher,
+            vr_scale=vr_scale,
+            x_offset=self.wrist_offsets['x'],
+            y_offset=self.wrist_offsets['y'],
+            z_offset=self.wrist_offsets['z'],
+            apply_right_z_flip=apply_right_z_flip,
+            pose_role='wrist',
+            side=hand_name,
+        )
+
+    def publish_relative_pose(
+        self,
+        camera_relative_position,
+        camera_relative_quaternion,
+        publisher,
+        vr_scale=1.0,
+        x_offset=0.0,
+        y_offset=0.0,
+        z_offset=0.0,
+        apply_right_z_flip=False,
+        pose_role='wrist',
+        side='',
+    ):
+        """Publish a pose using the same base_link transform as wrists."""
         # Fixed offset: zedm_camera_center → base_link
         zedm_to_base_offset = np.array([
             0.0 - 0.0238122 - 0.040 - 0.049483 - 0.0055,  # x: -0.1187952
@@ -327,27 +460,38 @@ class VRTrajectoryPublisher(Node):
             -0.01325 + 0.0242094 - 0.054 - 0.102130 - 1.4316  # z: -1.5767706
         ], dtype=np.float64)
 
-        # Transform from camera relative coordinates directly to base_link coordinates
-        base_position = camera_relative_position - zedm_to_base_offset
+        base_position = (camera_relative_position * vr_scale) - zedm_to_base_offset
+        if self.zero_z_on_start:
+            if (not self.z_calibrated) and pose_role == 'wrist':
+                self.z_calibration_offset = base_position[2]
+                self.z_calibrated = True
+            if self.z_calibrated:
+                base_position = base_position.copy()
+                base_position[2] -= self.z_calibration_offset
 
-        # Use camera relative orientation as is
         camera_relative_rotation = R.from_quat(camera_relative_quaternion)
-
-        # Additional: Apply 180-degree rotation around Z-axis (right hand only)
-        if hand_name == 'right':
+        if apply_right_z_flip:
             rot_z_180 = R.from_euler('z', 180, degrees=True)
             camera_relative_rotation = camera_relative_rotation * rot_z_180
-
         arm_quaternion = camera_relative_rotation.as_quat()  # [x, y, z, w]
 
-        # Create target pose message
+        pose_key = f'{side}_{pose_role}' if side else pose_role
+        base_position, arm_quaternion = self.low_pass_filter_pose(
+            pose_key,
+            base_position,
+            arm_quaternion,
+            max_angle_deg=self.max_wrist_angle_step_deg if pose_role == 'wrist' else None,
+        )
+        if side:
+            base_position = self.apply_elbow_wrist_safety(side, pose_role, base_position)
+
         target_pose = PoseStamped()
         target_pose.header.stamp = self.get_clock().now().to_msg()
         target_pose.header.frame_id = 'base_link'
 
-        target_pose.pose.position.x = base_position[0]-0.15  # Small offset for better visualization
-        target_pose.pose.position.y = base_position[1]
-        target_pose.pose.position.z = base_position[2]
+        target_pose.pose.position.x = base_position[0] + x_offset
+        target_pose.pose.position.y = base_position[1] + y_offset
+        target_pose.pose.position.z = base_position[2] + z_offset
 
         target_pose.pose.orientation.x = arm_quaternion[0]
         target_pose.pose.orientation.y = arm_quaternion[1]
@@ -355,12 +499,6 @@ class VRTrajectoryPublisher(Node):
         target_pose.pose.orientation.w = arm_quaternion[3]
 
         publisher.publish(target_pose)
-
-        self.get_logger().debug(
-            'Transformed {} pose: pos=[{:.3f}, {:.3f}, {:.3f}]'.format(
-                hand_name, base_position[0], base_position[1], base_position[2]
-            )
-        )
 
     def get_joint_matrix(self, hand_data, joint_index):
         """Extract joint transformation matrix from hand data."""
@@ -447,7 +585,10 @@ class VRTrajectoryPublisher(Node):
         for i in range(25):
             try:
                 world_joint_matrix = self.get_joint_matrix(hand_data, i)
-                relative_joint_matrix = self.head_inverse_matrix @ world_joint_matrix
+                if self.hand_pose_is_head_relative:
+                    relative_joint_matrix = world_joint_matrix
+                else:
+                    relative_joint_matrix = self.head_inverse_matrix @ world_joint_matrix
                 relative_pos, relative_quat = self.matrix_to_pose(relative_joint_matrix)
                 relative_pos_ros, relative_quat_ros = self.vr_to_ros_transform(relative_pos, relative_quat)
 
@@ -518,7 +659,7 @@ class VRTrajectoryPublisher(Node):
 
                     # Transform and publish left wrist pose to base_link coordinates
                     self.transform_and_publish_pose(
-                        pose_array, self.left_wrist_rviz_pub, 'left', vr_scale=1.7
+                        pose_array, self.left_wrist_rviz_pub, 'left', vr_scale=self.wrist_vr_scale
                     )
 
                 # Apply low-pass filter
@@ -532,7 +673,7 @@ class VRTrajectoryPublisher(Node):
 
                     # Transform and publish right wrist pose to base_link coordinates
                     self.transform_and_publish_pose(
-                        pose_array, self.right_wrist_rviz_pub, 'right', vr_scale=1.7
+                        pose_array, self.right_wrist_rviz_pub, 'right', vr_scale=self.wrist_vr_scale
                     )
 
                 # Apply low-pass filter
@@ -565,23 +706,29 @@ class VRTrajectoryPublisher(Node):
 
     def start_vuer_server(self):
         """Start the VR server in a separate thread."""
-        async def start_server():
-            try:
-                self.vuer.spawn(start=True)(self.main_hand_tracking)
-                self.get_logger().info('Starting VR server...')
-                await self.vuer.start()
-            except Exception as e:
-                self.get_logger().error(f'Failed to start VR server: {e}')
-
         def run_server():
             try:
-                self.loop.run_until_complete(start_server())
-                self.loop.run_forever()
+                self.vuer.spawn(self.main_hand_tracking)
+                self.get_logger().info('Starting VR server...')
+                self.start_vuer_server_no_super()
             except Exception as e:
-                self.get_logger().error(f'Error in VR server thread: {e}')
+                self.get_logger().error(f'Failed to start VR server: {e}')
+                self.get_logger().error(traceback.format_exc())
 
         self.server_thread = threading.Thread(target=run_server, daemon=True)
         self.server_thread.start()
+
+    def start_vuer_server_no_super(self):
+        """Start Vuer server without zero-arg super() usage."""
+        # Replicate vuer.server.Vuer.start setup, but call Server.start directly.
+        self.vuer._add_route("", self.vuer.socket_index, method="GET")
+        self.vuer._add_static("/assets", self.vuer.client_root / "assets")
+        self.vuer._static_file("/editor", self.vuer.client_root, "editor/index.html")
+        self.vuer._add_static("/static", self.vuer.static_root)
+        self.vuer._add_route("/relay", self.vuer.relay, method="POST")
+
+        # Start base Server without Vuer.start() super() call.
+        Server.start(self.vuer)
 
     async def main_hand_tracking(self, session):
         """Main hand tracking session."""
@@ -597,6 +744,20 @@ class VRTrajectoryPublisher(Node):
                     hideRight=False,
                 ),
                 to='bgChildren',
+            )
+            session.upsert(
+                Body(
+                    key='body_tracking',
+                    stream=True,
+                    fps=fps,
+                    leftHand=False,
+                    rightHand=False,
+                    hideIndicate=False,
+                    showFrame=True,
+                    showBody=True,
+                    frameScale=0.02,
+                ),
+                to='children',
             )
             self.get_logger().info('Hand tracking enabled')
             while True:
@@ -668,19 +829,160 @@ class VRTrajectoryPublisher(Node):
                     self.process_hand_joints(self.right_hand_data,'right')
 
             # Debug logging
-            self.hand_log_counter += 1
-            if self.hand_log_counter % self.log_every_n == 0:
-                self.get_logger().info('Hand tracking data processed')
+            # self.hand_log_counter += 1
+            # if self.hand_log_counter % self.log_every_n == 0:
+            #     self.get_logger().info('Hand tracking data processed')
 
         except Exception as e:
             self.get_logger().error(f'Error in hand move event: {e}')
 
+    async def on_body_tracking_move(self, event, session):
+        """Handle body tracking events (elbow poses)."""
+        try:
+            if not self.vr_publishing_enabled:
+                return
+
+            if not isinstance(event.value, dict) or not event.value:
+                return
+
+            body_data = event.value.get('body') if isinstance(event.value, dict) else None
+            if not isinstance(body_data, (list, tuple, np.ndarray)):
+                return
+
+            # WebXR Body Tracking spec joints use left-arm-lower/right-arm-lower
+            left_matrix = self.get_body_joint_matrix_from_flat(
+                body_data,
+                'left-arm-lower'
+            )
+            right_matrix = self.get_body_joint_matrix_from_flat(
+                body_data,
+                'right-arm-lower'
+            )
+
+            if left_matrix is not None:
+                self.publish_body_joint_pose(left_matrix, self.left_elbow_pub, side='left')
+            if right_matrix is not None:
+                self.publish_body_joint_pose(right_matrix, self.right_elbow_pub, side='right')
+
+        except Exception as e:
+            self.get_logger().error(f'Error in body tracking event: {e}')
+
+    def get_body_joint_matrix_from_flat(self, body_array, joint_name):
+        """Extract a 4x4 matrix for a body joint from flattened body array."""
+        if joint_name not in BODY_JOINT_KEYS:
+            return None
+        index = BODY_JOINT_KEYS.index(joint_name)
+        start = index * 16
+        end = start + 16
+        if len(body_array) < end:
+            return None
+        matrix = np.array(body_array[start:end], dtype=np.float64)
+        return matrix.reshape(4, 4, order='F')
+
+    def publish_body_joint_pose(self, joint_matrix, publisher, side=''):
+        """Publish PoseStamped for a body joint."""
+        relative_joint_matrix = self.head_inverse_matrix @ joint_matrix
+        pos, quat = self.matrix_to_pose(relative_joint_matrix)
+        if not (np.all(np.isfinite(pos)) and np.all(np.isfinite(quat))):
+            return
+
+        pos_ros, quat_ros = self.vr_to_ros_transform(pos, quat)
+        self.publish_relative_pose(
+            pos_ros,
+            quat_ros,
+            publisher,
+            vr_scale=self.elbow_vr_scale,
+            x_offset=self.elbow_offsets['x'],
+            y_offset=self.elbow_offsets['y'],
+            z_offset=self.elbow_offsets['z'],
+            apply_right_z_flip=False,
+            pose_role='elbow',
+            side=side,
+        )
+
+    def low_pass_filter_pose(self, key, position, quaternion, max_angle_deg=None):
+        """Apply low-pass filter to position and quaternion."""
+        quat = np.array(quaternion, dtype=np.float64)
+        quat_norm = np.linalg.norm(quat)
+        if not np.isfinite(quat_norm) or quat_norm <= 0.0:
+            quat = np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
+        else:
+            quat = quat / quat_norm
+        if key not in self.pose_filters:
+            self.pose_filters[key] = {
+                'pos': np.array(position, dtype=np.float64),
+                'quat': quat,
+            }
+            return position, quat
+
+        prev = self.pose_filters[key]
+        alpha = 0.5
+        filtered_pos = alpha * position + (1.0 - alpha) * prev['pos']
+        prev_quat = prev['quat']
+        if np.dot(prev_quat, quat) < 0.0:
+            quat = -quat
+        filtered_quat = self.slerp_quaternion(prev_quat, quat, alpha)
+        if max_angle_deg is not None:
+            filtered_quat = self.limit_quaternion_spike(prev_quat, filtered_quat, max_angle_deg)
+
+        self.pose_filters[key]['pos'] = filtered_pos
+        self.pose_filters[key]['quat'] = filtered_quat
+        return filtered_pos, filtered_quat
+
+    def limit_quaternion_spike(self, prev_quat, current_quat, max_angle_deg):
+        """Clamp quaternion step by max angle in degrees."""
+        prev_quat = np.array(prev_quat, dtype=np.float64)
+        curr_quat = np.array(current_quat, dtype=np.float64)
+        if np.dot(prev_quat, curr_quat) < 0.0:
+            curr_quat = -curr_quat
+        dot = float(np.clip(np.dot(prev_quat, curr_quat), -1.0, 1.0))
+        angle = 2.0 * math.acos(dot)
+        max_angle = math.radians(max_angle_deg)
+        if angle <= max_angle or angle <= 1.0e-6:
+            return curr_quat
+        t = max_angle / angle
+        return self.slerp_quaternion(prev_quat, curr_quat, t)
+
+    def slerp_quaternion(self, q0, q1, t):
+        """Spherical linear interpolation for quaternions."""
+        q0 = np.array(q0, dtype=np.float64)
+        q1 = np.array(q1, dtype=np.float64)
+        dot = float(np.clip(np.dot(q0, q1), -1.0, 1.0))
+        if dot < 0.0:
+            q1 = -q1
+            dot = -dot
+        if dot > 0.9995:
+            result = q0 + t * (q1 - q0)
+            norm = np.linalg.norm(result)
+            return result / norm if norm > 0.0 else q0
+        theta_0 = math.acos(dot)
+        sin_theta_0 = math.sin(theta_0)
+        theta = theta_0 * t
+        sin_theta = math.sin(theta)
+        s0 = math.cos(theta) - dot * sin_theta / sin_theta_0
+        s1 = sin_theta / sin_theta_0
+        return s0 * q0 + s1 * q1
+
+    def apply_elbow_wrist_safety(self, side, pose_role, position):
+        """Clamp wrist-elbow distance to safety limit (wrist has priority)."""
+        if pose_role not in ('wrist', 'elbow'):
+            return position
+        if pose_role == 'wrist':
+            return position
+        other_key = f'{side}_wrist'
+        if other_key not in self.pose_filters:
+            return position
+        other_pos = self.pose_filters[other_key]['pos']
+        delta = position - other_pos
+        dist = np.linalg.norm(delta)
+        if dist > self.max_elbow_wrist_distance and dist > 0.0:
+            position = other_pos + delta * (self.max_elbow_wrist_distance / dist)
+        return position
+
     def __del__(self):
         try:
-            if hasattr(self, 'vuer'):
-                self.loop.run_until_complete(self.vuer.stop())
-            if hasattr(self, 'loop'):
-                self.loop.close()
+            if hasattr(self, 'vuer') and hasattr(self.vuer, 'stop'):
+                self.vuer.stop()
         except Exception as e:
             self.get_logger().error(f'Error in cleanup: {e}')
 
