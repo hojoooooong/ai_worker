@@ -32,7 +32,7 @@ from scipy.spatial.transform import Rotation as R
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from vuer import Vuer
 from vuer.base import Server
-from vuer.schemas import Hands, Body
+from vuer.schemas import Hands, Body, DefaultScene
 from std_msgs.msg import Bool
 
 # Allow nested asyncio execution
@@ -735,6 +735,9 @@ class VRTrajectoryPublisher(Node):
         try:
             fps = self.fps
             self.get_logger().info('Starting hand tracking session')
+            session.set @ DefaultScene(
+                grid=False,
+            )
             session.upsert(
                 Hands(
                     fps=fps,
