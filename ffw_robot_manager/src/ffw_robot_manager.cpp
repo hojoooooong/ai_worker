@@ -61,11 +61,13 @@ controller_interface::CallbackReturn FfwRobotManager::on_configure(
     return controller_interface::CallbackReturn::ERROR;
   }
   params_ = param_listener_->get_params();
+  refresh_battery_led_policy_from_params();
 
   gpio_names_.clear();
   gpio_interface_indices_.clear();
   torque_disabled_ = false;
   led_error_set_ = false;
+  battery_led_level_ = BatteryLedLevel::UNKNOWN;
 
   // Create service client for Dynamixel torque control
   torque_client_ =
@@ -129,6 +131,13 @@ controller_interface::CallbackReturn FfwRobotManager::on_deactivate(
 {
   gpio_names_.clear();
   gpio_interface_indices_.clear();
+  battery_publishers_.clear();
+  battery_configurations_.clear();
+  battery_monitoring_enabled_ = false;
+  dxl_state_watchdog_.reset();
+  torque_disabled_ = false;
+  led_error_set_ = false;
+  battery_led_level_ = BatteryLedLevel::UNKNOWN;
 
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -137,13 +146,24 @@ controller_interface::return_type FfwRobotManager::update(
   const rclcpp::Time & /*time*/,
   const rclcpp::Duration & /*period*/)
 {
+  if (param_listener_->is_old(params_)) {
+    params_ = param_listener_->get_params();
+    refresh_battery_led_policy_from_params();
+    battery_led_level_ = BatteryLedLevel::UNKNOWN;
+  }
+
   for (const auto & gpio : gpio_names_) {
     bool has_error = false;
     std::string error_details;
+    const auto gpio_interfaces_it = gpio_interface_indices_.find(gpio);
+    if (gpio_interfaces_it == gpio_interface_indices_.end()) {
+      continue;
+    }
+    const auto & gpio_interfaces = gpio_interfaces_it->second;
 
     // Check Error Code
-    auto error_code_it = gpio_interface_indices_[gpio].find("Error Code");
-    if (error_code_it != gpio_interface_indices_[gpio].end()) {
+    auto error_code_it = gpio_interfaces.find("Error Code");
+    if (error_code_it != gpio_interfaces.end()) {
       auto opt = state_interfaces_[error_code_it->second].get_optional();
       if (opt.has_value() && opt.value() != 0) {
         has_error = true;
@@ -160,8 +180,8 @@ controller_interface::return_type FfwRobotManager::update(
     }
 
     // Check Hardware Error Status
-    auto hw_error_it = gpio_interface_indices_[gpio].find("Hardware Error Status");
-    if (hw_error_it != gpio_interface_indices_[gpio].end()) {
+    auto hw_error_it = gpio_interfaces.find("Hardware Error Status");
+    if (hw_error_it != gpio_interfaces.end()) {
       auto opt = state_interfaces_[hw_error_it->second].get_optional();
       if (opt.has_value() && opt.value() != 0) {
         has_error = true;
@@ -220,6 +240,7 @@ void FfwRobotManager::disable_all_torque()
   auto request = std::make_shared<std_srvs::srv::SetBool::Request>();
   request->data = false;  // Disable torque
 
+  torque_disabled_ = true;
   auto future = torque_client_->async_send_request(request);
 }
 
@@ -392,11 +413,36 @@ void FfwRobotManager::setup_battery_monitoring()
   }
 }
 
+void FfwRobotManager::refresh_battery_led_policy_from_params()
+{
+  battery_soc_led_enabled_ = params_.enable_battery_soc_led;
+  battery_soc_high_threshold_ = std::clamp(params_.battery_soc_high_threshold, 0.0, 1.0);
+  battery_soc_medium_threshold_ = std::clamp(params_.battery_soc_medium_threshold, 0.0, 1.0);
+  battery_soc_low_threshold_ = std::clamp(params_.battery_soc_low_threshold, 0.0, 1.0);
+  battery_soc_led_hysteresis_ = std::max(0.0, params_.battery_soc_led_hysteresis);
+
+  if (!(battery_soc_high_threshold_ > battery_soc_medium_threshold_ &&
+    battery_soc_medium_threshold_ > battery_soc_low_threshold_))
+  {
+    RCLCPP_WARN(
+      get_node()->get_logger(),
+      "Invalid battery SOC LED thresholds (high=%.3f, medium=%.3f, low=%.3f). "
+      "Falling back to defaults: high=0.50, medium=0.30, low=0.15",
+      battery_soc_high_threshold_, battery_soc_medium_threshold_, battery_soc_low_threshold_);
+    battery_soc_high_threshold_ = 0.50;
+    battery_soc_medium_threshold_ = 0.30;
+    battery_soc_low_threshold_ = 0.15;
+  }
+}
+
 void FfwRobotManager::update_battery_states()
 {
   if (!battery_monitoring_enabled_) {
     return;
   }
+
+  double min_soc_fraction = 1.0;
+  bool has_valid_soc = false;
 
   // Update all batteries dynamically
   for (size_t i = 0; i < battery_configurations_.size() && i < battery_publishers_.size(); ++i) {
@@ -410,7 +456,10 @@ void FfwRobotManager::update_battery_states()
       auto voltage_opt = state_interfaces_[battery_config.voltage_index].get_optional();
       if (voltage_opt.has_value()) {
         double voltage = voltage_opt.value();
-        double soc_fraction = robot_type_->get_battery_model()->voltage_to_soc(voltage);
+        double soc_fraction = std::clamp(
+          robot_type_->get_battery_model()->voltage_to_soc(voltage), 0.0, 1.0);
+        has_valid_soc = true;
+        min_soc_fraction = std::min(min_soc_fraction, soc_fraction);
         // Prefer explicit frame_id from BatteryInfo when provided; otherwise derive
         const std::string frame_id = !battery_config.frame_id.empty() ?
           battery_config.frame_id :
@@ -421,6 +470,86 @@ void FfwRobotManager::update_battery_states()
         publisher->publish(battery_state);
       }
     }
+  }
+
+  // Only update battery LED in non-error conditions.
+  const bool watchdog_timed_out = dxl_state_watchdog_ ? dxl_state_watchdog_->is_timed_out() : false;
+  if (has_valid_soc && battery_soc_led_enabled_ && !led_error_set_ && !watchdog_timed_out) {
+    update_battery_led_from_soc(min_soc_fraction);
+  }
+}
+
+void FfwRobotManager::update_battery_led_from_soc(double min_soc_fraction)
+{
+  const auto next_level = classify_battery_led_level(min_soc_fraction);
+  if (next_level == battery_led_level_) {
+    return;
+  }
+
+  battery_led_level_ = next_level;
+
+  switch (next_level) {
+    case BatteryLedLevel::HIGH:
+      set_led_values(LedValues(0, 255, 255, LedMode::RGB_BREATHE));
+      break;
+    case BatteryLedLevel::MEDIUM:
+      set_led_values(LedValues(255, 180, 0, LedMode::RGB_BREATHE));
+      break;
+    case BatteryLedLevel::LOW:
+      set_led_values(LedValues(255, 90, 0, LedMode::RGB_BLINK));
+      break;
+    case BatteryLedLevel::CRITICAL:
+      set_led_values(LedValues(255, 0, 0, LedMode::RGB_BLINK));
+      break;
+    case BatteryLedLevel::UNKNOWN:
+    default:
+      reset_led_state();
+      break;
+  }
+}
+
+FfwRobotManager::BatteryLedLevel FfwRobotManager::classify_battery_led_level(double soc_fraction) const
+{
+  const auto classify_without_hysteresis = [this](double soc) -> BatteryLedLevel {
+      if (soc > battery_soc_high_threshold_) {
+        return BatteryLedLevel::HIGH;
+      }
+      if (soc > battery_soc_medium_threshold_) {
+        return BatteryLedLevel::MEDIUM;
+      }
+      if (soc > battery_soc_low_threshold_) {
+        return BatteryLedLevel::LOW;
+      }
+      return BatteryLedLevel::CRITICAL;
+    };
+
+  const auto base_level = classify_without_hysteresis(soc_fraction);
+  const double h = battery_soc_led_hysteresis_;
+
+  switch (battery_led_level_) {
+    case BatteryLedLevel::HIGH:
+      return (soc_fraction > (battery_soc_high_threshold_ - h)) ? BatteryLedLevel::HIGH : base_level;
+    case BatteryLedLevel::MEDIUM:
+      if (soc_fraction >= (battery_soc_high_threshold_ + h)) {
+        return BatteryLedLevel::HIGH;
+      }
+      if (soc_fraction <= (battery_soc_medium_threshold_ - h)) {
+        return base_level;
+      }
+      return BatteryLedLevel::MEDIUM;
+    case BatteryLedLevel::LOW:
+      if (soc_fraction >= (battery_soc_medium_threshold_ + h)) {
+        return base_level;
+      }
+      if (soc_fraction <= (battery_soc_low_threshold_ - h)) {
+        return BatteryLedLevel::CRITICAL;
+      }
+      return BatteryLedLevel::LOW;
+    case BatteryLedLevel::CRITICAL:
+      return (soc_fraction < (battery_soc_low_threshold_ + h)) ? BatteryLedLevel::CRITICAL : base_level;
+    case BatteryLedLevel::UNKNOWN:
+    default:
+      return base_level;
   }
 }
 

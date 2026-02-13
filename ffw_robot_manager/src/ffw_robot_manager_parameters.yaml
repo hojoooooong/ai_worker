@@ -14,3 +14,28 @@ ffw_robot_manager:
     default_value: "",
     description: "FFW robot type (e.g., 'ffw_sg2_rev1'). Used to determine battery monitoring configuration."
   }
+  enable_battery_soc_led: {
+    type: bool,
+    default_value: true,
+    description: "Enable LED indication based on battery SOC when there is no error/watchdog alarm."
+  }
+  battery_soc_high_threshold: {
+    type: double,
+    default_value: 0.50,
+    description: "SOC threshold for HIGH battery LED level (0.0~1.0). Must be greater than medium threshold."
+  }
+  battery_soc_medium_threshold: {
+    type: double,
+    default_value: 0.30,
+    description: "SOC threshold for MEDIUM battery LED level (0.0~1.0). Must be between high and low thresholds."
+  }
+  battery_soc_low_threshold: {
+    type: double,
+    default_value: 0.15,
+    description: "SOC threshold for LOW battery LED level (0.0~1.0). Below this is CRITICAL."
+  }
+  battery_soc_led_hysteresis: {
+    type: double,
+    default_value: 0.03,
+    description: "Hysteresis margin for SOC LED transitions to reduce flicker near thresholds."
+  }

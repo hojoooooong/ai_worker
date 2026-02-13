@@ -117,6 +117,15 @@ public:
     const rclcpp::Duration & period) override;
 
 protected:
+  enum class BatteryLedLevel
+  {
+    UNKNOWN = 0,
+    HIGH,
+    MEDIUM,
+    LOW,
+    CRITICAL
+  };
+
   std::vector<std::string> gpio_names_;
   std::unordered_map<std::string, std::unordered_map<std::string, size_t>> gpio_interface_indices_;
 
@@ -147,6 +156,12 @@ protected:
   std::shared_ptr<RobotType> robot_type_;
 
   bool battery_monitoring_enabled_ = false;
+  BatteryLedLevel battery_led_level_ = BatteryLedLevel::UNKNOWN;
+  bool battery_soc_led_enabled_ = true;
+  double battery_soc_high_threshold_ = 0.50;
+  double battery_soc_medium_threshold_ = 0.30;
+  double battery_soc_low_threshold_ = 0.15;
+  double battery_soc_led_hysteresis_ = 0.03;
 
   // Disable torque for all Dynamixels
   void disable_all_torque();
@@ -185,7 +200,10 @@ protected:
 
   // Battery monitoring methods
   void setup_battery_monitoring();
+  void refresh_battery_led_policy_from_params();
   void update_battery_states();
+  void update_battery_led_from_soc(double min_soc_fraction);
+  BatteryLedLevel classify_battery_led_level(double soc_fraction) const;
   sensor_msgs::msg::BatteryState create_battery_state(
     double voltage, double soc, const std::string & frame_id);
 };

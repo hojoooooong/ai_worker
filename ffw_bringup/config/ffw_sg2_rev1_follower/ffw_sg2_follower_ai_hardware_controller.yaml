@@ -205,3 +205,8 @@
       disable_torque_on_error: false
       set_led_error_on_error: true
       ffw_type: ffw_sg2_rev1
+      enable_battery_soc_led: true
+      battery_soc_high_threshold: 0.50
+      battery_soc_medium_threshold: 0.30
+      battery_soc_low_threshold: 0.15
+      battery_soc_led_hysteresis: 0.03
