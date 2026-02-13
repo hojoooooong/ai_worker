@@ -21,21 +21,111 @@ import math
 import os
 import socket
 import threading
+import traceback
 
 from geometry_msgs.msg import Point, Pose, PoseArray, PoseStamped, Quaternion, Twist
+from sensor_msgs.msg import CompressedImage
 import nest_asyncio
 import numpy as np
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from nav_msgs.msg import Odometry
 from scipy.spatial.transform import Rotation as R
+from std_msgs.msg import Bool
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from vuer import Vuer
-from vuer.schemas import Hands
-from std_msgs.msg import Bool
+from vuer.schemas import Hands, Body, ImageBackground
 
 # Allow nested asyncio execution
 nest_asyncio.apply()
+
+# WebXR Body Tracking joint order (XRBodyJoint enum)
+BODY_JOINT_KEYS = [
+    "hips",
+    "spine-lower",
+    "spine-middle",
+    "spine-upper",
+    "chest",
+    "neck",
+    "head",
+    "left-shoulder",
+    "left-scapula",
+    "left-arm-upper",
+    "left-arm-lower",
+    "left-hand-wrist-twist",
+    "right-shoulder",
+    "right-scapula",
+    "right-arm-upper",
+    "right-arm-lower",
+    "right-hand-wrist-twist",
+    "left-hand-palm",
+    "left-hand-wrist",
+    "left-hand-thumb-metacarpal",
+    "left-hand-thumb-phalanx-proximal",
+    "left-hand-thumb-phalanx-distal",
+    "left-hand-thumb-tip",
+    "left-hand-index-metacarpal",
+    "left-hand-index-phalanx-proximal",
+    "left-hand-index-phalanx-intermediate",
+    "left-hand-index-phalanx-distal",
+    "left-hand-index-tip",
+    "left-hand-middle-phalanx-metacarpal",
+    "left-hand-middle-phalanx-proximal",
+    "left-hand-middle-phalanx-intermediate",
+    "left-hand-middle-phalanx-distal",
+    "left-hand-middle-tip",
+    "left-hand-ring-metacarpal",
+    "left-hand-ring-phalanx-proximal",
+    "left-hand-ring-phalanx-intermediate",
+    "left-hand-ring-phalanx-distal",
+    "left-hand-ring-tip",
+    "left-hand-little-metacarpal",
+    "left-hand-little-phalanx-proximal",
+    "left-hand-little-phalanx-intermediate",
+    "left-hand-little-phalanx-distal",
+    "left-hand-little-tip",
+    "right-hand-palm",
+    "right-hand-wrist",
+    "right-hand-thumb-metacarpal",
+    "right-hand-thumb-phalanx-proximal",
+    "right-hand-thumb-phalanx-distal",
+    "right-hand-thumb-tip",
+    "right-hand-index-metacarpal",
+    "right-hand-index-phalanx-proximal",
+    "right-hand-index-phalanx-intermediate",
+    "right-hand-index-phalanx-distal",
+    "right-hand-index-tip",
+    "right-hand-middle-metacarpal",
+    "right-hand-middle-phalanx-proximal",
+    "right-hand-middle-phalanx-intermediate",
+    "right-hand-middle-phalanx-distal",
+    "right-hand-middle-tip",
+    "right-hand-ring-metacarpal",
+    "right-hand-ring-phalanx-proximal",
+    "right-hand-ring-phalanx-intermediate",
+    "right-hand-ring-phalanx-distal",
+    "right-hand-ring-tip",
+    "right-hand-little-metacarpal",
+    "right-hand-little-phalanx-proximal",
+    "right-hand-little-phalanx-intermediate",
+    "right-hand-little-phalanx-distal",
+    "right-hand-little-tip",
+    "left-upper-leg",
+    "left-lower-leg",
+    "left-foot-ankle-twist",
+    "left-foot-ankle",
+    "left-foot-subtalar",
+    "left-foot-transverse",
+    "left-foot-ball",
+    "right-upper-leg",
+    "right-lower-leg",
+    "right-foot-ankle-twist",
+    "right-foot-ankle",
+    "right-foot-subtalar",
+    "right-foot-transverse",
+    "right-foot-ball",
+]
 
 
 class VRTrajectoryPublisher(Node):
@@ -44,19 +134,19 @@ class VRTrajectoryPublisher(Node):
         super().__init__('vr_trajectory_publisher')
         self.get_logger().set_level(rclpy.logging.LoggingSeverity.INFO)
 
-        # Declare parameters
-        self.declare_parameter('enable_lift_publishing', True)
-        self.declare_parameter('enable_head_publishing', False)
+        # Lift and base (whole-body) parameters
+        self.declare_parameter('enable_lift_publishing', False)
+        self.declare_parameter('enable_head_publishing', True)
         self.declare_parameter('enable_base_publishing', True)
-        # Position control parameters: convert position error to velocity using P control
-        self.declare_parameter('base_linear_kp', 2.0)  # P gain for linear position control (velocity = kp * position_error)
-        self.declare_parameter('base_angular_kp', 1.0)  # P gain for angular position control (velocity = kp * angle_error)
-        self.declare_parameter('base_linear_deadzone', 0.05)  # Deadzone range for linear position (m) - within this range, velocity is 0
-        self.declare_parameter('base_angular_deadzone', 0.05)  # Deadzone range for angular position (rad) - within this range, velocity is 0
-        self.declare_parameter('base_max_linear_velocity', 0.5)  # Maximum linear velocity (m/s)
-        self.declare_parameter('base_max_angular_velocity', 0.5)  # Maximum angular velocity (rad/s)
+        self.declare_parameter('enable_vr_image', False)
 
-        # Get parameters
+        self.declare_parameter('base_linear_kp', 2.0)
+        self.declare_parameter('base_angular_kp', 1.0)
+        self.declare_parameter('base_linear_deadzone', 0.05)
+        self.declare_parameter('base_angular_deadzone', 0.05)
+        self.declare_parameter('base_max_linear_velocity', 0.3)
+        self.declare_parameter('base_max_angular_velocity', 0.3)
+
         self.enable_lift_publishing = self.get_parameter('enable_lift_publishing').get_parameter_value().bool_value
         self.enable_head_publishing = self.get_parameter('enable_head_publishing').get_parameter_value().bool_value
         self.enable_base_publishing = self.get_parameter('enable_base_publishing').get_parameter_value().bool_value
@@ -67,32 +157,35 @@ class VRTrajectoryPublisher(Node):
         self.base_max_linear_velocity = self.get_parameter('base_max_linear_velocity').get_parameter_value().double_value
         self.base_max_angular_velocity = self.get_parameter('base_max_angular_velocity').get_parameter_value().double_value
 
-        # Validate parameters
         if self.base_linear_kp <= 0.0:
             self.get_logger().warn('base_linear_kp must be positive. Using default 2.0.')
             self.base_linear_kp = 2.0
         if self.base_angular_kp <= 0.0:
-            self.get_logger().warn('base_angular_kp must be positive. Using default 2.0.')
-            self.base_angular_kp = 2.0
+            self.get_logger().warn('base_angular_kp must be positive. Using default 1.0.')
+            self.base_angular_kp = 1.0
         if self.base_linear_deadzone < 0.0:
-            self.get_logger().warn('base_linear_deadzone must be non-negative. Using default 0.01.')
-            self.base_linear_deadzone = 0.01
+            self.base_linear_deadzone = 0.05
         if self.base_angular_deadzone < 0.0:
-            self.get_logger().warn('base_angular_deadzone must be non-negative. Using default 0.01.')
-            self.base_angular_deadzone = 0.01
+            self.base_angular_deadzone = 0.05
 
-        self.get_logger().info(f'Parameters: enable_lift_publishing={self.enable_lift_publishing}, '
-                              f'enable_head_publishing={self.enable_head_publishing}, '
-                              f'enable_base_publishing={self.enable_base_publishing}, '
-                              f'base_linear_kp={self.base_linear_kp}, '
-                              f'base_angular_kp={self.base_angular_kp}, '
-                              f'base_linear_deadzone={self.base_linear_deadzone}m, '
-                              f'base_angular_deadzone={self.base_angular_deadzone}rad, '
-                              f'base_max_linear_velocity={self.base_max_linear_velocity}m/s, '
-                              f'base_max_angular_velocity={self.base_max_angular_velocity}rad/s')
+        # VR image in headset (stereo background from camera topics)
+        self.declare_parameter('vr_image_left_topic', '/zed/zed_node/left/image_rect_color/compressed')
+        self.declare_parameter('vr_image_right_topic', '/zed/zed_node/right/image_rect_color/compressed')
+        self.declare_parameter('vr_image_fps', 15.0)
+
+        self.enable_vr_image = self.get_parameter('enable_vr_image').get_parameter_value().bool_value
+        self.vr_image_left_topic = self.get_parameter('vr_image_left_topic').get_parameter_value().string_value
+        self.vr_image_right_topic = self.get_parameter('vr_image_right_topic').get_parameter_value().string_value
+        self.vr_image_fps = self.get_parameter('vr_image_fps').get_parameter_value().double_value
+
+        self.get_logger().info(
+            f'Whole-body: lift={self.enable_lift_publishing}, base={self.enable_base_publishing}, '
+            f'base_linear_kp={self.base_linear_kp}, base_angular_kp={self.base_angular_kp}, '
+            f'vr_image={self.enable_vr_image}'
+        )
 
         # VR publishing control flag
-        self.vr_publishing_enabled = False  # Default: disabled
+        self.vr_publishing_enabled = True
 
         # VR Server setup
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -116,7 +209,7 @@ class VRTrajectoryPublisher(Node):
 
         # VR event handlers
         self.vuer.add_handler('HAND_MOVE')(self.on_hand_move)
-        self.vuer.add_handler('CAMERA_MOVE')(self.on_camera_move)
+        self.vuer.add_handler('BODY_MOVE')(self.on_body_tracking_move)
 
         # Hand joint configuration
         self.left_joint_names = [
@@ -175,13 +268,11 @@ class VRTrajectoryPublisher(Node):
             '/leader/joystick_controller_right/joint_trajectory',
             10
         )
-        self.cmd_vel_pub = self.create_publisher(
-            Twist,
-            '/cmd_vel',
-            10
-        )
-        self.left_wrist_rviz_pub = self.create_publisher(PoseStamped, '/vr_hand/left_wrist', 10)
-        self.right_wrist_rviz_pub = self.create_publisher(PoseStamped, '/vr_hand/right_wrist', 10)
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.left_wrist_rviz_pub = self.create_publisher(PoseStamped, '/l_goal_pose', 10)
+        self.right_wrist_rviz_pub = self.create_publisher(PoseStamped, '/r_goal_pose', 10)
+        self.left_elbow_pub = self.create_publisher(PoseStamped, '/l_elbow_pose', 10)
+        self.right_elbow_pub = self.create_publisher(PoseStamped, '/r_elbow_pose', 10)
 
         self.left_thumb_pub = self.create_publisher(PoseArray, '/vr_hand/left_thumb', 10)
         self.right_thumb_pub = self.create_publisher(PoseArray, '/vr_hand/right_thumb', 10)
@@ -193,89 +284,122 @@ class VRTrajectoryPublisher(Node):
             self.vr_control_callback,
             10
         )
+        self.odom_sub = self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
 
-        # Subscriber for odometry
-        self.odom_sub = self.create_subscription(
-            Odometry,
-            '/odom',
-            self.odom_callback,
-            10
-        )
+        # VR image (stereo background): optional, enabled by enable_vr_image
+        self.current_session = None
+        self.latest_left_bytes = None
+        self.latest_right_bytes = None
+        if self.enable_vr_image:
+            qos_image = QoSProfile(
+                reliability=ReliabilityPolicy.BEST_EFFORT,
+                history=HistoryPolicy.KEEP_LAST,
+                depth=1,
+            )
+            self.left_image_sub = self.create_subscription(
+                CompressedImage,
+                self.vr_image_left_topic,
+                self.left_image_callback,
+                qos_image,
+            )
+            self.right_image_sub = self.create_subscription(
+                CompressedImage,
+                self.vr_image_right_topic,
+                self.right_image_callback,
+                qos_image,
+            )
+            period = 1.0 / self.vr_image_fps if self.vr_image_fps > 0 else 1.0 / 15.0
+            self.image_send_timer = self.create_timer(period, self.send_latest_images)
+            self.get_logger().info(
+                f'VR image enabled: left={self.vr_image_left_topic}, right={self.vr_image_right_topic}, '
+                f'{self.vr_image_fps} fps'
+            )
 
         # VR data storage
         self.left_hand_data = None
         self.right_hand_data = None
         self.head_transform_matrix = np.eye(4)
         self.head_inverse_matrix = np.eye(4)
-        self.previous_camera_height = None  # Store previous camera height for tracking changes
-        self.initial_camera_height = None  # Store initial camera height as reference
-        self.initial_camera_position = None  # Store initial camera position (x, y) as reference for base control
-        self.initial_camera_yaw = None  # Store initial camera yaw as reference for base rotation
-        self.previous_camera_position = None  # Store previous camera position for velocity calculation
-        self.previous_camera_yaw = None  # Store previous camera yaw for angular velocity calculation
+        self.hand_pose_is_head_relative = self.declare_parameter(
+            'hand_pose_is_head_relative', True
+        ).value
+        self.zero_z_on_start = self.declare_parameter(
+            'zero_z_on_start', True
+        ).value
+        self.z_calibrated = False
+        self.z_calibration_offset = 0.0
 
-        # Robot odometry tracking
-        self.current_odom = None  # Current robot odometry
-        self.initial_odom_position = None  # Store initial robot position (x, y) when VR control is enabled
-        self.initial_odom_yaw = None  # Store initial robot yaw when VR control is enabled
+        # Whole-body: camera/odom reference for lift and base
+        self.initial_camera_height = None
+        self.initial_camera_position = None
+        self.initial_camera_yaw = None
+        self.previous_camera_position = None
+        self.previous_camera_yaw = None
+        self.current_odom = None
+        self.initial_odom_position = None
+        self.initial_odom_yaw = None
+        self.cmd_vel_log_counter = 0
+        self.cmd_vel_log_every_n = 10
 
-        # Low-pass filter settings
-        self.low_pass_filter_alpha = 0.3
+        # Low-pass filter settings (wrist/elbow pose)
+        self.low_pass_filter_alpha = 1.0
+        self.pose_filters = {}
+
+        # Lift low-pass filter (smooths height command)
+        self.declare_parameter('lift_low_pass_alpha', 0.3)
+        self.lift_low_pass_alpha = self.get_parameter('lift_low_pass_alpha').get_parameter_value().double_value
+        self.filtered_lift_position = None
+        self.max_elbow_wrist_distance = 0.4
+        self.max_wrist_angle_step_deg = 30.0
 
         # Scaling VR data
         self.scaling_vr = 1.1
+        self.wrist_vr_scale = 1.4
+        self.elbow_vr_scale = 1.4
+        self.wrist_offsets = {'x': -0.14, 'y': 0.0, 'z': 1.0}
+        self.elbow_offsets = {'x': -0.14, 'y': 0.0, 'z': 1.0}
 
         # Head pitch offset configuration
-        self.pitch_offset = -0.5  # Adjustable pitch offset in radians
+        self.pitch_offset = -0.5
 
         self.hand_log_counter = 0
 
-        # Timer for hand trajectory publishing
-        # self.timer_period = 0.005  # 200 Hz for smooth trajectory generation
-        self.timer_period = 0.01  # 100 Hz for smooth trajectory generation
+        self.timer_period = 0.01
         self.timer = self.create_timer(self.timer_period, self.publish_hand_trajectory)
-
-        # Status monitoring timer (every 5 seconds)
         self.status_timer = self.create_timer(5.0, self.log_status)
-
-        # Logging counters
         self.head_log_counter = 0
         self.log_every_n = self.fps
-        self.cmd_vel_log_counter = 0
-        self.cmd_vel_log_every_n = 10  # Log every 10 camera move events
 
-        # Async setup
+        # Async event loop for Vuer server
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         self.start_vuer_server()
 
         self.get_logger().info('VR Trajectory Publisher node has been started')
-        self.get_logger().info('VR publishing is DISABLED by default. Send /vr_control/toggle message (True=enable, False=disable).')
+        self.get_logger().info(
+            f'VR publishing is {"ENABLED" if self.vr_publishing_enabled else "DISABLED"} by default. '
+            f'Send /vr_control/toggle message (True=enable, False=disable).'
+        )
 
     def odom_callback(self, msg):
-        """Callback to receive robot odometry."""
+        """Callback to receive robot odometry for base control."""
         self.current_odom = msg
 
     def vr_control_callback(self, msg):
         """Callback to enable/disable VR publishing based on message content."""
-        new_state = bool(msg.data)  # Read message content
+        new_state = bool(msg.data)
 
-        # Only log if state actually changed
         if new_state != self.vr_publishing_enabled:
             self.vr_publishing_enabled = new_state
             status = "ENABLED" if self.vr_publishing_enabled else "DISABLED"
             self.get_logger().info(f'VR publishing changed to: {status} (message value: {msg.data})')
 
-            # When VR control is enabled (true), reset reference to be set on next camera event
-            # This ensures we use the camera pose at the moment true is received
             if self.vr_publishing_enabled:
-                self.initial_camera_height = None  # Reset to capture current height on next camera event
-                self.initial_camera_position = None  # Reset to capture current position on next camera event
-                self.initial_camera_yaw = None  # Reset to capture current yaw on next camera event
-                self.previous_camera_position = None  # Reset previous position for velocity calculation
-                self.previous_camera_yaw = None  # Reset previous yaw for angular velocity calculation
-
-                # Store initial robot odometry position when VR control is enabled
+                self.initial_camera_height = None
+                self.initial_camera_position = None
+                self.initial_camera_yaw = None
+                self.previous_camera_position = None
+                self.previous_camera_yaw = None
                 if self.current_odom is not None:
                     pos = self.current_odom.pose.pose.position
                     quat = self.current_odom.pose.pose.orientation
@@ -293,31 +417,77 @@ class VRTrajectoryPublisher(Node):
                     self.get_logger().warn('VR control enabled but odom not available yet')
 
             if not self.vr_publishing_enabled:
-                # Reset joint positions to zero when disabled
                 self.left_joint_positions = [0.0] * 20
                 self.right_joint_positions = [0.0] * 20
                 self.initial_odom_position = None
                 self.initial_odom_yaw = None
+                self.initial_camera_height = None
+                self.initial_camera_position = None
+                self.initial_camera_yaw = None
+                self.filtered_lift_position = None
+                self.z_calibrated = False
+                self.pose_filters.clear()
                 self.get_logger().info('Joint positions reset to zero')
 
     def log_status(self):
         """Log current system status for debugging."""
         vr_status = "ENABLED" if self.vr_publishing_enabled else "DISABLED"
-
         self.get_logger().info(f'Status: VR={vr_status}')
 
-        # Check if we have hand data
-        left_data_status = "Available" if self.left_hand_data is not None else "None"
-        right_data_status = "Available" if self.right_hand_data is not None else "None"
+    def left_image_callback(self, msg):
+        """Store latest left eye image for VR background (only when enable_vr_image)."""
+        if not self.enable_vr_image:
+            return
+        self.latest_left_bytes = bytes(msg.data)
 
-        self.get_logger().info(f'Hand data: Left={left_data_status}, Right={right_data_status}')
+    def right_image_callback(self, msg):
+        """Store latest right eye image for VR background (only when enable_vr_image)."""
+        if not self.enable_vr_image:
+            return
+        self.latest_right_bytes = bytes(msg.data)
 
-        # Check joint positions
-        if self.left_joint_positions and any(pos != 0.0 for pos in self.left_joint_positions):
-            self.get_logger().info(f'Left joint positions: {self.left_joint_positions[:5]}...')
-        if self.right_joint_positions and any(pos != 0.0 for pos in self.right_joint_positions):
-            self.get_logger().info(f'Right joint positions: {self.right_joint_positions[:5]}...')
+    def send_latest_images(self):
+        """Timer callback: send latest stereo frames to Vuer at configured fps."""
+        if not self.enable_vr_image or not self.vr_publishing_enabled:
+            return
+        if not self.loop.is_running():
+            return
+        if self.latest_left_bytes is not None:
+            img = self.latest_left_bytes
+            self.latest_left_bytes = None
+            asyncio.run_coroutine_threadsafe(
+                self.update_vuer_background(img, key='bg_left', layer=1),
+                self.loop,
+            )
+        if self.latest_right_bytes is not None:
+            img = self.latest_right_bytes
+            self.latest_right_bytes = None
+            asyncio.run_coroutine_threadsafe(
+                self.update_vuer_background(img, key='bg_right', layer=2),
+                self.loop,
+            )
 
+    async def update_vuer_background(self, img_bytes, key, layer):
+        """Update Vuer session background image (stereo: layer 1=left, 2=right)."""
+        try:
+            if self.current_session is None:
+                return
+            await self.current_session.upsert(
+                ImageBackground(
+                    src=img_bytes,
+                    key=key,
+                    layers=layer,
+                    distanceToCamera=2.0,
+                    aspect=1.77,
+                    height=2.5,
+                    position=[0, 0, -2.0],
+                    format='jpeg',
+                    interpolate=True,
+                ),
+                to='bgChildren',
+            )
+        except Exception:
+            pass
 
     def is_valid_float(self, value):
         """Check if value is valid float (excluding NaN, inf)."""
@@ -410,21 +580,16 @@ class VRTrajectoryPublisher(Node):
         return ros_pos, ros_quat
 
     def transform_and_publish_pose(self, pose_array_msg, publisher, hand_name, vr_scale=1.0):
-        """Transform pose from head relative coordinates to base_link and publish."""
+        """Transform wrist pose from head relative coordinates to base_link and publish."""
         if not pose_array_msg.poses:
             return
 
-        # Assume the first pose in the array is the wrist pose (head relative, ROS coordinates)
         wrist_pose_relative = pose_array_msg.poses[0]
-
-        # Extract relative position (head/camera relative, already in ROS coordinate system)
         camera_relative_position = np.array([
-            wrist_pose_relative.position.x * vr_scale,
-            wrist_pose_relative.position.y * vr_scale,
-            wrist_pose_relative.position.z * vr_scale
+            wrist_pose_relative.position.x,
+            wrist_pose_relative.position.y,
+            wrist_pose_relative.position.z
         ], dtype=np.float64)
-
-        # Extract relative orientation (head/camera relative, already in ROS coordinate system)
         camera_relative_quaternion = np.array([
             wrist_pose_relative.orientation.x,
             wrist_pose_relative.orientation.y,
@@ -432,47 +597,76 @@ class VRTrajectoryPublisher(Node):
             wrist_pose_relative.orientation.w
         ], dtype=np.float64)
 
-        # Fixed offset: zedm_camera_center → base_link
+        apply_right_z_flip = (hand_name == 'right')
+        self.publish_relative_pose(
+            camera_relative_position,
+            camera_relative_quaternion,
+            publisher,
+            vr_scale=vr_scale,
+            x_offset=self.wrist_offsets['x'],
+            y_offset=self.wrist_offsets['y'],
+            z_offset=self.wrist_offsets['z'],
+            apply_right_z_flip=apply_right_z_flip,
+            pose_role='wrist',
+            side=hand_name,
+        )
+
+    def publish_relative_pose(
+        self,
+        camera_relative_position,
+        camera_relative_quaternion,
+        publisher,
+        vr_scale=1.0,
+        x_offset=0.0,
+        y_offset=0.0,
+        z_offset=0.0,
+        apply_right_z_flip=False,
+        pose_role='wrist',
+        side='',
+    ):
+        """Publish a pose using the same base_link transform as wrists."""
         zedm_to_base_offset = np.array([
-            0.0 - 0.0238122 - 0.040 - 0.049483 - 0.0055,  # x: -0.1187952
-            0.0 + 0.0 + 0.0 + 0.0 + 0.0,                  # y: 0.0
-            -0.01325 + 0.0242094 - 0.054 - 0.102130 - 1.4316  # z: -1.5767706
+            0.0 - 0.0238122 - 0.040 - 0.049483 - 0.0055,
+            0.0 + 0.0 + 0.0 + 0.0 + 0.0,
+            -0.01325 + 0.0242094 - 0.054 - 0.102130 - 1.4316
         ], dtype=np.float64)
 
-        # Transform from camera relative coordinates directly to base_link coordinates
-        base_position = camera_relative_position - zedm_to_base_offset
+        base_position = (camera_relative_position * vr_scale) - zedm_to_base_offset
+        if self.zero_z_on_start:
+            if (not self.z_calibrated) and pose_role == 'wrist':
+                self.z_calibration_offset = base_position[2]
+                self.z_calibrated = True
+            if self.z_calibrated:
+                base_position = base_position.copy()
+                base_position[2] -= self.z_calibration_offset
 
-        # Use camera relative orientation as is
         camera_relative_rotation = R.from_quat(camera_relative_quaternion)
-
-        # Additional: Apply 180-degree rotation around Z-axis (right hand only)
-        if hand_name == 'right':
+        if apply_right_z_flip:
             rot_z_180 = R.from_euler('z', 180, degrees=True)
             camera_relative_rotation = camera_relative_rotation * rot_z_180
+        arm_quaternion = camera_relative_rotation.as_quat()
 
-        arm_quaternion = camera_relative_rotation.as_quat()  # [x, y, z, w]
+        pose_key = f'{side}_{pose_role}' if side else pose_role
+        base_position, arm_quaternion = self.low_pass_filter_pose(
+            pose_key,
+            base_position,
+            arm_quaternion,
+            max_angle_deg=self.max_wrist_angle_step_deg if pose_role == 'wrist' else None,
+        )
+        if side:
+            base_position = self.apply_elbow_wrist_safety(side, pose_role, base_position)
 
-        # Create target pose message
         target_pose = PoseStamped()
         target_pose.header.stamp = self.get_clock().now().to_msg()
         target_pose.header.frame_id = 'base_link'
-
-        target_pose.pose.position.x = base_position[0]-0.15  # Small offset for better visualization
-        target_pose.pose.position.y = base_position[1]
-        target_pose.pose.position.z = base_position[2]
-
+        target_pose.pose.position.x = base_position[0] + x_offset
+        target_pose.pose.position.y = base_position[1] + y_offset
+        target_pose.pose.position.z = base_position[2] + z_offset
         target_pose.pose.orientation.x = arm_quaternion[0]
         target_pose.pose.orientation.y = arm_quaternion[1]
         target_pose.pose.orientation.z = arm_quaternion[2]
         target_pose.pose.orientation.w = arm_quaternion[3]
-
         publisher.publish(target_pose)
-
-        self.get_logger().debug(
-            'Transformed {} pose: pos=[{:.3f}, {:.3f}, {:.3f}]'.format(
-                hand_name, base_position[0], base_position[1], base_position[2]
-            )
-        )
 
     def get_joint_matrix(self, hand_data, joint_index):
         """Extract joint transformation matrix from hand data."""
@@ -559,7 +753,10 @@ class VRTrajectoryPublisher(Node):
         for i in range(25):
             try:
                 world_joint_matrix = self.get_joint_matrix(hand_data, i)
-                relative_joint_matrix = self.head_inverse_matrix @ world_joint_matrix
+                if self.hand_pose_is_head_relative:
+                    relative_joint_matrix = world_joint_matrix
+                else:
+                    relative_joint_matrix = self.head_inverse_matrix @ world_joint_matrix
                 relative_pos, relative_quat = self.matrix_to_pose(relative_joint_matrix)
                 relative_pos_ros, relative_quat_ros = self.vr_to_ros_transform(relative_pos, relative_quat)
 
@@ -630,7 +827,7 @@ class VRTrajectoryPublisher(Node):
 
                     # Transform and publish left wrist pose to base_link coordinates
                     self.transform_and_publish_pose(
-                        pose_array, self.left_wrist_rviz_pub, 'left', vr_scale=1.7
+                        pose_array, self.left_wrist_rviz_pub, 'left', vr_scale=self.wrist_vr_scale
                     )
 
                 # Apply low-pass filter
@@ -644,7 +841,7 @@ class VRTrajectoryPublisher(Node):
 
                     # Transform and publish right wrist pose to base_link coordinates
                     self.transform_and_publish_pose(
-                        pose_array, self.right_wrist_rviz_pub, 'right', vr_scale=1.7
+                        pose_array, self.right_wrist_rviz_pub, 'right', vr_scale=self.wrist_vr_scale
                     )
 
                 # Apply low-pass filter
@@ -677,20 +874,18 @@ class VRTrajectoryPublisher(Node):
 
     def start_vuer_server(self):
         """Start the VR server in a separate thread."""
-        async def start_server():
-            try:
-                self.vuer.spawn(start=True)(self.main_hand_tracking)
-                self.get_logger().info('Starting VR server...')
-                await self.vuer.start()
-            except Exception as e:
-                self.get_logger().error(f'Failed to start VR server: {e}')
-
         def run_server():
             try:
-                self.loop.run_until_complete(start_server())
-                self.loop.run_forever()
+                # Set event loop for this thread
+                asyncio.set_event_loop(self.loop)
+                self.get_logger().info('Starting VR server...')
+                # Register handler and start server
+                # spawn(start=True) calls Vuer.start() -> Server.start()
+                # Server.start() internally calls run_until_complete + run_forever (blocks here)
+                self.vuer.spawn(start=True)(self.main_hand_tracking)
             except Exception as e:
                 self.get_logger().error(f'Error in VR server thread: {e}')
+                self.get_logger().error(traceback.format_exc())
 
         self.server_thread = threading.Thread(target=run_server, daemon=True)
         self.server_thread.start()
@@ -699,247 +894,73 @@ class VRTrajectoryPublisher(Node):
         """Main hand tracking session."""
         try:
             fps = self.fps
+            self.current_session = session
             self.get_logger().info('Starting hand tracking session')
-            session.upsert(
+
+            # Build bgChildren: optional stereo ImageBackgrounds + Hands
+            bg_children = []
+            if self.enable_vr_image:
+                bg_children.extend([
+                    ImageBackground(
+                        src='',
+                        key='bg_left',
+                        layers=1,
+                        distanceToCamera=2.0,
+                        aspect=1.77,
+                        height=2.5,
+                        position=[0, 0, -2.0],
+                        format='jpeg',
+                    ),
+                    ImageBackground(
+                        src='',
+                        key='bg_right',
+                        layers=2,
+                        distanceToCamera=2.0,
+                        aspect=1.77,
+                        height=2.5,
+                        position=[0, 0, -2.0],
+                        format='jpeg',
+                    ),
+                ])
+            bg_children.append(
                 Hands(
                     fps=fps,
                     stream=True,
                     key='hands',
                     hideLeft=False,
                     hideRight=False,
-                ),
-                to='bgChildren',
+                )
             )
-            self.get_logger().info('Hand tracking enabled')
+            session.upsert(bg_children, to='bgChildren')
+
+            session.upsert(
+                Body(
+                    key='body_tracking',
+                    stream=True,
+                    fps=fps,
+                    leftHand=False,
+                    rightHand=False,
+                    hideIndicate=False,
+                    showFrame=True,
+                    showBody=True,
+                    frameScale=0.02,
+                ),
+                to='children',
+            )
+            self.get_logger().info(
+                f'Hand tracking enabled{" + VR image" if self.enable_vr_image else ""}'
+            )
             while True:
                 await asyncio.sleep(1/fps)
         except Exception as e:
             self.get_logger().error(f'Error in hand tracking session: {e}')
 
-    async def on_camera_move(self, event, session):
-        """Handle camera movement events."""
-        try:
-            if not self.vr_publishing_enabled:
-                return
-
-            if getattr(event, 'key', None) != 'defaultCamera':
-                return
-
-            matrix = None
-            if isinstance(event.value, dict):
-                if 'matrix' in event.value:
-                    matrix = event.value['matrix']
-                elif 'camera' in event.value and isinstance(event.value['camera'], dict):
-                    matrix = event.value['camera'].get('matrix')
-
-            if isinstance(matrix, (list, np.ndarray)) and len(matrix) == 16:
-                self.head_transform_matrix = np.array(matrix).reshape(4, 4, order='F')
-                self.head_inverse_matrix = np.linalg.inv(self.head_transform_matrix)
-                pos, quat = self.matrix_to_pose(self.head_transform_matrix)
-
-                # Transform from VR coordinate system to ROS coordinate system
-                # VR coordinate system: (x, y, z) where typically:
-                #   - x: right/left (depending on convention)
-                #   - y: up/down (height)
-                #   - z: forward/backward
-                # ROS coordinate system: (x, y, z) where:
-                #   - x: forward
-                #   - y: left
-                #   - z: up
-                ros_pos, ros_quat = self.vr_to_ros_transform(pos, quat)
-
-                # Track camera pose changes for whole body control
-                # After transformation to ROS coordinates:
-                #   - ros_pos[0] (ROS x): forward/backward
-                #   - ros_pos[1] (ROS y): left/right
-                #   - ros_pos[2] (ROS z): up/down (height)
-                current_camera_height = ros_pos[2]  # ROS z coordinate (height)
-                current_camera_position = np.array([ros_pos[0], ros_pos[1]])  # ROS x, y (forward/backward, left/right)
-
-                # Extract camera rotation (already in ROS coordinate system after transformation)
-                r = R.from_quat(ros_quat)
-                roll, pitch, yaw = r.as_euler('xyz')  # Use 'xyz' for ROS convention (yaw around z-axis)
-                current_camera_yaw = yaw
-
-                # If VR control is enabled and reference is not set yet, set it now
-                if self.vr_publishing_enabled and self.initial_camera_height is None:
-                    self.initial_camera_height = current_camera_height
-                    self.initial_camera_position = current_camera_position.copy()
-                    self.initial_camera_yaw = current_camera_yaw
-                    self.previous_camera_position = current_camera_position.copy()
-                    self.previous_camera_yaw = current_camera_yaw
-
-                # Calculate relative height (0-based from reference)
-                relative_height = 0.0
-                if self.initial_camera_height is not None:
-                    relative_height = current_camera_height - self.initial_camera_height
-
-                # Calculate relative position and rotation from reference point (not from previous frame)
-                relative_position = np.array([0.0, 0.0])
-                relative_yaw = 0.0
-                if (self.initial_camera_position is not None and
-                    self.initial_camera_yaw is not None):
-                    # Calculate relative position from reference point
-                    relative_position = current_camera_position - self.initial_camera_position
-                    relative_yaw = current_camera_yaw - self.initial_camera_yaw
-                    # Wrap yaw to [-pi, pi]
-                    while relative_yaw > math.pi:
-                        relative_yaw -= 2.0 * math.pi
-                    while relative_yaw < -math.pi:
-                        relative_yaw += 2.0 * math.pi
-
-                # Publish lift joint command based on camera height change
-                if (self.vr_publishing_enabled and self.initial_camera_height is not None and
-                    self.enable_lift_publishing):
-                    lift_msg = JointTrajectory()
-                    # Set header.stamp to zero to avoid "ends in the past" error
-                    lift_msg.header.stamp.sec = 0
-                    lift_msg.header.stamp.nanosec = 0
-                    lift_msg.header.frame_id = ''
-                    lift_msg.joint_names = ['lift_joint']
-
-                    point = JointTrajectoryPoint()
-                    point.positions = [float(relative_height)]
-                    point.velocities = [0.0]
-                    point.accelerations = [0.0]
-                    point.effort = []
-                    point.time_from_start.sec = 0
-                    point.time_from_start.nanosec = 0
-
-                    lift_msg.points.append(point)
-                    self.lift_joint_pub.publish(lift_msg)
-
-                # Publish base velocity command based on difference between camera movement and robot odom movement
-                # Calculate the difference: camera_movement - robot_movement
-                # Only move the robot by the remaining difference
-                self.cmd_vel_log_counter += 1
-                if (self.vr_publishing_enabled and self.initial_camera_position is not None and
-                    self.initial_camera_yaw is not None and self.enable_base_publishing and
-                    self.initial_odom_position is not None and self.initial_odom_yaw is not None and
-                    self.current_odom is not None):
-                    # Calculate camera movement from initial position
-                    camera_movement_position = relative_position.copy()  # [x, y] in ROS coordinates
-                    camera_movement_yaw = relative_yaw
-
-                    # Calculate robot movement from initial odom position
-                    current_odom_pos = self.current_odom.pose.pose.position
-                    current_odom_quat = self.current_odom.pose.pose.orientation
-                    r_odom = R.from_quat([current_odom_quat.x, current_odom_quat.y, current_odom_quat.z, current_odom_quat.w])
-                    _, _, current_odom_yaw = r_odom.as_euler('xyz')
-                    current_odom_position = np.array([current_odom_pos.x, current_odom_pos.y])
-
-                    robot_movement_position = current_odom_position - self.initial_odom_position
-                    robot_movement_yaw = current_odom_yaw - self.initial_odom_yaw
-                    # Wrap yaw to [-pi, pi]
-                    while robot_movement_yaw > math.pi:
-                        robot_movement_yaw -= 2.0 * math.pi
-                    while robot_movement_yaw < -math.pi:
-                        robot_movement_yaw += 2.0 * math.pi
-
-                    # Calculate difference: what the robot still needs to move
-                    position_error = camera_movement_position - robot_movement_position  # [x, y]
-                    yaw_error = camera_movement_yaw - robot_movement_yaw
-                    # Wrap yaw error to [-pi, pi]
-                    while yaw_error > math.pi:
-                        yaw_error -= 2.0 * math.pi
-                    while yaw_error < -math.pi:
-                        yaw_error += 2.0 * math.pi
-
-                    def calculate_velocity_from_position_error(position_error, kp, deadzone, max_velocity):
-                        """Calculate velocity from position error using P control with deadzone and saturation."""
-                        abs_error = abs(position_error)
-                        sign = 1.0 if position_error >= 0.0 else -1.0
-
-                        # Deadzone: if error is within deadzone, velocity is 0
-                        if abs_error <= deadzone:
-                            return 0.0
-
-                        # P control: velocity = kp * position_error
-                        velocity = kp * position_error
-
-                        # Saturate to max_velocity
-                        if abs(velocity) > max_velocity:
-                            velocity = sign * max_velocity
-
-                        return velocity
-
-                    # Calculate velocity from position error (P control)
-                    # Position error is the difference between camera movement and robot movement
-                    linear_x = calculate_velocity_from_position_error(
-                        position_error[0],  # ROS x: forward/backward error
-                        self.base_linear_kp,
-                        self.base_linear_deadzone,
-                        self.base_max_linear_velocity
-                    )
-                    linear_y = calculate_velocity_from_position_error(
-                        position_error[1],  # ROS y: left/right error
-                        self.base_linear_kp,
-                        self.base_linear_deadzone,
-                        self.base_max_linear_velocity
-                    )
-                    angular_z = calculate_velocity_from_position_error(
-                        yaw_error,  # ROS yaw error
-                        self.base_angular_kp,
-                        self.base_angular_deadzone,
-                        self.base_max_angular_velocity
-                    )
-
-                    # Map ROS coordinates to cmd_vel
-                    twist_msg = Twist()
-                    twist_msg.linear.x = linear_x
-                    twist_msg.linear.y = linear_y
-                    twist_msg.linear.z = 0.0
-                    twist_msg.angular.x = 0.0
-                    twist_msg.angular.y = 0.0
-                    twist_msg.angular.z = angular_z
-
-                    self.cmd_vel_pub.publish(twist_msg)
-
-                    # Log cmd_vel
-                    if self.cmd_vel_log_counter % self.cmd_vel_log_every_n == 0:
-                        self.get_logger().info(
-                            f'🚗 cmd_vel: linear=[{twist_msg.linear.x:+.3f}, {twist_msg.linear.y:+.3f}, {twist_msg.linear.z:+.3f}], '
-                            f'angular=[{twist_msg.angular.x:+.3f}, {twist_msg.angular.y:+.3f}, {twist_msg.angular.z:+.3f}] | '
-                            f'Camera movement: [{camera_movement_position[0]:+.4f}, {camera_movement_position[1]:+.4f}], yaw: {camera_movement_yaw:+.4f} | '
-                            f'Robot movement: [{robot_movement_position[0]:+.4f}, {robot_movement_position[1]:+.4f}], yaw: {robot_movement_yaw:+.4f} | '
-                            f'Error: [{position_error[0]:+.4f}, {position_error[1]:+.4f}], yaw: {yaw_error:+.4f}'
-                        )
-                elif self.cmd_vel_log_counter % (self.cmd_vel_log_every_n * 10) == 0:
-                    # Debug: log why cmd_vel is not being published (less frequently)
-                    self.get_logger().debug(
-                        f'⚠️ cmd_vel not published: vr_enabled={self.vr_publishing_enabled}, '
-                        f'initial_pos={self.initial_camera_position is not None}, '
-                        f'initial_yaw={self.initial_camera_yaw is not None}, '
-                        f'enable_base={self.enable_base_publishing}'
-                    )
-
-                self.previous_camera_height = current_camera_height
-
-                # Publish head joint trajectory
-                if self.enable_head_publishing:
-                    r = R.from_quat(quat)
-                    roll, pitch, yaw = r.as_euler('zxy')
-
-                    if self.is_valid_float(pitch) and self.is_valid_float(yaw):
-                        msg = JointTrajectory()
-                        msg.joint_names = ['head_joint1', 'head_joint2']
-                        point = JointTrajectoryPoint()
-                        # Apply pitch offset
-                        adjusted_pitch = pitch + self.pitch_offset
-                        point.positions = [-float(adjusted_pitch), float(yaw)]
-                        point.velocities = [0.0, 0.0]
-                        point.accelerations = [0.0, 0.0]
-                        point.effort = []
-                        msg.points.append(point)
-                        # self.head_joint_pub.publish(msg)
-
-        except Exception as e:
-            self.get_logger().error(f'Error in camera move event: {e}')
-
     async def on_hand_move(self, event, session):
         """Handle hand movement events."""
         try:
             if not self.vr_publishing_enabled:
+                return
+            if not isinstance(event.value, dict):
                 return
 
             # Process hand data
@@ -958,20 +979,317 @@ class VRTrajectoryPublisher(Node):
                     # Process right hand joints directly
                     self.process_hand_joints(self.right_hand_data,'right')
 
-            # Debug logging
-            self.hand_log_counter += 1
-            if self.hand_log_counter % self.log_every_n == 0:
-                self.get_logger().info('Hand tracking data processed')
-
         except Exception as e:
             self.get_logger().error(f'Error in hand move event: {e}')
 
+    async def on_body_tracking_move(self, event, session):
+        """Handle body tracking events (head, lift, base, elbow poses).
+
+        Uses 'head' joint for everything: head_transform_matrix, head_inverse_matrix,
+        lift (height), head joint, base position XY and yaw.
+        Matrix validation rejects degenerate data (zeros from uninitialized tracking).
+        """
+        try:
+            if not rclpy.ok():
+                return
+            if not self.vr_publishing_enabled:
+                return
+
+            if not isinstance(event.value, dict) or not event.value:
+                return
+
+            body_data = event.value.get('body') if isinstance(event.value, dict) else None
+            if not isinstance(body_data, (list, tuple, np.ndarray)):
+                return
+
+            # --- Head joint: for all head-related processing ---
+            # get_body_joint_matrix_from_flat now rejects degenerate matrices (det~0)
+            head_matrix = self.get_body_joint_matrix_from_flat(body_data, 'head')
+            if head_matrix is not None:
+                self.head_transform_matrix = head_matrix
+                self.head_inverse_matrix = np.linalg.inv(head_matrix)
+
+                pos, quat = self.matrix_to_pose(head_matrix)
+                ros_pos, ros_quat = self.vr_to_ros_transform(pos, quat)
+
+                current_camera_height = float(ros_pos[2])
+                current_camera_position = np.array([ros_pos[0], ros_pos[1]], dtype=np.float64)
+                r = R.from_quat(ros_quat)
+                _, _, current_camera_yaw = r.as_euler('xyz')
+
+                # Set initial references (only from validated data)
+                if self.initial_camera_height is None:
+                    self.initial_camera_height = current_camera_height
+                    self.initial_camera_position = current_camera_position.copy()
+                    self.initial_camera_yaw = current_camera_yaw
+                    self.previous_camera_position = current_camera_position.copy()
+                    self.previous_camera_yaw = current_camera_yaw
+                if self.initial_odom_position is None and self.current_odom is not None:
+                    odom_pos = self.current_odom.pose.pose.position
+                    odom_quat = self.current_odom.pose.pose.orientation
+                    r_odom = R.from_quat([odom_quat.x, odom_quat.y, odom_quat.z, odom_quat.w])
+                    _, _, yaw = r_odom.as_euler('xyz')
+                    self.initial_odom_position = np.array([odom_pos.x, odom_pos.y])
+                    self.initial_odom_yaw = yaw
+
+                relative_height = current_camera_height - self.initial_camera_height
+                relative_position = current_camera_position - self.initial_camera_position
+                relative_yaw = current_camera_yaw - self.initial_camera_yaw
+                while relative_yaw > math.pi:
+                    relative_yaw -= 2.0 * math.pi
+                while relative_yaw < -math.pi:
+                    relative_yaw += 2.0 * math.pi
+
+                # Lift: low-pass filter then publish
+                if self.enable_lift_publishing:
+                    if self.filtered_lift_position is None:
+                        self.filtered_lift_position = float(relative_height)
+                    else:
+                        self.filtered_lift_position = (
+                            self.lift_low_pass_alpha * relative_height
+                            + (1.0 - self.lift_low_pass_alpha) * self.filtered_lift_position
+                        )
+                    lift_msg = JointTrajectory()
+                    lift_msg.header.stamp.sec = 0
+                    lift_msg.header.stamp.nanosec = 0
+                    lift_msg.header.frame_id = ''
+                    lift_msg.joint_names = ['lift_joint']
+                    point = JointTrajectoryPoint()
+                    point.positions = [float(self.filtered_lift_position)]
+                    point.velocities = [0.0]
+                    point.accelerations = [0.0]
+                    point.effort = []
+                    point.time_from_start.sec = 0
+                    point.time_from_start.nanosec = 0
+                    lift_msg.points.append(point)
+                    if rclpy.ok():
+                        self.lift_joint_pub.publish(lift_msg)
+
+                # Base: cmd_vel from head position/yaw error vs odom (P control)
+                self.cmd_vel_log_counter += 1
+                if (self.initial_camera_position is not None and self.initial_camera_yaw is not None and
+                    self.initial_odom_position is not None and self.initial_odom_yaw is not None and
+                    self.enable_base_publishing and self.current_odom is not None):
+                    current_odom_pos = self.current_odom.pose.pose.position
+                    current_odom_quat = self.current_odom.pose.pose.orientation
+                    r_odom = R.from_quat([current_odom_quat.x, current_odom_quat.y, current_odom_quat.z, current_odom_quat.w])
+                    _, _, current_odom_yaw = r_odom.as_euler('xyz')
+                    current_odom_position = np.array([current_odom_pos.x, current_odom_pos.y])
+                    robot_movement_position = current_odom_position - self.initial_odom_position
+                    robot_movement_yaw = current_odom_yaw - self.initial_odom_yaw
+                    while robot_movement_yaw > math.pi:
+                        robot_movement_yaw -= 2.0 * math.pi
+                    while robot_movement_yaw < -math.pi:
+                        robot_movement_yaw += 2.0 * math.pi
+
+                    # position_error is in odom/world frame; rotate to base_link frame
+                    # before mapping to cmd_vel linear x/y.
+                    position_error = relative_position - robot_movement_position
+                    cos_yaw = math.cos(current_odom_yaw)
+                    sin_yaw = math.sin(current_odom_yaw)
+                    position_error_base = np.array([
+                        cos_yaw * position_error[0] + sin_yaw * position_error[1],
+                        -sin_yaw * position_error[0] + cos_yaw * position_error[1],
+                    ])
+                    yaw_error = relative_yaw - robot_movement_yaw
+                    while yaw_error > math.pi:
+                        yaw_error -= 2.0 * math.pi
+                    while yaw_error < -math.pi:
+                        yaw_error += 2.0 * math.pi
+
+                    def vel_from_error(err, kp, deadzone, max_vel):
+                        if abs(err) <= deadzone:
+                            return 0.0
+                        vel = kp * err
+                        return max(-max_vel, min(max_vel, vel))
+
+                    linear_x = vel_from_error(
+                        position_error_base[0], self.base_linear_kp,
+                        self.base_linear_deadzone, self.base_max_linear_velocity
+                    )
+                    linear_y = vel_from_error(
+                        position_error_base[1], self.base_linear_kp,
+                        self.base_linear_deadzone, self.base_max_linear_velocity
+                    )
+                    angular_z = vel_from_error(
+                        yaw_error, self.base_angular_kp,
+                        self.base_angular_deadzone, self.base_max_angular_velocity
+                    )
+
+                    twist_msg = Twist()
+                    twist_msg.linear.x = linear_x
+                    twist_msg.linear.y = linear_y
+                    twist_msg.linear.z = 0.0
+                    twist_msg.angular.x = 0.0
+                    twist_msg.angular.y = 0.0
+                    twist_msg.angular.z = angular_z
+                    if rclpy.ok():
+                        self.cmd_vel_pub.publish(twist_msg)
+
+                    if rclpy.ok() and self.cmd_vel_log_counter % self.cmd_vel_log_every_n == 0:
+                        self.get_logger().info(
+                            f'[BODY] cmd_vel: linear=[{twist_msg.linear.x:+.3f}, {twist_msg.linear.y:+.3f}], '
+                            f'angular.z={twist_msg.angular.z:+.3f} | '
+                            f'pos_err_world=[{position_error[0]:+.4f}, {position_error[1]:+.4f}], '
+                            f'pos_err_base=[{position_error_base[0]:+.4f}, {position_error_base[1]:+.4f}], '
+                            f'yaw_err={yaw_error:+.4f}'
+                        )
+
+                # Head joint trajectory
+                if self.enable_head_publishing:
+                    ros_roll, ros_pitch, ros_yaw_head = r.as_euler('xyz')
+                    if self.is_valid_float(ros_pitch) and self.is_valid_float(ros_yaw_head):
+                        msg = JointTrajectory()
+                        msg.joint_names = ['head_joint1', 'head_joint2']
+                        point = JointTrajectoryPoint()
+                        adjusted_pitch = ros_pitch + self.pitch_offset
+                        point.positions = [float(adjusted_pitch), float(ros_yaw_head)]
+                        point.velocities = [0.0, 0.0]
+                        point.accelerations = [0.0, 0.0]
+                        point.effort = []
+                        msg.points.append(point)
+                        if rclpy.ok():
+                            self.head_joint_pub.publish(msg)
+
+            # --- Elbow poses (use head_inverse_matrix updated above) ---
+            left_matrix = self.get_body_joint_matrix_from_flat(body_data, 'left-arm-lower')
+            right_matrix = self.get_body_joint_matrix_from_flat(body_data, 'right-arm-lower')
+
+            if left_matrix is not None:
+                self.publish_body_joint_pose(left_matrix, self.left_elbow_pub, side='left')
+            if right_matrix is not None:
+                self.publish_body_joint_pose(right_matrix, self.right_elbow_pub, side='right')
+
+        except Exception as e:
+            if not rclpy.ok() or 'Destroyable' in str(type(e).__name__) or 'destruction' in str(e).lower():
+                return
+            self.get_logger().error(f'Error in body tracking event: {e}')
+
+    def get_body_joint_matrix_from_flat(self, body_array, joint_name):
+        """Extract a 4x4 matrix for a body joint from flattened body array.
+
+        Returns None if joint not found, data too short, or matrix is degenerate
+        (e.g. all zeros when body tracking is not yet initialized).
+        """
+        if joint_name not in BODY_JOINT_KEYS:
+            return None
+        index = BODY_JOINT_KEYS.index(joint_name)
+        start = index * 16
+        end = start + 16
+        if len(body_array) < end:
+            return None
+        matrix = np.array(body_array[start:end], dtype=np.float64)
+        mat4 = matrix.reshape(4, 4, order='F')
+        # Reject degenerate matrices (zero matrix, singular, etc.)
+        det = np.linalg.det(mat4[:3, :3])
+        if abs(det) < 1e-6:
+            return None
+        return mat4
+
+    def publish_body_joint_pose(self, joint_matrix, publisher, side=''):
+        """Publish PoseStamped for a body joint (elbow)."""
+        relative_joint_matrix = self.head_inverse_matrix @ joint_matrix
+        pos, quat = self.matrix_to_pose(relative_joint_matrix)
+        if not (np.all(np.isfinite(pos)) and np.all(np.isfinite(quat))):
+            return
+
+        pos_ros, quat_ros = self.vr_to_ros_transform(pos, quat)
+        self.publish_relative_pose(
+            pos_ros,
+            quat_ros,
+            publisher,
+            vr_scale=self.elbow_vr_scale,
+            x_offset=self.elbow_offsets['x'],
+            y_offset=self.elbow_offsets['y'],
+            z_offset=self.elbow_offsets['z'],
+            apply_right_z_flip=False,
+            pose_role='elbow',
+            side=side,
+        )
+
+    def low_pass_filter_pose(self, key, position, quaternion, max_angle_deg=None):
+        """Apply low-pass filter to position and quaternion."""
+        quat = np.array(quaternion, dtype=np.float64)
+        quat_norm = np.linalg.norm(quat)
+        if not np.isfinite(quat_norm) or quat_norm <= 0.0:
+            quat = np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
+        else:
+            quat = quat / quat_norm
+        if key not in self.pose_filters:
+            self.pose_filters[key] = {
+                'pos': np.array(position, dtype=np.float64),
+                'quat': quat,
+            }
+            return position, quat
+
+        prev = self.pose_filters[key]
+        alpha = 0.5
+        filtered_pos = alpha * position + (1.0 - alpha) * prev['pos']
+        prev_quat = prev['quat']
+        if np.dot(prev_quat, quat) < 0.0:
+            quat = -quat
+        filtered_quat = self.slerp_quaternion(prev_quat, quat, alpha)
+        if max_angle_deg is not None:
+            filtered_quat = self.limit_quaternion_spike(prev_quat, filtered_quat, max_angle_deg)
+
+        self.pose_filters[key]['pos'] = filtered_pos
+        self.pose_filters[key]['quat'] = filtered_quat
+        return filtered_pos, filtered_quat
+
+    def limit_quaternion_spike(self, prev_quat, current_quat, max_angle_deg):
+        """Clamp quaternion step by max angle in degrees."""
+        prev_quat = np.array(prev_quat, dtype=np.float64)
+        curr_quat = np.array(current_quat, dtype=np.float64)
+        if np.dot(prev_quat, curr_quat) < 0.0:
+            curr_quat = -curr_quat
+        dot = float(np.clip(np.dot(prev_quat, curr_quat), -1.0, 1.0))
+        angle = 2.0 * math.acos(dot)
+        max_angle = math.radians(max_angle_deg)
+        if angle <= max_angle or angle <= 1.0e-6:
+            return curr_quat
+        t = max_angle / angle
+        return self.slerp_quaternion(prev_quat, curr_quat, t)
+
+    def slerp_quaternion(self, q0, q1, t):
+        """Spherical linear interpolation for quaternions."""
+        q0 = np.array(q0, dtype=np.float64)
+        q1 = np.array(q1, dtype=np.float64)
+        dot = float(np.clip(np.dot(q0, q1), -1.0, 1.0))
+        if dot < 0.0:
+            q1 = -q1
+            dot = -dot
+        if dot > 0.9995:
+            result = q0 + t * (q1 - q0)
+            norm = np.linalg.norm(result)
+            return result / norm if norm > 0.0 else q0
+        theta_0 = math.acos(dot)
+        sin_theta_0 = math.sin(theta_0)
+        theta = theta_0 * t
+        sin_theta = math.sin(theta)
+        s0 = math.cos(theta) - dot * sin_theta / sin_theta_0
+        s1 = sin_theta / sin_theta_0
+        return s0 * q0 + s1 * q1
+
+    def apply_elbow_wrist_safety(self, side, pose_role, position):
+        """Clamp wrist-elbow distance to safety limit (wrist has priority)."""
+        if pose_role not in ('wrist', 'elbow'):
+            return position
+        if pose_role == 'wrist':
+            return position
+        other_key = f'{side}_wrist'
+        if other_key not in self.pose_filters:
+            return position
+        other_pos = self.pose_filters[other_key]['pos']
+        delta = position - other_pos
+        dist = np.linalg.norm(delta)
+        if dist > self.max_elbow_wrist_distance and dist > 0.0:
+            position = other_pos + delta * (self.max_elbow_wrist_distance / dist)
+        return position
+
     def __del__(self):
         try:
-            if hasattr(self, 'vuer'):
-                self.loop.run_until_complete(self.vuer.stop())
-            if hasattr(self, 'loop'):
-                self.loop.close()
+            if hasattr(self, 'vuer') and hasattr(self.vuer, 'stop'):
+                self.vuer.stop()
         except Exception as e:
             self.get_logger().error(f'Error in cleanup: {e}')
 
@@ -984,8 +1302,15 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        try:
+            node.destroy_node()
+        except Exception:
+            pass
+        try:
+            if rclpy.ok():
+                rclpy.shutdown()
+        except Exception:
+            pass
 
 
 if __name__ == '__main__':
