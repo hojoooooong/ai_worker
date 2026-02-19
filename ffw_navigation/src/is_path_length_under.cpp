@@ -1,7 +1,11 @@
+// Copyright 2026 ROBOTIS
+
 #include "ffw_navigation/is_path_length_under.hpp"
-#include "behaviortree_cpp/bt_factory.h"
-#include <cmath> 
+
+#include <cmath>
 #include <limits>
+
+#include "behaviortree_cpp/bt_factory.h"
 
 namespace nav2_behavior_tree
 {
@@ -38,7 +42,7 @@ BT::NodeStatus IsPathLengthUnder::tick()
   double path_length = 0.0;
   for (size_t i = 0; i + 1 < path.poses.size(); ++i) {
     const auto & p1 = path.poses[i].pose.position;
-    const auto & p2 = path.poses[i+1].pose.position;
+    const auto & p2 = path.poses[i + 1].pose.position;
     path_length += std::hypot(p2.x - p1.x, p2.y - p1.y);
   }
 
@@ -48,7 +52,7 @@ BT::NodeStatus IsPathLengthUnder::tick()
 
   return BT::NodeStatus::FAILURE;
 }
-}
+}  // namespace nav2_behavior_tree
 
 BT_REGISTER_NODES(factory)
 {
