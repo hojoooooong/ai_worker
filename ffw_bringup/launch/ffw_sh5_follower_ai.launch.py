@@ -325,12 +325,6 @@ def generate_launch_description():
         condition=IfCondition(use_head_eef_tracker),
     )
 
-    preset_hand_controller = Node(
-        package='ffw_teleop',
-        executable='preset_hand_controller',
-        output='screen',
-    )
-
     init_position_event_handler = RegisterEventHandler(
         event_handler=OnProcessExit(
             target_action=robot_controller_spawner,
@@ -360,8 +354,6 @@ def generate_launch_description():
         ),
         condition=IfCondition(init_position)
     )
-
-
 
     # Camera launch include
     bringup_launch_dir = PathJoinSubstitution([FindPackageShare('ffw_bringup'), 'launch'])
@@ -393,6 +385,5 @@ def generate_launch_description():
             head_eef_tracker_node,
             camera_timer_20s,
             camera_timer_10s,
-            preset_hand_controller,
         ]
     )
