@@ -11,7 +11,7 @@
         type: joint_trajectory_command_broadcaster/JointTrajectoryCommandBroadcaster
 
       spring_actuator_controller:
-        type: ffw_spring_actuator_controller_2/SpringActuatorController
+        type: spring_actuator_controller/SpringActuatorController
 
       # joystick_controller:
       #   type: joystick_controller/JoystickController
