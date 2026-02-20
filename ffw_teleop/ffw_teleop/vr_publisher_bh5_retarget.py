@@ -134,7 +134,7 @@ class VRTrajectoryPublisher(Node):
         self.get_logger().set_level(rclpy.logging.LoggingSeverity.INFO)
 
         # VR publishing control flag
-        self.vr_publishing_enabled = True  # Default: disabled
+        self.vr_publishing_enabled = False  # Default: disabled
 
         # VR Server setup
         current_dir = os.path.dirname(os.path.abspath(__file__))
