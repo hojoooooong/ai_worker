@@ -24,6 +24,8 @@
   <exec_depend>ffw_swerve_drive_controller</exec_depend>
   <exec_depend>ffw_teleop</exec_depend>
   <exec_depend>ffw_kinematics</exec_depend>
+  <exec_depend>ffw_interfaces</exec_depend>
+  <exec_depend>ffw_retargeting</exec_depend>
   <export>
     <build_type>ament_cmake</build_type>
   </export>
