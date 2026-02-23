@@ -24,7 +24,7 @@ import socket
 import threading
 import traceback
 
-from geometry_msgs.msg import Point, Pose, PoseArray, PoseStamped, Quaternion, Twist
+from geometry_msgs.msg import Point, Pose, PoseArray, PoseStamped, Quaternion, Twist, Point32
 from sensor_msgs.msg import CompressedImage
 import nest_asyncio
 import numpy as np
@@ -37,6 +37,7 @@ from std_msgs.msg import Bool
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from vuer import Vuer
 from vuer.schemas import Hands, Body, ImageBackground
+from ffw_interfaces.msg import HandJoints
 
 # Allow nested asyncio execution
 nest_asyncio.apply()
@@ -210,7 +211,7 @@ class VRTrajectoryPublisher(Node):
         )
 
         # VR publishing control flag
-        self.vr_publishing_enabled = True
+        self.vr_publishing_enabled = False
 
         # VR Server setup
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -242,51 +243,15 @@ class VRTrajectoryPublisher(Node):
         self.vuer.add_handler('HAND_MOVE')(self.on_hand_move)
         self.vuer.add_handler('BODY_MOVE')(self.on_body_tracking_move)
 
-        # Hand joint configuration
-        self.left_joint_names = [
-            "finger_l_joint1", "finger_l_joint2", "finger_l_joint3", "finger_l_joint4",
-            "finger_l_joint5", "finger_l_joint6", "finger_l_joint7", "finger_l_joint8",
-            "finger_l_joint9", "finger_l_joint10", "finger_l_joint11", "finger_l_joint12",
-            "finger_l_joint13", "finger_l_joint14", "finger_l_joint15", "finger_l_joint16",
-            "finger_l_joint17", "finger_l_joint18", "finger_l_joint19", "finger_l_joint20"
-        ]
-
-        self.right_joint_names = [
-            "finger_r_joint1", "finger_r_joint2", "finger_r_joint3", "finger_r_joint4",
-            "finger_r_joint5", "finger_r_joint6", "finger_r_joint7", "finger_r_joint8",
-            "finger_r_joint9", "finger_r_joint10", "finger_r_joint11", "finger_r_joint12",
-            "finger_r_joint13", "finger_r_joint14", "finger_r_joint15", "finger_r_joint16",
-            "finger_r_joint17", "finger_r_joint18", "finger_r_joint19", "finger_r_joint20"
-        ]
-
-        self.left_joint_positions = [0.0] * 20
-        self.right_joint_positions = [0.0] * 20
-
-        self.min_joint_limits = [
-            -2.2, -2.0, 0.0, 0.0,
-            -0.6, 0.0, 0.0, 0.0,
-            -0.6, 0.0, 0.0, 0.0,
-            -0.6, 0.0, 0.0, 0.0,
-            -0.6, 0.0, 0.0, 0.0
-        ]
-
-        self.max_joint_limits = [
-            0.0, 0.3, 1.57, 1.57,
-            0.6, 2.0, 1.57, 1.57,
-            0.6, 2.0, 1.57, 1.57,
-            0.6, 2.0, 1.57, 1.57,
-            0.6, 2.0, 1.57, 1.57,
-        ]
-
         # Publishers - Direct trajectory publishing without PoseArray
-        self.left_hand_trajectory_pub = self.create_publisher(
-            JointTrajectory,
-            '/left_hand/joint_trajectory',
+        self.left_hand_pos_pub = self.create_publisher(
+            HandJoints,
+            '/left_hand/hand_joint_pos',
             10
         )
-        self.right_hand_trajectory_pub = self.create_publisher(
-            JointTrajectory,
-            '/right_hand/joint_trajectory',
+        self.right_hand_pos_pub = self.create_publisher(
+            HandJoints,
+            '/right_hand/hand_joint_pos',
             10
         )
         self.head_joint_pub = self.create_publisher(
@@ -306,9 +271,6 @@ class VRTrajectoryPublisher(Node):
         self.right_wrist_rviz_pub = self.create_publisher(PoseStamped, '/r_goal_pose', 10)
         self.left_elbow_pub = self.create_publisher(PoseStamped, '/l_elbow_pose', 10)
         self.right_elbow_pub = self.create_publisher(PoseStamped, '/r_elbow_pose', 10)
-
-        self.left_thumb_pub = self.create_publisher(PoseArray, '/vr_hand/left_thumb', 10)
-        self.right_thumb_pub = self.create_publisher(PoseArray, '/vr_hand/right_thumb', 10)
 
         # Subscriber for VR control toggle
         self.vr_control_sub = self.create_subscription(
@@ -348,6 +310,25 @@ class VRTrajectoryPublisher(Node):
                 f'{self.vr_image_fps} fps'
             )
 
+        self.required_vr_frames = [0,
+                                   1,2,3,4,
+                                   6,7,8,9,
+                                   11,12,13,14,
+                                   16,17,18,19,
+                                   21,22,23,24]
+
+        self.vr_hand_to_urdf = np.array([
+            [0, -1, 0],
+            [-1, 0, 0],
+            [0, 0, -1]
+        ])
+
+        self.prev_poses_right = np.zeros((21,3))
+        self.start_poses_right = False
+
+        self.prev_poses_left = np.zeros((21,3))
+        self.start_poses_left = False
+
         # VR data storage
         self.left_hand_data = None
         self.right_hand_data = None
@@ -382,7 +363,7 @@ class VRTrajectoryPublisher(Node):
         self.base_divergence_log_every_n = 20
 
         # Low-pass filter settings (wrist/elbow pose)
-        self.low_pass_filter_alpha = 1.0
+        self.low_pass_filter_alpha = 0.9
         self.pose_filters = {}
 
         # Lift low-pass filter (smooths height command) and max velocity (m/s, same units as lift position)
@@ -407,8 +388,6 @@ class VRTrajectoryPublisher(Node):
         self.wrist_debug_log_counter = 0
         self.wrist_debug_log_every_n = 30
 
-        self.timer_period = 0.01
-        self.timer = self.create_timer(self.timer_period, self.publish_hand_trajectory)
         self.status_timer = self.create_timer(5.0, self.log_status)
         self.head_log_counter = 0
         self.log_every_n = self.fps
@@ -830,32 +809,55 @@ class VRTrajectoryPublisher(Node):
             angle += 2.0 * math.pi
         return angle
 
+    def quaternion_to_rotation_matrix(self, q):
+        """Convert quaternion to rotation matrix."""
+        x, y, z, w = q[0], q[1], q[2], q[3]
+        rot_matrix = np.array([
+            [1 - 2 * (y**2 + z**2), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+            [2 * (x * y + z * w), 1 - 2 * (x**2 + z**2), 2 * (y * z - x * w)],
+            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x**2 + y**2)]
+        ])
+        return rot_matrix
+
     def process_hand_joints(self, hand_data, side='left'):
         """Process VR hand data and calculate joint positions with low-pass filtering."""
         if hand_data is None or len(hand_data) != 400:
             return
 
         # Extract hand pose quaternions
+        hand_joints = HandJoints()
+        hand_joints.header.stamp = self.get_clock().now().to_msg()
+        hand_joints.header.frame_id = ''
+        hand_joints.joints = []
+        temp_joints = np.zeros((21,3))
+        pose_counter = 0
+        wrist_quat = np.zeros(4)
+        wrist_rot = np.eye(3)
+
+        # For wrist
         pose_array = PoseArray()
         pose_array.header.stamp = self.get_clock().now().to_msg()
         pose_array.header.frame_id = ''
         pose_array.poses = []
-        poses = []
+
         # Wrist must be published in camera (head) relative coordinates.
         # Position: vector from head to hand expressed in HEAD frame so it does not rotate when user rotates body.
         # Orientation: hand in head frame (head_inverse @ world_joint).
         head_inv = self.head_inverse_matrix if self.hand_pose_is_head_relative else None
         head_world_pos = self.head_transform_matrix[:3, 3] if self.hand_pose_is_head_relative else None
-        for i in range(25):
+
+        for i in self.required_vr_frames:
             try:
                 world_joint_matrix = self.get_joint_matrix(hand_data, i)
 
                 if self.hand_pose_is_head_relative and head_inv is not None and head_world_pos is not None:
                     joint_world_pos = world_joint_matrix[:3, 3]
                     vec_world = joint_world_pos - head_world_pos
+
                     relative_pos_vr = (head_inv[:3, :3] @ vec_world)  # in head-relative frame (+Y fwd, +Z right, +X down)
                     relative_joint_matrix = head_inv @ world_joint_matrix
                     _, relative_quat = self.matrix_to_pose(relative_joint_matrix)
+
                     # Head-relative frame -> ROS (forward +X, left +Y, up +Z)
                     relative_pos_ros = (self.BODY_HEAD_TO_ROS_POSITION @ relative_pos_vr).astype(np.float64)
                     rel_rot = R.from_matrix(relative_joint_matrix[:3, :3])
@@ -863,125 +865,71 @@ class VRTrajectoryPublisher(Node):
                     relative_quat_ros = ros_rot.as_quat()
                 else:
                     relative_pos_vr, relative_quat = self.matrix_to_pose(world_joint_matrix)
-                    relative_pos_ros, _ = self.vr_to_ros_transform(relative_pos_vr, relative_quat)
-                    _, relative_quat_ros = self.vr_to_ros_transform(relative_pos_vr, relative_quat)
+                    relative_pos_ros, relative_quat_ros = self.vr_to_ros_transform(relative_pos_vr, relative_quat)
 
-                if i == 0 and rclpy.ok() and hasattr(self, 'wrist_debug_log_counter') and self.wrist_debug_log_counter % self.wrist_debug_log_every_n == 0:
-                    self.get_logger().info(
-                        f'[WRIST_RAW {side}] head_rel_ros=[{relative_pos_ros[0]:+.3f}, {relative_pos_ros[1]:+.3f}, {relative_pos_ros[2]:+.3f}]'
-                    )
+                temp_joints[pose_counter,:] = relative_pos_vr
+                pose_counter += 1
 
-                quat = Quaternion()
-                quat.x = relative_quat_ros[0]
-                quat.y = relative_quat_ros[1]
-                quat.z = relative_quat_ros[2]
-                quat.w = relative_quat_ros[3]
-                poses.append(quat)
+                if i == 0:
+                    wrist_quat = relative_quat
+                    wrist_rot = self.quaternion_to_rotation_matrix(wrist_quat)
 
-                if (i == 0) or ((i >= 2) and (i <= 4)):
+                    quat = Quaternion()
+                    quat.x = relative_quat_ros[0]
+                    quat.y = relative_quat_ros[1]
+                    quat.z = relative_quat_ros[2]
+                    quat.w = relative_quat_ros[3]
+
                     pose_msg = Pose()
                     pose_msg.position = self.safe_point(relative_pos_ros[0], relative_pos_ros[1], relative_pos_ros[2])
                     pose_msg.orientation = quat
                     pose_array.poses.append(pose_msg)
 
-
             except Exception as e:
                 self.get_logger().warn(f'Error processing hand joint {i}: {e}')
                 return
 
-        if len(poses) >= 24:  # Need at least 24 poses for all joints
-            # Calculate joint angles using the same logic as hand_joint_state_publisher
-            quat0 = poses[0]   # wrist
-            quat6 = poses[6]
-            quat7 = poses[7]
-            quat8 = poses[8]
-            quat11 = poses[11]
-            quat12 = poses[12]
-            quat13 = poses[13]
-            quat16 = poses[16]
-            quat17 = poses[17]
-            quat18 = poses[18]
-            quat21 = poses[21]
-            quat22 = poses[22]
-            quat23 = poses[23]
+        if side == 'left':
+            # Transform and publish left wrist pose to base_link coordinates
+            self.transform_and_publish_pose(
+                pose_array, self.left_wrist_rviz_pub, 'left', vr_scale=self.wrist_vr_scale)
 
-            # Create temporary joint positions
-            temp_joint_positions = [0.0] * 20
+            # Apply low-pass filter
+            if self.start_poses_left:
+                temp_joints = self.low_pass_filter_alpha * temp_joints + (1-self.low_pass_filter_alpha) * self.prev_poses_left
+            else:
+                self.prev_poses_left = temp_joints
 
-            # Index finger (joints 4-7)
-            temp_joint_positions[4] = self.wrap_pi(-self.get_roll_pitch_yaw(self.quat_inverse(quat0), quat6, 'p') * self.scaling_vr)
-            temp_joint_positions[5] = self.wrap_pi(-self.get_roll_pitch_yaw(self.quat_inverse(quat0), quat6, 'r') * self.scaling_vr)
-            temp_joint_positions[6] = self.wrap_pi(-self.get_roll_pitch_yaw(self.quat_inverse(quat6), quat7, 'r') * self.scaling_vr)
-            temp_joint_positions[7] = self.wrap_pi(-self.get_roll_pitch_yaw(self.quat_inverse(quat7), quat8, 'r') * self.scaling_vr)
+            for i in range(21):
+                temp_position = self.vr_hand_to_urdf @ wrist_rot.T @ (temp_joints[i,:] - temp_joints[0,:])
+                temp_point = Point32()
+                temp_point.x = temp_position[0]
+                temp_point.y = temp_position[1]
+                temp_point.z = temp_position[2]
+                hand_joints.joints.append(temp_point)
 
-            # Middle finger (joints 8-11)
-            temp_joint_positions[8] = self.wrap_pi(-self.get_roll_pitch_yaw(self.quat_inverse(quat0), quat11, 'p') * self.scaling_vr)
-            temp_joint_positions[9] = self.wrap_pi(-self.get_roll_pitch_yaw(self.quat_inverse(quat0), quat11, 'r') * self.scaling_vr)
-            temp_joint_positions[10] = self.wrap_pi(-self.get_roll_pitch_yaw(self.quat_inverse(quat11), quat12, 'r') * self.scaling_vr)
-            temp_joint_positions[11] = self.wrap_pi(-self.get_roll_pitch_yaw(self.quat_inverse(quat12), quat13, 'r') * self.scaling_vr)
+            self.left_hand_pos_pub.publish(hand_joints)
 
-            # Ring finger (joints 12-15)
-            temp_joint_positions[12] = self.wrap_pi(-self.get_roll_pitch_yaw(self.quat_inverse(quat0), quat16, 'p') * self.scaling_vr)
-            temp_joint_positions[13] = self.wrap_pi(-self.get_roll_pitch_yaw(self.quat_inverse(quat0), quat16, 'r') * self.scaling_vr)
-            temp_joint_positions[14] = self.wrap_pi(-self.get_roll_pitch_yaw(self.quat_inverse(quat16), quat17, 'r') * self.scaling_vr)
-            temp_joint_positions[15] = self.wrap_pi(-self.get_roll_pitch_yaw(self.quat_inverse(quat17), quat18, 'r') * self.scaling_vr)
+        elif side == 'right':
+            # Transform and publish left wrist pose to base_link coordinates
+            self.transform_and_publish_pose(
+                pose_array, self.right_wrist_rviz_pub, 'right', vr_scale=self.wrist_vr_scale)
 
-            # Pinky finger (joints 16-19)
-            temp_joint_positions[16] = self.wrap_pi(-self.get_roll_pitch_yaw(self.quat_inverse(quat0), quat21, 'p') * self.scaling_vr)
-            temp_joint_positions[17] = self.wrap_pi(-self.get_roll_pitch_yaw(self.quat_inverse(quat0), quat21, 'r') * self.scaling_vr)
-            temp_joint_positions[18] = self.wrap_pi(-self.get_roll_pitch_yaw(self.quat_inverse(quat21), quat22, 'r') * self.scaling_vr)
-            temp_joint_positions[19] = self.wrap_pi(-self.get_roll_pitch_yaw(self.quat_inverse(quat22), quat23, 'r') * self.scaling_vr)
+            # Apply low-pass filter
+            if self.start_poses_right:
+                temp_joints = self.low_pass_filter_alpha * temp_joints + (1-self.low_pass_filter_alpha) * self.prev_poses_right
+            else:
+                self.prev_poses_right = temp_joints
 
-            if side == 'left':
-                if pose_array.poses:
-                    self.left_thumb_pub.publish(pose_array)
+            for i in range(21):
+                temp_position = self.vr_hand_to_urdf @ wrist_rot.T @ (temp_joints[i,:] - temp_joints[0,:])
+                temp_point = Point32()
+                temp_point.x = temp_position[0]
+                temp_point.y = temp_position[1]
+                temp_point.z = temp_position[2]
+                hand_joints.joints.append(temp_point)
 
-                    # Transform and publish left wrist pose to base_link coordinates
-                    self.transform_and_publish_pose(
-                        pose_array, self.left_wrist_rviz_pub, 'left', vr_scale=self.wrist_vr_scale
-                    )
-
-                # Apply low-pass filter
-                # TODO: change to np.array to compute in one line
-                for i in range(20):
-                    self.left_joint_positions[i] = (temp_joint_positions[i] * self.low_pass_filter_alpha +
-                                            (1 - self.low_pass_filter_alpha) * self.left_joint_positions[i])
-            elif side == 'right':
-                if pose_array.poses:
-                    self.right_thumb_pub.publish(pose_array)
-
-                    # Transform and publish right wrist pose to base_link coordinates
-                    self.transform_and_publish_pose(
-                        pose_array, self.right_wrist_rviz_pub, 'right', vr_scale=self.wrist_vr_scale
-                    )
-
-                # Apply low-pass filter
-                for i in range(20):
-                    self.right_joint_positions[i] = (temp_joint_positions[i] * self.low_pass_filter_alpha +
-                                            (1 - self.low_pass_filter_alpha) * self.right_joint_positions[i])
-
-    def publish_hand_trajectory(self):
-        """Publish hand joint trajectory directly only if enabled."""
-        if not self.vr_publishing_enabled:
-            return
-
-        left_msg = JointTrajectory()
-        left_msg.joint_names = self.left_joint_names
-        left_goal_point = JointTrajectoryPoint()
-        left_goal_point.positions = self.left_joint_positions.copy()
-        left_goal_point.time_from_start.sec = 0
-        left_goal_point.time_from_start.nanosec = 0
-        left_msg.points.append(left_goal_point)
-        self.left_hand_trajectory_pub.publish(left_msg)
-
-        right_msg = JointTrajectory()
-        right_msg.joint_names = self.right_joint_names
-        right_goal_point = JointTrajectoryPoint()
-        right_goal_point.positions = self.right_joint_positions.copy()
-        right_goal_point.time_from_start.sec = 0
-        right_goal_point.time_from_start.nanosec = 0
-        right_msg.points.append(right_goal_point)
-        self.right_hand_trajectory_pub.publish(right_msg)
+            self.right_hand_pos_pub.publish(hand_joints)
 
     def start_vuer_server(self):
         """Start the VR server in a separate thread."""
