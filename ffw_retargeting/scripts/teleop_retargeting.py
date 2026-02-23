@@ -34,8 +34,8 @@ class RetargetingTeleop(Node):
             "finger_r_joint17", "finger_r_joint18", "finger_r_joint19", "finger_r_joint20"
         ]
 
-        # self.left_publisher_ = self.create_publisher(JointTrajectory, '/left_hand_controller/joint_trajectory', 10)
-        self.left_publisher_ = self.create_publisher(JointState, '/joint_states', 10)
+        self.left_publisher_ = self.create_publisher(JointTrajectory, '/left_hand_controller/joint_trajectory', 10)
+        # self.left_publisher_ = self.create_publisher(JointState, '/joint_states', 10)
 
         self.right_publisher_ = self.create_publisher(JointTrajectory, '/right_hand_controller/joint_trajectory', 10)
         # self.right_publisher_ = self.create_publisher(JointState, '/joint_states', 10)
@@ -77,15 +77,15 @@ class RetargetingTeleop(Node):
             pose_array_np[i,2] = point.z
         return pose_array_np
 
-    # def publish_trajectory_left(self, goal, duration=0):
-    #     msg = JointTrajectory()
-    #     msg.joint_names = self.left_joint_names
-    #     goal_point = JointTrajectoryPoint()
-    #     goal_point.positions = goal.tolist()
-    #     goal_point.time_from_start.sec = int(duration)
-    #     goal_point.time_from_start.nanosec = 0
-    #     msg.points.append(goal_point)
-    #     self.left_publisher_.publish(msg)
+    def publish_trajectory_left(self, goal, duration=0):
+        msg = JointTrajectory()
+        msg.joint_names = self.left_joint_names
+        goal_point = JointTrajectoryPoint()
+        goal_point.positions = goal.tolist()
+        goal_point.time_from_start.sec = int(duration)
+        goal_point.time_from_start.nanosec = 0
+        msg.points.append(goal_point)
+        self.left_publisher_.publish(msg)
 
     def publish_trajectory_right(self, goal, duration=0):
         msg = JointTrajectory()
@@ -97,12 +97,12 @@ class RetargetingTeleop(Node):
         msg.points.append(goal_point)
         self.right_publisher_.publish(msg)
 
-    def publish_trajectory_left(self, goal):
-        msg = JointState()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.name = self.left_joint_names
-        msg.position = goal.tolist()
-        self.left_publisher_.publish(msg)
+    # def publish_trajectory_left(self, goal):
+    #     msg = JointState()
+    #     msg.header.stamp = self.get_clock().now().to_msg()
+    #     msg.name = self.left_joint_names
+    #     msg.position = goal.tolist()
+    #     self.left_publisher_.publish(msg)
 
     # def publish_trajectory_right(self, goal):
     #     msg = JointState()

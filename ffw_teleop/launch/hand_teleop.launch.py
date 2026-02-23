@@ -131,25 +131,34 @@ def generate_launch_description():
         }]
     )
 
-    # Hand IK Solver Node
-    hand_ik_solver_node = Node(
-        package='ffw_kinematics',
-        executable='hand_ik_solver',
-        name='hand_ik_solver',
-        output='screen'
-    )
+    # # Hand IK Solver Node
+    # hand_ik_solver_node = Node(
+    #     package='ffw_kinematics',
+    #     executable='hand_ik_solver',
+    #     name='hand_ik_solver',
+    #     output='screen'
+    # )
+
+    # # Hand Controller Node
+    # hand_controller_node = Node(
+    #     package='ffw_teleop',
+    #     executable='hand_controller',
+    #     name='hand_controller',
+    #     output='screen'
+    # )
 
     # Hand Controller Node
-    hand_controller_node = Node(
-        package='ffw_teleop',
-        executable='hand_controller',
-        name='hand_controller',
+    retargeting_node = Node(
+        package='ffw_retargeting',
+        executable='retargeting_teleop',
+        name='retargeting_teleop',
         output='screen'
     )
 
     # Add the nodes
     ld.add_action(arm_ik_solver_node)
-    ld.add_action(hand_ik_solver_node)
-    ld.add_action(hand_controller_node)
+    # ld.add_action(hand_ik_solver_node)
+    # ld.add_action(hand_controller_node)
+    ld.add_action(retargeting_node)
 
     return ld
