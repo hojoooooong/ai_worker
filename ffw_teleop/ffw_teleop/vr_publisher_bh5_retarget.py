@@ -153,7 +153,7 @@ class VRTrajectoryPublisher(Node):
             queue_len=3
         )
 
-        self.fps = 60
+        self.fps = 30
         self.get_logger().info(f'VR Trajectory server available at: https://{hostname}:8012')
 
         # VR event handlers
@@ -567,6 +567,7 @@ class VRTrajectoryPublisher(Node):
         wrist_quat = np.zeros(4)
         wrist_rot = np.eye(3)
 
+        # For wrist
         pose_array = PoseArray()
         pose_array.header.stamp = self.get_clock().now().to_msg()
         pose_array.header.frame_id = ''
@@ -605,70 +606,70 @@ class VRTrajectoryPublisher(Node):
                 self.get_logger().warn(f'Error processing hand joint {i}: {e}')
                 return
 
-            if side == 'left':
-                # Transform and publish left wrist pose to base_link coordinates
-                self.transform_and_publish_pose(
-                    pose_array, self.left_wrist_rviz_pub, 'left', vr_scale=self.wrist_vr_scale)
+        if side == 'left':
+            # Transform and publish left wrist pose to base_link coordinates
+            self.transform_and_publish_pose(
+                pose_array, self.left_wrist_rviz_pub, 'left', vr_scale=self.wrist_vr_scale)
 
-                # Apply low-pass filter
-                if self.start_poses_left:
-                    temp_joints = self.low_pass_filter_alpha * temp_joints + (1-self.low_pass_filter_alpha) * self.prev_poses_left
-                else:
-                    self.prev_poses_left = temp_joints
+            # Apply low-pass filter
+            if self.start_poses_left:
+                temp_joints = self.low_pass_filter_alpha * temp_joints + (1-self.low_pass_filter_alpha) * self.prev_poses_left
+            else:
+                self.prev_poses_left = temp_joints
 
-                for i in range(21):
-                    temp_position = self.vr_hand_to_urdf @ wrist_rot.T @ (temp_joints[i,:] - temp_joints[0,:])
-                    temp_point = Point32()
-                    temp_point.x = temp_position[0]
-                    temp_point.y = temp_position[1]
-                    temp_point.z = temp_position[2]
-                    hand_joints.joints.append(temp_point)
+            for i in range(21):
+                temp_position = self.vr_hand_to_urdf @ wrist_rot.T @ (temp_joints[i,:] - temp_joints[0,:])
+                temp_point = Point32()
+                temp_point.x = temp_position[0]
+                temp_point.y = temp_position[1]
+                temp_point.z = temp_position[2]
+                hand_joints.joints.append(temp_point)
 
-                self.left_hand_pos_pub.publish(hand_joints)
+            self.left_hand_pos_pub.publish(hand_joints)
 
-            elif side == 'right':
-                # Transform and publish left wrist pose to base_link coordinates
-                self.transform_and_publish_pose(
-                    pose_array, self.right_wrist_rviz_pub, 'right', vr_scale=self.wrist_vr_scale)
+        elif side == 'right':
+            # Transform and publish left wrist pose to base_link coordinates
+            self.transform_and_publish_pose(
+                pose_array, self.right_wrist_rviz_pub, 'right', vr_scale=self.wrist_vr_scale)
 
-                # Apply low-pass filter
-                if self.start_poses_right:
-                    temp_joints = self.low_pass_filter_alpha * temp_joints + (1-self.low_pass_filter_alpha) * self.prev_poses_right
-                else:
-                    self.prev_poses_right = temp_joints
+            # Apply low-pass filter
+            if self.start_poses_right:
+                temp_joints = self.low_pass_filter_alpha * temp_joints + (1-self.low_pass_filter_alpha) * self.prev_poses_right
+            else:
+                self.prev_poses_right = temp_joints
 
-                for i in range(21):
-                    temp_position = self.vr_hand_to_urdf @ wrist_rot.T @ (temp_joints[i,:] - temp_joints[0,:])
-                    temp_point = Point32()
-                    temp_point.x = temp_position[0]
-                    temp_point.y = temp_position[1]
-                    temp_point.z = temp_position[2]
-                    hand_joints.joints.append(temp_point)
+            for i in range(21):
+                temp_position = self.vr_hand_to_urdf @ wrist_rot.T @ (temp_joints[i,:] - temp_joints[0,:])
+                temp_point = Point32()
+                temp_point.x = temp_position[0]
+                temp_point.y = temp_position[1]
+                temp_point.z = temp_position[2]
+                hand_joints.joints.append(temp_point)
 
-                self.right_hand_pos_pub.publish(hand_joints)
+            self.right_hand_pos_pub.publish(hand_joints)
 
-    def publish_hand_trajectory(self):
-        """Publish hand joint trajectory directly only if enabled."""
-        if not self.vr_publishing_enabled:
-            return
+    # def publish_hand_trajectory(self):
+    #     """Publish hand joint trajectory directly only if enabled."""
+    #     if not self.vr_publishing_enabled:
+    #         return
 
-        left_msg = JointTrajectory()
-        left_msg.joint_names = self.left_joint_names
-        left_goal_point = JointTrajectoryPoint()
-        left_goal_point.positions = self.left_joint_positions.copy()
-        left_goal_point.time_from_start.sec = 0
-        left_goal_point.time_from_start.nanosec = 0
-        left_msg.points.append(left_goal_point)
-        self.left_hand_trajectory_pub.publish(left_msg)
+    #     left_msg = JointTrajectory()
+    #     left_msg.joint_names = self.left_joint_names
+    #     left_goal_point = JointTrajectoryPoint()
+    #     left_goal_point.positions = self.left_joint_positions.copy()
+    #     left_goal_point.time_from_start.sec = 0
+    #     left_goal_point.time_from_start.nanosec = 0
+    #     left_msg.points.append(left_goal_point)
+    #     self.left_hand_trajectory_pub.publish(left_msg)
 
-        right_msg = JointTrajectory()
-        right_msg.joint_names = self.right_joint_names
-        right_goal_point = JointTrajectoryPoint()
-        right_goal_point.positions = self.right_joint_positions.copy()
-        right_goal_point.time_from_start.sec = 0
-        right_goal_point.time_from_start.nanosec = 0
-        right_msg.points.append(right_goal_point)
-        self.right_hand_trajectory_pub.publish(right_msg)
+    #     right_msg = JointTrajectory()
+    #     right_msg.joint_names = self.right_joint_names
+    #     right_goal_point = JointTrajectoryPoint()
+    #     right_goal_point.positions = self.right_joint_positions.copy()
+    #     right_goal_point.time_from_start.sec = 0
+    #     right_goal_point.time_from_start.nanosec = 0
+    #     right_msg.points.append(right_goal_point)
+    #     self.right_hand_trajectory_pub.publish(right_msg)
 
     def start_vuer_server(self):
         """Start the VR server in a separate thread."""
