@@ -156,7 +156,7 @@ def generate_launch_description():
     )
 
     # Add the nodes
-    ld.add_action(arm_ik_solver_node)
+    # ld.add_action(arm_ik_solver_node)
     # ld.add_action(hand_ik_solver_node)
     # ld.add_action(hand_controller_node)
     ld.add_action(retargeting_node)

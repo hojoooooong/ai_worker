@@ -34,10 +34,12 @@ class RetargetingTeleop(Node):
             "finger_r_joint17", "finger_r_joint18", "finger_r_joint19", "finger_r_joint20"
         ]
 
-        self.left_publisher_ = self.create_publisher(JointTrajectory, '/left_hand_controller/joint_trajectory', 10)
+        self.left_publisher_ = self.create_publisher(JointTrajectory, '/leader/joint_trajectory_command_broadcaster_left_hand/joint_trajectory', 10)
+        # self.left_publisher_ = self.create_publisher(JointTrajectory, '/left_hand_controller/joint_trajectory', 10)
         # self.left_publisher_ = self.create_publisher(JointState, '/joint_states', 10)
 
-        self.right_publisher_ = self.create_publisher(JointTrajectory, '/right_hand_controller/joint_trajectory', 10)
+        self.right_publisher_ = self.create_publisher(JointTrajectory, '/leader/joint_trajectory_command_broadcaster_right_hand/joint_trajectory', 10)
+        # self.right_publisher_ = self.create_publisher(JointTrajectory, '/right_hand_controller/joint_trajectory', 10)
         # self.right_publisher_ = self.create_publisher(JointState, '/joint_states', 10)
 
         self.left_subscriber_ = self.create_subscription(
