@@ -802,12 +802,8 @@ class VRTrajectoryPublisher(Node):
             return roll, pitch, yaw
 
     def wrap_pi(self, angle):
-        """Wrap angle to [-pi, pi] range."""
-        while angle > math.pi:
-            angle -= 2.0 * math.pi
-        while angle < -math.pi:
-            angle += 2.0 * math.pi
-        return angle
+        """Wrap angle to [-pi, pi] range using modulo."""
+        return (angle + math.pi) % (2.0 * math.pi) - math.pi
 
     def quaternion_to_rotation_matrix(self, q):
         """Convert quaternion to rotation matrix."""
@@ -1096,11 +1092,7 @@ class VRTrajectoryPublisher(Node):
                 relative_height = current_camera_height - self.initial_camera_height
                 # VR device change from initial pose (world-like frame after vr_to_ros_transform)
                 relative_position = current_camera_position - self.initial_camera_position
-                relative_yaw = current_camera_yaw - self.initial_camera_yaw
-                while relative_yaw > math.pi:
-                    relative_yaw -= 2.0 * math.pi
-                while relative_yaw < -math.pi:
-                    relative_yaw += 2.0 * math.pi
+                relative_yaw = self.wrap_pi(current_camera_yaw - self.initial_camera_yaw)
 
                 # Use same-frame head height change for arm target Z (camera-relative behavior).
                 self.head_height_offset_for_arms = float(relative_height)
@@ -1161,11 +1153,7 @@ class VRTrajectoryPublisher(Node):
                     _, _, current_odom_yaw = r_odom.as_euler('xyz')
                     current_odom_position = np.array([current_odom_pos.x, current_odom_pos.y])
                     robot_movement_position = current_odom_position - self.initial_odom_position
-                    robot_movement_yaw = current_odom_yaw - self.initial_odom_yaw
-                    while robot_movement_yaw > math.pi:
-                        robot_movement_yaw -= 2.0 * math.pi
-                    while robot_movement_yaw < -math.pi:
-                        robot_movement_yaw += 2.0 * math.pi
+                    robot_movement_yaw = self.wrap_pi(current_odom_yaw - self.initial_odom_yaw)
 
                     # position_error is in odom/world frame; rotate to base_link frame
                     # before mapping to cmd_vel linear x/y.
@@ -1176,11 +1164,7 @@ class VRTrajectoryPublisher(Node):
                         cos_yaw * position_error[0] + sin_yaw * position_error[1],
                         -sin_yaw * position_error[0] + cos_yaw * position_error[1],
                     ])
-                    yaw_error = relative_yaw - robot_movement_yaw
-                    while yaw_error > math.pi:
-                        yaw_error -= 2.0 * math.pi
-                    while yaw_error < -math.pi:
-                        yaw_error += 2.0 * math.pi
+                    yaw_error = self.wrap_pi(relative_yaw - robot_movement_yaw)
 
                     def vel_from_error(err, kp, deadzone, max_vel):
                         if abs(err) <= deadzone:
