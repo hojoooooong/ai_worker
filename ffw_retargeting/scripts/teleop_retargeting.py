@@ -3,6 +3,7 @@ import numpy as np
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
@@ -10,6 +11,12 @@ from ffw_interfaces.msg import HandJoints
 
 from scripts.retarget import ROBOTISHandRetargeter
 
+# Create a profile that prioritizes speed over reliability
+qos_best_effort = QoSProfile(
+    reliability=ReliabilityPolicy.BEST_EFFORT,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=1
+)
 
 class RetargetingTeleop(Node):
     def __init__(self):
@@ -34,13 +41,13 @@ class RetargetingTeleop(Node):
             "finger_r_joint17", "finger_r_joint18", "finger_r_joint19", "finger_r_joint20"
         ]
 
-        self.left_publisher_ = self.create_publisher(JointTrajectory, '/leader/joint_trajectory_command_broadcaster_left_hand/joint_trajectory', 10)
-        # self.left_publisher_ = self.create_publisher(JointTrajectory, '/left_hand_controller/joint_trajectory', 10)
-        # self.left_publisher_ = self.create_publisher(JointState, '/joint_states', 10)
+        self.left_publisher_ = self.create_publisher(JointTrajectory, '/leader/joint_trajectory_command_broadcaster_left_hand/joint_trajectory', qos_best_effort)
+        # self.left_publisher_ = self.create_publisher(JointTrajectory, '/left_hand_controller/joint_trajectory', qos_best_effort)
+        # self.left_publisher_ = self.create_publisher(JointState, '/joint_states', qos_best_effort)
 
-        self.right_publisher_ = self.create_publisher(JointTrajectory, '/leader/joint_trajectory_command_broadcaster_right_hand/joint_trajectory', 10)
-        # self.right_publisher_ = self.create_publisher(JointTrajectory, '/right_hand_controller/joint_trajectory', 10)
-        # self.right_publisher_ = self.create_publisher(JointState, '/joint_states', 10)
+        self.right_publisher_ = self.create_publisher(JointTrajectory, '/leader/joint_trajectory_command_broadcaster_right_hand/joint_trajectory', qos_best_effort)
+        # self.right_publisher_ = self.create_publisher(JointTrajectory, '/right_hand_controller/joint_trajectory', qos_best_effort)
+        # self.right_publisher_ = self.create_publisher(JointState, '/joint_states', qos_best_effort)
 
         self.left_subscriber_ = self.create_subscription(
             HandJoints,
