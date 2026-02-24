@@ -179,7 +179,7 @@ RUN pip install --no-cache-dir --ignore-installed -r /opt/talos/requirements.txt
 COPY docker/s6-agent /etc/s6-overlay/s6-rc.d/s6-agent
 
 # Define ROS2 services
-ARG ROS2_SERVICES="ffw_bg2_follower_ai ffw_lg2_leader_ai ffw_sg2_follower_ai"
+ARG ROS2_SERVICES="ai_worker_bringup avatar_bringup"
 
 # Copy all ROS2 service directories directly to s6-rc.d
 COPY docker/s6-services/ /etc/s6-overlay/s6-rc.d/
