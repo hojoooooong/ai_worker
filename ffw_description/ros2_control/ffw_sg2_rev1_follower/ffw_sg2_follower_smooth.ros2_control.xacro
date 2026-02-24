@@ -585,11 +585,11 @@
         <param name="Profile Acceleration">150</param>
         <param name="Max Position Limit">2275</param>
         <param name="Min Position Limit">1820</param>
-        <param name="Position P Gain">1600</param>
-        <param name="Position I Gain">400</param>
-        <param name="Position D Gain">400</param>
-        <param name="Feedforward 1st Gain">30</param>
-        <param name="Feedforward 2nd Gain">30</param>
+        <param name="Position P Gain">800</param>
+        <param name="Position I Gain">200</param>
+        <param name="Position D Gain">200</param>
+        <param name="Feedforward 1st Gain">20</param>
+        <param name="Feedforward 2nd Gain">20</param>
       </gpio>
       <!-- LEFT WHEEL -->
       <gpio name="dxl101">
