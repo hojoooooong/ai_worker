@@ -17,7 +17,6 @@
 # Authors: Wonho Yun
 
 import asyncio
-from enum import Flag
 import math
 import os
 import socket
@@ -329,6 +328,19 @@ class VRTrajectoryPublisher(Node):
         self.prev_poses_left = np.zeros((21,3))
         self.start_poses_left = False
 
+        # Cached transform constants for hot paths
+        self.vr_to_ros_matrix = np.array([
+            [0.0, 0.0, -1.0],
+            [-1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ], dtype=np.float64)
+        self.body_head_to_ros_rot = R.from_matrix(self.BODY_HEAD_TO_ROS_POSITION)
+        self.zedm_to_base_offset = np.array([
+            0.0 - 0.0238122 - 0.040 - 0.049483 - 0.0055,
+            0.0 + 0.0 + 0.0 + 0.0 + 0.0,
+            -0.01325 + 0.0242094 - 0.054 - 0.102130 - 1.4316,
+        ], dtype=np.float64)
+
         # VR data storage
         self.left_hand_data = None
         self.right_hand_data = None
@@ -417,6 +429,10 @@ class VRTrajectoryPublisher(Node):
             self.get_logger().info(f'VR publishing changed to: {status} (message value: {msg.data})')
 
             if self.vr_publishing_enabled:
+                self.start_poses_left = False
+                self.start_poses_right = False
+                self.prev_poses_left.fill(0.0)
+                self.prev_poses_right.fill(0.0)
                 self.initial_camera_height = None
                 self.initial_camera_position = None
                 self.initial_camera_yaw = None
@@ -441,6 +457,10 @@ class VRTrajectoryPublisher(Node):
             if not self.vr_publishing_enabled:
                 self.left_joint_positions = [0.0] * 20
                 self.right_joint_positions = [0.0] * 20
+                self.start_poses_left = False
+                self.start_poses_right = False
+                self.prev_poses_left.fill(0.0)
+                self.prev_poses_right.fill(0.0)
                 self.initial_odom_position = None
                 self.initial_odom_yaw = None
                 self.initial_camera_height = None
@@ -449,6 +469,7 @@ class VRTrajectoryPublisher(Node):
                 self.filtered_lift_position = None
                 self.last_lift_time = None
                 self.z_calibrated = False
+                self.head_height_offset_for_arms = 0.0
                 self.pose_filters.clear()
                 self.get_logger().info('Joint positions reset to zero')
 
@@ -594,17 +615,11 @@ class VRTrajectoryPublisher(Node):
 
     def vr_to_ros_transform(self, vr_pos, vr_quat):
         """Transform from VR coordinate system to ROS coordinate system."""
-        vr_to_ros_matrix = np.array([
-            [0, 0, -1],
-            [-1, 0, 0],
-            [0, 1, 0]
-        ])
-
-        ros_pos = vr_to_ros_matrix @ vr_pos
+        ros_pos = self.vr_to_ros_matrix @ vr_pos
 
         vr_rotation = R.from_quat([vr_quat[0], vr_quat[1], vr_quat[2], vr_quat[3]])
         vr_rot_matrix = vr_rotation.as_matrix()
-        ros_rot_matrix = vr_to_ros_matrix @ vr_rot_matrix
+        ros_rot_matrix = self.vr_to_ros_matrix @ vr_rot_matrix
         ros_rotation = R.from_matrix(ros_rot_matrix)
         ros_quat = ros_rotation.as_quat()
 
@@ -673,15 +688,9 @@ class VRTrajectoryPublisher(Node):
         """Publish a pose in base_link. When hand_pose_is_head_relative, rotate position and
         orientation by head pose so head-relative coordinates are correctly expressed in base_link.
         """
-        zedm_to_base_offset = np.array([
-            0.0 - 0.0238122 - 0.040 - 0.049483 - 0.0055,
-            0.0 + 0.0 + 0.0 + 0.0 + 0.0,
-            -0.01325 + 0.0242094 - 0.054 - 0.102130 - 1.4316
-        ], dtype=np.float64)
-
         # Position: head-relative in VR world axes, then vr_to_ros; no head rotation (axes match base_link).
         scaled_pos = camera_relative_position * vr_scale
-        base_position = scaled_pos - zedm_to_base_offset
+        base_position = scaled_pos - self.zedm_to_base_offset
 
         # When the user squats/stands, shift arm target Z by current head height delta.
         if self.apply_head_height_to_arm_z and pose_role in ('wrist', 'elbow'):
@@ -740,7 +749,7 @@ class VRTrajectoryPublisher(Node):
 
     def get_joint_matrix(self, hand_data, joint_index):
         """Extract joint transformation matrix from hand data."""
-        arr = np.array(hand_data)
+        arr = hand_data if isinstance(hand_data, np.ndarray) else np.asarray(hand_data, dtype=np.float64)
         start_idx = joint_index * 16
         end_idx = start_idx + 16
         matrix_data = arr[start_idx:end_idx]
@@ -816,116 +825,99 @@ class VRTrajectoryPublisher(Node):
         return rot_matrix
 
     def process_hand_joints(self, hand_data, side='left'):
-        """Process VR hand data and calculate joint positions with low-pass filtering."""
+        """Process VR hand data (retarget) and publish HandJoints + wrist target pose."""
         if hand_data is None or len(hand_data) != 400:
             return
 
-        # Extract hand pose quaternions
         hand_joints = HandJoints()
         hand_joints.header.stamp = self.get_clock().now().to_msg()
         hand_joints.header.frame_id = ''
         hand_joints.joints = []
-        temp_joints = np.zeros((21,3))
+        temp_joints = np.zeros((21, 3), dtype=np.float64)
         pose_counter = 0
-        wrist_quat = np.zeros(4)
-        wrist_rot = np.eye(3)
+        wrist_rot = np.eye(3, dtype=np.float64)
+        wrist_pos_ros = None
+        wrist_quat_ros = None
 
-        # For wrist
-        pose_array = PoseArray()
-        pose_array.header.stamp = self.get_clock().now().to_msg()
-        pose_array.header.frame_id = ''
-        pose_array.poses = []
-
-        # Wrist must be published in camera (head) relative coordinates.
-        # Position: vector from head to hand expressed in HEAD frame so it does not rotate when user rotates body.
-        # Orientation: hand in head frame (head_inverse @ world_joint).
-        head_inv = self.head_inverse_matrix if self.hand_pose_is_head_relative else None
+        hand_arr = hand_data if isinstance(hand_data, np.ndarray) else np.asarray(hand_data, dtype=np.float64)
+        head_rot_inv = self.head_inverse_matrix[:3, :3] if self.hand_pose_is_head_relative else None
         head_world_pos = self.head_transform_matrix[:3, 3] if self.hand_pose_is_head_relative else None
 
-        for i in self.required_vr_frames:
-            try:
-                world_joint_matrix = self.get_joint_matrix(hand_data, i)
+        try:
+            for i in self.required_vr_frames:
+                start = i * 16
+                world_joint_matrix = hand_arr[start:start + 16].reshape(4, 4, order='F')
+                world_rot = world_joint_matrix[:3, :3]
+                world_pos = world_joint_matrix[:3, 3]
 
-                if self.hand_pose_is_head_relative and head_inv is not None and head_world_pos is not None:
-                    joint_world_pos = world_joint_matrix[:3, 3]
-                    vec_world = joint_world_pos - head_world_pos
-
-                    relative_pos_vr = (head_inv[:3, :3] @ vec_world)  # in head-relative frame (+Y fwd, +Z right, +X down)
-                    relative_joint_matrix = head_inv @ world_joint_matrix
-                    _, relative_quat = self.matrix_to_pose(relative_joint_matrix)
-
-                    # Head-relative frame -> ROS (forward +X, left +Y, up +Z)
-                    relative_pos_ros = (self.BODY_HEAD_TO_ROS_POSITION @ relative_pos_vr).astype(np.float64)
-                    rel_rot = R.from_matrix(relative_joint_matrix[:3, :3])
-                    ros_rot = R.from_matrix(self.BODY_HEAD_TO_ROS_POSITION) * rel_rot
-                    relative_quat_ros = ros_rot.as_quat()
+                if self.hand_pose_is_head_relative and head_rot_inv is not None and head_world_pos is not None:
+                    relative_pos_vr = head_rot_inv @ (world_pos - head_world_pos)
+                    temp_joints[pose_counter, :] = relative_pos_vr
+                    if i == 0:
+                        wrist_rot = head_rot_inv @ world_rot
+                        wrist_pos_ros = (self.BODY_HEAD_TO_ROS_POSITION @ relative_pos_vr).astype(np.float64)
+                        wrist_quat_ros = (self.body_head_to_ros_rot * R.from_matrix(wrist_rot)).as_quat()
                 else:
-                    relative_pos_vr, relative_quat = self.matrix_to_pose(world_joint_matrix)
-                    relative_pos_ros, relative_quat_ros = self.vr_to_ros_transform(relative_pos_vr, relative_quat)
+                    relative_pos_vr = world_pos
+                    temp_joints[pose_counter, :] = relative_pos_vr
+                    if i == 0:
+                        wrist_rot = world_rot
+                        wrist_pos_ros = self.vr_to_ros_matrix @ relative_pos_vr
+                        wrist_quat_ros = R.from_matrix(self.vr_to_ros_matrix @ wrist_rot).as_quat()
 
-                temp_joints[pose_counter,:] = relative_pos_vr
                 pose_counter += 1
+        except Exception as e:
+            self.get_logger().warn(f'Error processing hand joints for {side}: {e}')
+            return
 
-                if i == 0:
-                    wrist_quat = relative_quat
-                    wrist_rot = self.quaternion_to_rotation_matrix(wrist_quat)
-
-                    quat = Quaternion()
-                    quat.x = relative_quat_ros[0]
-                    quat.y = relative_quat_ros[1]
-                    quat.z = relative_quat_ros[2]
-                    quat.w = relative_quat_ros[3]
-
-                    pose_msg = Pose()
-                    pose_msg.position = self.safe_point(relative_pos_ros[0], relative_pos_ros[1], relative_pos_ros[2])
-                    pose_msg.orientation = quat
-                    pose_array.poses.append(pose_msg)
-
-            except Exception as e:
-                self.get_logger().warn(f'Error processing hand joint {i}: {e}')
-                return
+        if pose_counter != 21 or wrist_pos_ros is None or wrist_quat_ros is None:
+            return
 
         if side == 'left':
-            # Transform and publish left wrist pose to base_link coordinates
-            self.transform_and_publish_pose(
-                pose_array, self.left_wrist_rviz_pub, 'left', vr_scale=self.wrist_vr_scale)
-
-            # Apply low-pass filter
             if self.start_poses_left:
-                temp_joints = self.low_pass_filter_alpha * temp_joints + (1-self.low_pass_filter_alpha) * self.prev_poses_left
-            else:
-                self.prev_poses_left = temp_joints
-
-            for i in range(21):
-                temp_position = self.vr_hand_to_urdf @ wrist_rot.T @ (temp_joints[i,:] - temp_joints[0,:])
-                temp_point = Point32()
-                temp_point.x = temp_position[0]
-                temp_point.y = temp_position[1]
-                temp_point.z = temp_position[2]
-                hand_joints.joints.append(temp_point)
-
-            self.left_hand_pos_pub.publish(hand_joints)
-
+                temp_joints = (
+                    self.low_pass_filter_alpha * temp_joints
+                    + (1.0 - self.low_pass_filter_alpha) * self.prev_poses_left
+                )
+            self.prev_poses_left[:] = temp_joints
+            self.start_poses_left = True
+            wrist_publisher = self.left_wrist_rviz_pub
+            hand_publisher = self.left_hand_pos_pub
         elif side == 'right':
-            # Transform and publish left wrist pose to base_link coordinates
-            self.transform_and_publish_pose(
-                pose_array, self.right_wrist_rviz_pub, 'right', vr_scale=self.wrist_vr_scale)
-
-            # Apply low-pass filter
             if self.start_poses_right:
-                temp_joints = self.low_pass_filter_alpha * temp_joints + (1-self.low_pass_filter_alpha) * self.prev_poses_right
-            else:
-                self.prev_poses_right = temp_joints
+                temp_joints = (
+                    self.low_pass_filter_alpha * temp_joints
+                    + (1.0 - self.low_pass_filter_alpha) * self.prev_poses_right
+                )
+            self.prev_poses_right[:] = temp_joints
+            self.start_poses_right = True
+            wrist_publisher = self.right_wrist_rviz_pub
+            hand_publisher = self.right_hand_pos_pub
+        else:
+            return
 
-            for i in range(21):
-                temp_position = self.vr_hand_to_urdf @ wrist_rot.T @ (temp_joints[i,:] - temp_joints[0,:])
-                temp_point = Point32()
-                temp_point.x = temp_position[0]
-                temp_point.y = temp_position[1]
-                temp_point.z = temp_position[2]
-                hand_joints.joints.append(temp_point)
+        rel_points = temp_joints - temp_joints[0]
+        retarget_points = (self.vr_hand_to_urdf @ (wrist_rot.T @ rel_points.T)).T
+        for p in retarget_points:
+            msg_p = Point32()
+            msg_p.x = float(p[0])
+            msg_p.y = float(p[1])
+            msg_p.z = float(p[2])
+            hand_joints.joints.append(msg_p)
 
-            self.right_hand_pos_pub.publish(hand_joints)
+        self.publish_relative_pose(
+            wrist_pos_ros,
+            wrist_quat_ros,
+            wrist_publisher,
+            vr_scale=self.wrist_vr_scale,
+            x_offset=self.wrist_offsets['x'],
+            y_offset=self.wrist_offsets['y'],
+            z_offset=self.wrist_offsets['z'],
+            apply_right_z_flip=(side == 'right'),
+            pose_role='wrist',
+            side=side,
+        )
+        hand_publisher.publish(hand_joints)
 
     def start_vuer_server(self):
         """Start the VR server in a separate thread."""
@@ -1022,11 +1014,11 @@ class VRTrajectoryPublisher(Node):
             if 'left' in event.value:
                 left_data = event.value['left']
                 if isinstance(left_data, (list, np.ndarray)) and len(left_data) == 400:
-                    self.left_hand_data = np.array(left_data)
+                    self.left_hand_data = left_data if isinstance(left_data, np.ndarray) else np.asarray(left_data, dtype=np.float64)
             if 'right' in event.value:
                 right_data = event.value['right']
                 if isinstance(right_data, (list, np.ndarray)) and len(right_data) == 400:
-                    self.right_hand_data = np.array(right_data)
+                    self.right_hand_data = right_data if isinstance(right_data, np.ndarray) else np.asarray(right_data, dtype=np.float64)
 
         except Exception as e:
             self.get_logger().error(f'Error in hand move event: {e}')
@@ -1050,10 +1042,11 @@ class VRTrajectoryPublisher(Node):
             body_data = event.value.get('body') if isinstance(event.value, dict) else None
             if not isinstance(body_data, (list, tuple, np.ndarray)):
                 return
+            body_array = body_data if isinstance(body_data, np.ndarray) else np.asarray(body_data, dtype=np.float64)
 
             # --- Head joint: for all head-related processing ---
             # get_body_joint_matrix_from_flat now rejects degenerate matrices (det~0)
-            head_matrix = self.get_body_joint_matrix_from_flat(body_data, 'head')
+            head_matrix = self.get_body_joint_matrix_from_flat(body_array, 'head')
             if head_matrix is not None:
                 self.head_transform_matrix = head_matrix
                 self.head_inverse_matrix = np.linalg.inv(head_matrix)
@@ -1259,8 +1252,8 @@ class VRTrajectoryPublisher(Node):
             # --- Elbow poses: publish only when current-frame head is valid ---
             # Prevent using stale head_inverse_matrix, which can look world-fixed.
             if head_matrix is not None:
-                left_matrix = self.get_body_joint_matrix_from_flat(body_data, 'left-arm-lower')
-                right_matrix = self.get_body_joint_matrix_from_flat(body_data, 'right-arm-lower')
+                left_matrix = self.get_body_joint_matrix_from_flat(body_array, 'left-arm-lower')
+                right_matrix = self.get_body_joint_matrix_from_flat(body_array, 'right-arm-lower')
 
                 if left_matrix is not None:
                     self.publish_body_joint_pose(left_matrix, self.left_elbow_pub, side='left')
@@ -1283,9 +1276,10 @@ class VRTrajectoryPublisher(Node):
         index = BODY_JOINT_KEYS.index(joint_name)
         start = index * 16
         end = start + 16
-        if len(body_array) < end:
+        arr = body_array if isinstance(body_array, np.ndarray) else np.asarray(body_array, dtype=np.float64)
+        if arr.size < end:
             return None
-        matrix = np.array(body_array[start:end], dtype=np.float64)
+        matrix = arr[start:end]
         mat4 = matrix.reshape(4, 4, order='F')
         # Reject degenerate matrices (zero matrix, singular, etc.)
         det = np.linalg.det(mat4[:3, :3])
