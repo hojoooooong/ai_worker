@@ -53,14 +53,14 @@ class RetargetingTeleop(Node):
             HandJoints,
             '/left_hand/hand_joint_pos',
             self.run_teleop_left,
-            10
+            qos_best_effort
         )
 
         self.right_subscriber_ = self.create_subscription(
             HandJoints,
             '/right_hand/hand_joint_pos',
             self.run_teleop_right,
-            10
+            qos_best_effort
         )
 
         self.get_logger().info('Retargeting Teleop Node Started')
