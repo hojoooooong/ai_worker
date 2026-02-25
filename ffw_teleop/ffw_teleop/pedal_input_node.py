@@ -36,6 +36,8 @@ class PedalInputNode(Node):
         self.commands_pub = self.create_publisher(Float64MultiArray, 'position_controller/commands', 10)
         # Pedal state publisher: 0 or 1
         self.state_pub = self.create_publisher(Bool, 'pedal_state', 10)
+        # Reset signal when toggle becomes true
+        self.reset_pub = self.create_publisher(Bool, '/reset', 10)
 
         # Subscriber
         self.joint_states_sub = self.create_subscription(JointState, 'joint_states', self._on_joint_states, 10)
@@ -116,6 +118,10 @@ class PedalInputNode(Node):
                     # Toggle state once per press-and-hold
                     self.current_state = False if self.current_state == True else True
                     self.toggle_done_for_current_press = True
+                    if self.current_state:
+                        reset_msg = Bool()
+                        reset_msg.data = True
+                        self.reset_pub.publish(reset_msg)
         else:
             # Released: reset tracking for next press
             self.pressed_start_time = None
