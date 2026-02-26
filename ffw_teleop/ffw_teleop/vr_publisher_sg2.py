@@ -39,6 +39,8 @@ from std_msgs.msg import Bool
 nest_asyncio.apply()
 
 BODY_HEAD_INDEX = 6  # XRBodyJoint 'head'
+BODY_LEFT_ELBOW_INDEX = 10  # XRBodyJoint 'left-arm-lower'
+BODY_RIGHT_ELBOW_INDEX = 15  # XRBodyJoint 'right-arm-lower'
 # Head-relative VR frame from (head_inverse @ world):
 # +Y=forward, +Z=right, +X=down. Convert to ROS (+X forward, +Y left, +Z up).
 VR_HEAD_TO_ROS = np.array([
@@ -65,6 +67,12 @@ class VRTrajectoryPublisher(Node):
         self.declare_parameter('right_wrist_roll_offset_deg', 90.0)
         self.declare_parameter('right_wrist_pitch_offset_deg', 0.0)
         self.declare_parameter('right_wrist_yaw_offset_deg', 0.0)
+        self.declare_parameter('left_elbow_offset_x', 0.0)
+        self.declare_parameter('left_elbow_offset_y', 0.0)
+        self.declare_parameter('left_elbow_offset_z', 0.0)
+        self.declare_parameter('right_elbow_offset_x', 0.0)
+        self.declare_parameter('right_elbow_offset_y', 0.0)
+        self.declare_parameter('right_elbow_offset_z', 0.0)
 
         # VR publishing control flag
         self.vr_publishing_enabled = True  # Default: disabled
@@ -112,9 +120,11 @@ class VRTrajectoryPublisher(Node):
         self.right_trigger_pub = self.create_publisher(Float32, '/vr_controller/right_trigger', 10)
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
 
-        # Wrist pose publishers for visualization
+        # Wrist/elbow pose publishers for visualization
         self.left_wrist_rviz_pub = self.create_publisher(PoseStamped, '/l_goal_pose', 10)
         self.right_wrist_rviz_pub = self.create_publisher(PoseStamped, '/r_goal_pose', 10)
+        self.left_elbow_rviz_pub = self.create_publisher(PoseStamped, '/l_elbow_pose', 10)
+        self.right_elbow_rviz_pub = self.create_publisher(PoseStamped, '/r_elbow_pose', 10)
 
         # Reactivate service client (call when both A buttons are pressed)
         self.declare_parameter('reactivate_service', '/reactivate')
@@ -162,6 +172,18 @@ class VRTrajectoryPublisher(Node):
                 self.get_parameter('right_wrist_offset_x').get_parameter_value().double_value,
                 self.get_parameter('right_wrist_offset_y').get_parameter_value().double_value,
                 self.get_parameter('right_wrist_offset_z').get_parameter_value().double_value,
+            ], dtype=np.float64),
+        }
+        self.elbow_position_offsets = {
+            'left': np.array([
+                self.get_parameter('left_elbow_offset_x').get_parameter_value().double_value,
+                self.get_parameter('left_elbow_offset_y').get_parameter_value().double_value,
+                self.get_parameter('left_elbow_offset_z').get_parameter_value().double_value,
+            ], dtype=np.float64),
+            'right': np.array([
+                self.get_parameter('right_elbow_offset_x').get_parameter_value().double_value,
+                self.get_parameter('right_elbow_offset_y').get_parameter_value().double_value,
+                self.get_parameter('right_elbow_offset_z').get_parameter_value().double_value,
             ], dtype=np.float64),
         }
         self.wrist_rotation_offsets = {
@@ -229,6 +251,10 @@ class VRTrajectoryPublisher(Node):
         self.get_logger().info(
             f'Wrist offsets | left_pos={self.wrist_position_offsets["left"].tolist()}, '
             f'right_pos={self.wrist_position_offsets["right"].tolist()}'
+        )
+        self.get_logger().info(
+            f'Elbow offsets | left_pos={self.elbow_position_offsets["left"].tolist()}, '
+            f'right_pos={self.elbow_position_offsets["right"].tolist()}'
         )
         self.get_logger().info(
             'Wrist rot offsets deg | '
@@ -384,6 +410,19 @@ class VRTrajectoryPublisher(Node):
         rotation_with_offset = rotation_ros * self.wrist_rotation_offsets[side_key]
         return position_with_offset, rotation_with_offset
 
+    def get_body_joint_matrix_from_flat(self, body_array, joint_index):
+        """Extract a 4x4 body joint matrix from flattened BODY_MOVE array."""
+        start_idx = joint_index * 16
+        end_idx = start_idx + 16
+        if body_array.size < end_idx:
+            return None
+        joint_matrix = np.asarray(body_array[start_idx:end_idx], dtype=np.float64).reshape(4, 4, order='F')
+        if not np.all(np.isfinite(joint_matrix)):
+            return None
+        if abs(float(np.linalg.det(joint_matrix[:3, :3]))) < 1e-6:
+            return None
+        return joint_matrix
+
     def _publish_wrist_pose_from_matrix(self, world_joint_matrix, side):
         """Publish wrist pose from a world transform matrix."""
         try:
@@ -417,6 +456,40 @@ class VRTrajectoryPublisher(Node):
 
         except Exception as e:
             self.get_logger().warn(f'Error publishing wrist pose from matrix for {side}: {e}')
+
+    def _publish_elbow_pose_from_matrix(self, world_joint_matrix, side):
+        """Publish elbow pose from a body joint world matrix."""
+        try:
+            if not self.can_publish_goal_pose():
+                return
+
+            relative_joint_matrix = self.head_inverse_matrix @ world_joint_matrix
+            relative_pos_head, relative_quat_head = self.matrix_to_pose(relative_joint_matrix)
+            relative_pos_ros, relative_quat_ros = self.vr_to_ros_transform(relative_pos_head, relative_quat_head)
+            elbow_rotation = R.from_quat(relative_quat_ros)
+
+            base_position = relative_pos_ros - self.camera_to_base_offset
+            side_key = side if side in ('left', 'right') else 'left'
+            base_position = base_position + self.elbow_position_offsets[side_key]
+            elbow_quaternion = elbow_rotation.as_quat()
+
+            elbow_pose = PoseStamped()
+            elbow_pose.header.stamp = self.get_clock().now().to_msg()
+            elbow_pose.header.frame_id = 'base_link'
+            elbow_pose.pose.position = self.safe_point(
+                base_position[0], base_position[1], base_position[2]
+            )
+            elbow_pose.pose.orientation = self.safe_quaternion(
+                elbow_quaternion[0], elbow_quaternion[1], elbow_quaternion[2], elbow_quaternion[3]
+            )
+
+            if side == 'left':
+                self.left_elbow_rviz_pub.publish(elbow_pose)
+            elif side == 'right':
+                self.right_elbow_rviz_pub.publish(elbow_pose)
+
+        except Exception as e:
+            self.get_logger().warn(f'Error publishing elbow pose from matrix for {side}: {e}')
 
     def process_thumbstick(self):
         """Process thumbstick input for mode switching and joystick control."""
@@ -738,6 +811,14 @@ class VRTrajectoryPublisher(Node):
                 self.head_inverse_matrix = np.linalg.inv(head_matrix)
             except np.linalg.LinAlgError:
                 return
+
+            left_elbow_matrix = self.get_body_joint_matrix_from_flat(body_array, BODY_LEFT_ELBOW_INDEX)
+            if left_elbow_matrix is not None:
+                self._publish_elbow_pose_from_matrix(left_elbow_matrix, 'left')
+
+            right_elbow_matrix = self.get_body_joint_matrix_from_flat(body_array, BODY_RIGHT_ELBOW_INDEX)
+            if right_elbow_matrix is not None:
+                self._publish_elbow_pose_from_matrix(right_elbow_matrix, 'right')
 
         except Exception as e:
             self.get_logger().error(f'Error in body tracking event: {e}')
