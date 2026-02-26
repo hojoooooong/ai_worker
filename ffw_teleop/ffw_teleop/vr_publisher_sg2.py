@@ -29,6 +29,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from scipy.spatial.transform import Rotation as R
 from std_msgs.msg import Float32
+from std_srvs.srv import Trigger
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from vuer import Vuer
 from vuer.schemas import MotionControllers, Body
@@ -38,19 +39,13 @@ from std_msgs.msg import Bool
 nest_asyncio.apply()
 
 BODY_HEAD_INDEX = 6  # XRBodyJoint 'head'
-# Body head-relative frame from head_inverse @ world:
+# Head-relative VR frame from (head_inverse @ world):
 # +Y=forward, +Z=right, +X=down. Convert to ROS (+X forward, +Y left, +Z up).
-BODY_HEAD_TO_ROS_POSITION = np.array([
+VR_HEAD_TO_ROS = np.array([
     [0.0, 1.0, 0.0],   # ROS X = head +Y
     [0.0, 0.0, -1.0],  # ROS Y = -head Z
     [-1.0, 0.0, 0.0],  # ROS Z = -head X
 ], dtype=np.float64)
-LEFT_CONTROLLER_X_ROT_DEG = 180.0
-LEFT_CONTROLLER_Y_ROT_DEG = 0.0
-LEFT_CONTROLLER_Z_ROT_DEG = 90.0
-RIGHT_CONTROLLER_X_ROT_DEG = 0.0
-RIGHT_CONTROLLER_Y_ROT_DEG = 0.0
-RIGHT_CONTROLLER_Z_ROT_DEG = 90.0
 
 
 class VRTrajectoryPublisher(Node):
@@ -58,6 +53,18 @@ class VRTrajectoryPublisher(Node):
     def __init__(self):
         super().__init__('vr_trajectory_publisher')
         self.get_logger().set_level(rclpy.logging.LoggingSeverity.INFO)
+        self.declare_parameter('left_wrist_offset_x', 0.0)
+        self.declare_parameter('left_wrist_offset_y', 0.0)
+        self.declare_parameter('left_wrist_offset_z', 0.0)
+        self.declare_parameter('right_wrist_offset_x', 0.0)
+        self.declare_parameter('right_wrist_offset_y', 0.0)
+        self.declare_parameter('right_wrist_offset_z', 0.0)
+        self.declare_parameter('left_wrist_roll_offset_deg', 90.0)
+        self.declare_parameter('left_wrist_pitch_offset_deg', 0.0)
+        self.declare_parameter('left_wrist_yaw_offset_deg', 0.0)
+        self.declare_parameter('right_wrist_roll_offset_deg', 90.0)
+        self.declare_parameter('right_wrist_pitch_offset_deg', 0.0)
+        self.declare_parameter('right_wrist_yaw_offset_deg', 0.0)
 
         # VR publishing control flag
         self.vr_publishing_enabled = True  # Default: disabled
@@ -109,6 +116,12 @@ class VRTrajectoryPublisher(Node):
         self.left_wrist_rviz_pub = self.create_publisher(PoseStamped, '/l_goal_pose', 10)
         self.right_wrist_rviz_pub = self.create_publisher(PoseStamped, '/r_goal_pose', 10)
 
+        # Reactivate service client (call when both A buttons are pressed)
+        self.declare_parameter('reactivate_service', '/reactivate')
+        self.reactivate_service = str(self.get_parameter('reactivate_service').value)
+        self.reactivate_client = self.create_client(Trigger, self.reactivate_service)
+        self.both_a_buttons_pressed_prev = False
+
         # Subscriber for VR control toggle
         self.vr_control_sub = self.create_subscription(
             Bool,
@@ -133,7 +146,36 @@ class VRTrajectoryPublisher(Node):
         self.goal_pose_squeeze_threshold = 0.8
         self.head_transform_matrix = np.eye(4)
         self.head_inverse_matrix = np.eye(4)
-        self.body_head_to_ros_rot = R.from_matrix(BODY_HEAD_TO_ROS_POSITION)
+        self.vr_head_to_ros_rot = R.from_matrix(VR_HEAD_TO_ROS)
+        self.camera_to_base_offset = np.array([
+            0.0 - 0.0238122 - 0.040 - 0.049483 - 0.0055,  # x: -0.1187952
+            0.0 + 0.0 + 0.0 + 0.0 + 0.0,                  # y: 0.0
+            -0.01325 + 0.0242094 - 0.054 - 0.102130 - 1.4316  # z: -1.5767706
+        ], dtype=np.float64)
+        self.wrist_position_offsets = {
+            'left': np.array([
+                self.get_parameter('left_wrist_offset_x').get_parameter_value().double_value,
+                self.get_parameter('left_wrist_offset_y').get_parameter_value().double_value,
+                self.get_parameter('left_wrist_offset_z').get_parameter_value().double_value,
+            ], dtype=np.float64),
+            'right': np.array([
+                self.get_parameter('right_wrist_offset_x').get_parameter_value().double_value,
+                self.get_parameter('right_wrist_offset_y').get_parameter_value().double_value,
+                self.get_parameter('right_wrist_offset_z').get_parameter_value().double_value,
+            ], dtype=np.float64),
+        }
+        self.wrist_rotation_offsets = {
+            'left': R.from_euler('xyz', [
+                self.get_parameter('left_wrist_roll_offset_deg').get_parameter_value().double_value,
+                self.get_parameter('left_wrist_pitch_offset_deg').get_parameter_value().double_value,
+                self.get_parameter('left_wrist_yaw_offset_deg').get_parameter_value().double_value,
+            ], degrees=True),
+            'right': R.from_euler('xyz', [
+                self.get_parameter('right_wrist_roll_offset_deg').get_parameter_value().double_value,
+                self.get_parameter('right_wrist_pitch_offset_deg').get_parameter_value().double_value,
+                self.get_parameter('right_wrist_yaw_offset_deg').get_parameter_value().double_value,
+            ], degrees=True),
+        }
 
         # Thumbstick mode:
         # True: lift + head joints, False: lift + cmd_vel
@@ -184,6 +226,15 @@ class VRTrajectoryPublisher(Node):
             f'Stick swap config: left_stick_swap_xy={self.left_stick_swap_xy}, '
             f'right_stick_swap_xy={self.right_stick_swap_xy}'
         )
+        self.get_logger().info(
+            f'Wrist offsets | left_pos={self.wrist_position_offsets["left"].tolist()}, '
+            f'right_pos={self.wrist_position_offsets["right"].tolist()}'
+        )
+        self.get_logger().info(
+            'Wrist rot offsets deg | '
+            f'left={[self.get_parameter("left_wrist_roll_offset_deg").value, self.get_parameter("left_wrist_pitch_offset_deg").value, self.get_parameter("left_wrist_yaw_offset_deg").value]}, '
+            f'right={[self.get_parameter("right_wrist_roll_offset_deg").value, self.get_parameter("right_wrist_pitch_offset_deg").value, self.get_parameter("right_wrist_yaw_offset_deg").value]}'
+        )
 
     def vr_control_callback(self, msg):
         """Callback to enable/disable VR publishing based on message content."""
@@ -201,6 +252,24 @@ class VRTrajectoryPublisher(Node):
     def is_valid_float(self, value):
         """Check if value is valid float (excluding NaN, inf)."""
         return isinstance(value, (int, float)) and np.isfinite(value)
+
+    def _call_reactivate(self):
+        """Call reactivate service (non-blocking)."""
+        if not self.reactivate_client.wait_for_service(timeout_sec=0.2):
+            self.get_logger().warn(f'Reactivate service "{self.reactivate_service}" not available')
+            return
+        req = Trigger.Request()
+        self.reactivate_client.call_async(req).add_done_callback(self._reactivate_done_callback)
+
+    def _reactivate_done_callback(self, future):
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info('Reactivate service called successfully (both A buttons)')
+            else:
+                self.get_logger().warn(f'Reactivate service returned: {response.message}')
+        except Exception as e:
+            self.get_logger().error(f'Reactivate service call failed: {e}')
 
     def apply_deadzone(self, value):
         """Apply deadzone to thumbstick value."""
@@ -293,22 +362,11 @@ class VRTrajectoryPublisher(Node):
         return pos, quat
 
     def vr_to_ros_transform(self, vr_pos, vr_quat):
-        """Transform from VR coordinate system to ROS coordinate system."""
-        vr_to_ros_matrix = np.array([
-            [0, 0, -1],
-            [-1, 0, 0],
-            [0, 1, 0]
-        ])
-
-        ros_pos = vr_to_ros_matrix @ vr_pos
-
+        """Convert head-relative VR pose to ROS pose (no hand-specific offsets)."""
+        ros_pos = (VR_HEAD_TO_ROS @ vr_pos).astype(np.float64)
         vr_rotation = R.from_quat([vr_quat[0], vr_quat[1], vr_quat[2], vr_quat[3]])
-        vr_rot_matrix = vr_rotation.as_matrix()
-        ros_rot_matrix = vr_to_ros_matrix @ vr_rot_matrix
-        ros_rotation = R.from_matrix(ros_rot_matrix)
-        ros_quat = ros_rotation.as_quat()
-
-        return ros_pos, ros_quat
+        ros_rotation = self.vr_head_to_ros_rot * vr_rotation * self.vr_head_to_ros_rot.inv()
+        return ros_pos, ros_rotation.as_quat()
 
     def can_publish_goal_pose(self):
         """Safety gate for goal_pose topics."""
@@ -318,23 +376,13 @@ class VRTrajectoryPublisher(Node):
             self.right_squeeze_value >= self.goal_pose_squeeze_threshold
         )
 
-    def apply_side_orientation_offset(self, base_rotation, side):
-        """Apply fixed side-dependent orientation offset in ROS/world frame."""
-        if side == 'left':
-            rot_x = R.from_euler('x', LEFT_CONTROLLER_X_ROT_DEG, degrees=True)
-            rot_y = R.from_euler('y', LEFT_CONTROLLER_Y_ROT_DEG, degrees=True)
-            rot_z = R.from_euler('z', LEFT_CONTROLLER_Z_ROT_DEG, degrees=True)
-            # Apply X -> Y -> Z on ROS fixed axes.
-            return rot_z * rot_y * rot_x * base_rotation
-
-        if side == 'right':
-            rot_x = R.from_euler('x', RIGHT_CONTROLLER_X_ROT_DEG, degrees=True)
-            rot_y = R.from_euler('y', RIGHT_CONTROLLER_Y_ROT_DEG, degrees=True)
-            rot_z = R.from_euler('z', RIGHT_CONTROLLER_Z_ROT_DEG, degrees=True)
-            # Apply X -> Y -> Z on ROS fixed axes.
-            return rot_z * rot_y * rot_x * base_rotation
-
-        return base_rotation
+    def apply_wrist_offsets(self, side, position_ros, rotation_ros):
+        """Apply per-hand offsets after VR->ROS conversion."""
+        side_key = side if side in ('left', 'right') else 'left'
+        position_with_offset = position_ros + self.wrist_position_offsets[side_key]
+        # Local wrist frame rotation offset.
+        rotation_with_offset = rotation_ros * self.wrist_rotation_offsets[side_key]
+        return position_with_offset, rotation_with_offset
 
     def _publish_wrist_pose_from_matrix(self, world_joint_matrix, side):
         """Publish wrist pose from a world transform matrix."""
@@ -344,23 +392,13 @@ class VRTrajectoryPublisher(Node):
 
             relative_joint_matrix = self.head_inverse_matrix @ world_joint_matrix
             relative_pos_head, relative_quat_head = self.matrix_to_pose(relative_joint_matrix)
-            relative_pos_ros = (BODY_HEAD_TO_ROS_POSITION @ relative_pos_head).astype(np.float64)
+            relative_pos_ros, relative_quat_ros = self.vr_to_ros_transform(relative_pos_head, relative_quat_head)
+            relative_rot_ros = R.from_quat(relative_quat_ros)
 
-            rel_rot_head = R.from_quat(relative_quat_head)
-            relative_rot_ros = self.body_head_to_ros_rot * rel_rot_head
-
-            # Fixed offset: zedm_camera_center -> base_link
-            zedm_to_base_offset = np.array([
-                0.0 - 0.0238122 - 0.040 - 0.049483 - 0.0055,  # x: -0.1187952
-                0.0 + 0.0 + 0.0 + 0.0 + 0.0,                  # y: 0.0
-                -0.01325 + 0.0242094 - 0.054 - 0.102130 - 1.4316  # z: -1.5767706
-            ], dtype=np.float64)
-
-            base_position = relative_pos_ros - zedm_to_base_offset
-
-            camera_relative_rotation = self.apply_side_orientation_offset(relative_rot_ros, side)
-
-            arm_quaternion = camera_relative_rotation.as_quat()  # [x, y, z, w]
+            # 1) Coordinate conversion 2) camera->base shift 3) user-configurable offsets
+            base_position = relative_pos_ros - self.camera_to_base_offset
+            base_position, base_rotation = self.apply_wrist_offsets(side, base_position, relative_rot_ros)
+            arm_quaternion = base_rotation.as_quat()  # [x, y, z, w]
 
             wrist_pose = PoseStamped()
             wrist_pose.header.stamp = self.get_clock().now().to_msg()
@@ -589,21 +627,14 @@ class VRTrajectoryPublisher(Node):
             wrist_pose_relative.orientation.w
         ], dtype=np.float64)
 
-        # Fixed offset: zedm_camera_center → base_link
-        zedm_to_base_offset = np.array([
-            0.0 - 0.0238122 - 0.040 - 0.049483 - 0.0055,  # x: -0.1187952
-            0.0 + 0.0 + 0.0 + 0.0 + 0.0,                  # y: 0.0
-            -0.01325 + 0.0242094 - 0.054 - 0.102130 - 1.4316  # z: -1.5767706
-        ], dtype=np.float64)
-
         # Transform from camera relative coordinates directly to base_link coordinates
-        base_position = camera_relative_position - zedm_to_base_offset
+        base_position = camera_relative_position - self.camera_to_base_offset
 
         # Use camera relative orientation as is
         camera_relative_rotation = R.from_quat(camera_relative_quaternion)
-
-        camera_relative_rotation = self.apply_side_orientation_offset(camera_relative_rotation, hand_name)
-
+        base_position, camera_relative_rotation = self.apply_wrist_offsets(
+            hand_name, base_position, camera_relative_rotation
+        )
         arm_quaternion = camera_relative_rotation.as_quat()  # [x, y, z, w]
 
         # Create target pose message
@@ -763,6 +794,14 @@ class VRTrajectoryPublisher(Node):
 
             # Process thumbstick for lift/head/cmd_vel control.
             self.process_thumbstick()
+
+            # Call reactivate when both A buttons are pressed (rising edge only)
+            left_a = bool(self.left_controller_state.get('aButton', False)) if isinstance(self.left_controller_state, dict) else False
+            right_a = bool(self.right_controller_state.get('aButton', False)) if isinstance(self.right_controller_state, dict) else False
+            both_a_now = left_a and right_a
+            if both_a_now and not self.both_a_buttons_pressed_prev:
+                self._call_reactivate()
+            self.both_a_buttons_pressed_prev = both_a_now
 
             left_matrix_raw = data.get('left')
             if isinstance(left_matrix_raw, (list, np.ndarray)) and len(left_matrix_raw) == 16:
