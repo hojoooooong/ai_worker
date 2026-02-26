@@ -7,6 +7,7 @@ from rclpy.node import Node
 from rclpy.duration import Duration
 
 from std_msgs.msg import Float64MultiArray, Bool
+from std_srvs.srv import Trigger
 from sensor_msgs.msg import JointState
 
 
@@ -22,6 +23,7 @@ class PedalInputNode(Node):
         self.declare_parameter('long_press_seconds', 1.0)
         self.declare_parameter('command_publish_rate_hz', 10.0)
         self.declare_parameter('communication_timeout_seconds', 1.0)
+        self.declare_parameter('reactivate_service', '/reactivate')
 
         self.desired_position: float = float(self.get_parameter('desired_position').value)
         self.joint_name: str = str(self.get_parameter('joint_name').value)
@@ -30,14 +32,16 @@ class PedalInputNode(Node):
         self.long_press_seconds: float = float(self.get_parameter('long_press_seconds').value)
         self.command_publish_rate_hz: float = float(self.get_parameter('command_publish_rate_hz').value)
         self.communication_timeout_seconds: float = float(self.get_parameter('communication_timeout_seconds').value)
+        self.reactivate_service: str = str(self.get_parameter('reactivate_service').value)
 
         # Publishers
         # Commands publisher (remap '~/commands' to the controller input topic in launch)
         self.commands_pub = self.create_publisher(Float64MultiArray, 'position_controller/commands', 10)
         # Pedal state publisher: 0 or 1
         self.state_pub = self.create_publisher(Bool, 'pedal_state', 10)
-        # Reset signal when toggle becomes true
-        self.reset_pub = self.create_publisher(Bool, '/reset', 10)
+
+        # Service client to call reactivate when pedal is toggled on (replaces /reset topic)
+        self.reactivate_client = self.create_client(Trigger, self.reactivate_service)
 
         # Subscriber
         self.joint_states_sub = self.create_subscription(JointState, 'joint_states', self._on_joint_states, 10)
@@ -88,6 +92,23 @@ class PedalInputNode(Node):
         state_msg.data = self.current_state
         self.state_pub.publish(state_msg)
 
+    def _call_reactivate(self) -> None:
+        if not self.reactivate_client.wait_for_service(timeout_sec=0.5):
+            self.get_logger().warn(f'Reactivate service "{self.reactivate_service}" not available')
+            return
+        req = Trigger.Request()
+        self.reactivate_client.call_async(req).add_done_callback(self._reactivate_done_callback)
+
+    def _reactivate_done_callback(self, future) -> None:
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info('Reactivate service called successfully')
+            else:
+                self.get_logger().warn(f'Reactivate service returned: {response.message}')
+        except Exception as e:
+            self.get_logger().error(f'Reactivate service call failed: {e}')
+
     def _is_pressed(self, position_value: float) -> bool:
         return abs(position_value - self.pressed_center) < self.pressed_window
 
@@ -119,9 +140,7 @@ class PedalInputNode(Node):
                     self.current_state = False if self.current_state == True else True
                     self.toggle_done_for_current_press = True
                     if self.current_state:
-                        reset_msg = Bool()
-                        reset_msg.data = True
-                        self.reset_pub.publish(reset_msg)
+                        self._call_reactivate()
         else:
             # Released: reset tracking for next press
             self.pressed_start_time = None
