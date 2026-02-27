@@ -67,6 +67,8 @@ class VRTrajectoryPublisher(Node):
         self.declare_parameter('right_wrist_roll_offset_deg', 90.0)
         self.declare_parameter('right_wrist_pitch_offset_deg', 0.0)
         self.declare_parameter('right_wrist_yaw_offset_deg', 0.0)
+        self.declare_parameter('stream_fps', 60)
+        self.declare_parameter('pose_publish_hz', 60.0)
         self.declare_parameter('left_elbow_offset_x', 0.0)
         self.declare_parameter('left_elbow_offset_y', 0.0)
         self.declare_parameter('left_elbow_offset_z', 0.0)
@@ -94,7 +96,7 @@ class VRTrajectoryPublisher(Node):
             queue_len=3
         )
 
-        self.fps = 100
+        self.fps = int(self.get_parameter('stream_fps').value)
         self.get_logger().info(f'VR Trajectory server available at: https://{hostname}:8012')
 
         # VR event handlers
@@ -121,16 +123,19 @@ class VRTrajectoryPublisher(Node):
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
 
         # Wrist/elbow pose publishers for visualization
-        self.left_wrist_rviz_pub = self.create_publisher(PoseStamped, '/l_goal_pose', 10)
-        self.right_wrist_rviz_pub = self.create_publisher(PoseStamped, '/r_goal_pose', 10)
-        self.left_elbow_rviz_pub = self.create_publisher(PoseStamped, '/l_elbow_pose', 10)
-        self.right_elbow_rviz_pub = self.create_publisher(PoseStamped, '/r_elbow_pose', 10)
+        # Keep depth=1 to avoid stale-pose queueing in RViz.
+        self.left_wrist_rviz_pub = self.create_publisher(PoseStamped, '/l_goal_pose', 1)
+        self.right_wrist_rviz_pub = self.create_publisher(PoseStamped, '/r_goal_pose', 1)
+        self.left_elbow_rviz_pub = self.create_publisher(PoseStamped, '/l_elbow_pose', 1)
+        self.right_elbow_rviz_pub = self.create_publisher(PoseStamped, '/r_elbow_pose', 1)
 
         # Reactivate service client (call when both A buttons are pressed)
         self.declare_parameter('reactivate_service', '/reactivate')
         self.reactivate_service = str(self.get_parameter('reactivate_service').value)
         self.reactivate_client = self.create_client(Trigger, self.reactivate_service)
         self.both_a_buttons_pressed_prev = False
+        self.reactivate_call_in_flight = False
+        self.last_reactivate_service_warn_sec = 0.0
 
         # Subscriber for VR control toggle
         self.vr_control_sub = self.create_subscription(
@@ -198,6 +203,14 @@ class VRTrajectoryPublisher(Node):
                 self.get_parameter('right_wrist_yaw_offset_deg').get_parameter_value().double_value,
             ], degrees=True),
         }
+        self.pose_publish_hz = float(self.get_parameter('pose_publish_hz').value)
+        self.pose_min_period = (1.0 / self.pose_publish_hz) if self.pose_publish_hz > 0.0 else 0.0
+        self.last_pose_publish_sec = {
+            'left_wrist': 0.0,
+            'right_wrist': 0.0,
+            'left_elbow': 0.0,
+            'right_elbow': 0.0,
+        }
 
         # Thumbstick mode:
         # True: lift + head joints, False: lift + cmd_vel
@@ -261,6 +274,7 @@ class VRTrajectoryPublisher(Node):
             f'left={[self.get_parameter("left_wrist_roll_offset_deg").value, self.get_parameter("left_wrist_pitch_offset_deg").value, self.get_parameter("left_wrist_yaw_offset_deg").value]}, '
             f'right={[self.get_parameter("right_wrist_roll_offset_deg").value, self.get_parameter("right_wrist_pitch_offset_deg").value, self.get_parameter("right_wrist_yaw_offset_deg").value]}'
         )
+        self.get_logger().info(f'Stream fps={self.fps}, pose publish hz={self.pose_publish_hz:.1f}, queue_depth=1')
 
     def vr_control_callback(self, msg):
         """Callback to enable/disable VR publishing based on message content."""
@@ -280,14 +294,23 @@ class VRTrajectoryPublisher(Node):
         return isinstance(value, (int, float)) and np.isfinite(value)
 
     def _call_reactivate(self):
-        """Call reactivate service (non-blocking)."""
-        if not self.reactivate_client.wait_for_service(timeout_sec=0.2):
-            self.get_logger().warn(f'Reactivate service "{self.reactivate_service}" not available')
+        """Call reactivate service without blocking event callbacks."""
+        if self.reactivate_call_in_flight:
             return
+
+        if not self.reactivate_client.service_is_ready():
+            now_sec = self.get_clock().now().nanoseconds / 1e9
+            if (now_sec - self.last_reactivate_service_warn_sec) >= 5.0:
+                self.get_logger().warn(f'Reactivate service "{self.reactivate_service}" not available')
+                self.last_reactivate_service_warn_sec = now_sec
+            return
+
+        self.reactivate_call_in_flight = True
         req = Trigger.Request()
         self.reactivate_client.call_async(req).add_done_callback(self._reactivate_done_callback)
 
     def _reactivate_done_callback(self, future):
+        self.reactivate_call_in_flight = False
         try:
             response = future.result()
             if response.success:
@@ -428,6 +451,10 @@ class VRTrajectoryPublisher(Node):
         try:
             if not self.can_publish_goal_pose():
                 return
+            pose_key = f'{side}_wrist'
+            now_sec = self.get_clock().now().nanoseconds / 1e9
+            if self.pose_min_period > 0.0 and (now_sec - self.last_pose_publish_sec[pose_key]) < self.pose_min_period:
+                return
 
             relative_joint_matrix = self.head_inverse_matrix @ world_joint_matrix
             relative_pos_head, relative_quat_head = self.matrix_to_pose(relative_joint_matrix)
@@ -453,6 +480,7 @@ class VRTrajectoryPublisher(Node):
                 self.left_wrist_rviz_pub.publish(wrist_pose)
             elif side == 'right':
                 self.right_wrist_rviz_pub.publish(wrist_pose)
+            self.last_pose_publish_sec[pose_key] = now_sec
 
         except Exception as e:
             self.get_logger().warn(f'Error publishing wrist pose from matrix for {side}: {e}')
@@ -461,6 +489,10 @@ class VRTrajectoryPublisher(Node):
         """Publish elbow pose from a body joint world matrix."""
         try:
             if not self.can_publish_goal_pose():
+                return
+            pose_key = f'{side}_elbow'
+            now_sec = self.get_clock().now().nanoseconds / 1e9
+            if self.pose_min_period > 0.0 and (now_sec - self.last_pose_publish_sec[pose_key]) < self.pose_min_period:
                 return
 
             relative_joint_matrix = self.head_inverse_matrix @ world_joint_matrix
@@ -487,6 +519,7 @@ class VRTrajectoryPublisher(Node):
                 self.left_elbow_rviz_pub.publish(elbow_pose)
             elif side == 'right':
                 self.right_elbow_rviz_pub.publish(elbow_pose)
+            self.last_pose_publish_sec[pose_key] = now_sec
 
         except Exception as e:
             self.get_logger().warn(f'Error publishing elbow pose from matrix for {side}: {e}')
