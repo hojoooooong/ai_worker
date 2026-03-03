@@ -67,8 +67,15 @@ class VRTrajectoryPublisher(Node):
         self.declare_parameter('right_wrist_roll_offset_deg', 90.0)
         self.declare_parameter('right_wrist_pitch_offset_deg', 0.0)
         self.declare_parameter('right_wrist_yaw_offset_deg', 0.0)
-        self.declare_parameter('stream_fps', 60)
-        self.declare_parameter('pose_publish_hz', 60.0)
+        self.declare_parameter('left_trigger_offset', 0.0)
+        self.declare_parameter('right_trigger_offset', 0.0)
+        self.declare_parameter('left_trigger_scale', 1.0)
+        self.declare_parameter('right_trigger_scale', 1.0)
+        self.declare_parameter('goal_pose_position_scale', 1.1)
+        self.declare_parameter('stream_fps', 30)
+        self.declare_parameter('pose_publish_hz', 30.0)
+        self.declare_parameter('apply_lift_to_arm_z', True)
+        self.declare_parameter('lift_to_arm_z_scale', 1.0)
         self.declare_parameter('left_elbow_offset_x', 0.0)
         self.declare_parameter('left_elbow_offset_y', 0.0)
         self.declare_parameter('left_elbow_offset_z', 0.0)
@@ -203,6 +210,20 @@ class VRTrajectoryPublisher(Node):
                 self.get_parameter('right_wrist_yaw_offset_deg').get_parameter_value().double_value,
             ], degrees=True),
         }
+        self.trigger_offsets = {
+            'left': float(self.get_parameter('left_trigger_offset').value),
+            'right': float(self.get_parameter('right_trigger_offset').value),
+        }
+        self.trigger_scales = {
+            'left': float(self.get_parameter('left_trigger_scale').value),
+            'right': float(self.get_parameter('right_trigger_scale').value),
+        }
+        self.goal_pose_position_scale = float(self.get_parameter('goal_pose_position_scale').value)
+        if not np.isfinite(self.goal_pose_position_scale) or self.goal_pose_position_scale <= 0.0:
+            self.get_logger().warn(
+                f'Invalid goal_pose_position_scale={self.goal_pose_position_scale}; fallback to 1.0'
+            )
+            self.goal_pose_position_scale = 1.0
         self.pose_publish_hz = float(self.get_parameter('pose_publish_hz').value)
         self.pose_min_period = (1.0 / self.pose_publish_hz) if self.pose_publish_hz > 0.0 else 0.0
         self.last_pose_publish_sec = {
@@ -231,8 +252,11 @@ class VRTrajectoryPublisher(Node):
         self.right_stick_swap_xy = True
         self.current_joint_states = None
         self.lift_joint_current_position = 0.0
+        self.lift_reference_position_for_pose = None
         self.head_joint1_current_position = 0.0
         self.head_joint2_current_position = 0.0
+        self.apply_lift_to_arm_z = bool(self.get_parameter('apply_lift_to_arm_z').value)
+        self.lift_to_arm_z_scale = float(self.get_parameter('lift_to_arm_z_scale').value)
         self.control_max_hz = 30.0
         self.control_min_period = 1.0 / self.control_max_hz
         self.last_lift_publish_sec = 0.0
@@ -274,7 +298,16 @@ class VRTrajectoryPublisher(Node):
             f'left={[self.get_parameter("left_wrist_roll_offset_deg").value, self.get_parameter("left_wrist_pitch_offset_deg").value, self.get_parameter("left_wrist_yaw_offset_deg").value]}, '
             f'right={[self.get_parameter("right_wrist_roll_offset_deg").value, self.get_parameter("right_wrist_pitch_offset_deg").value, self.get_parameter("right_wrist_yaw_offset_deg").value]}'
         )
+        self.get_logger().info(
+            f'Trigger calibration | left=(offset={self.trigger_offsets["left"]:+.3f}, scale={self.trigger_scales["left"]:.3f}), '
+            f'right=(offset={self.trigger_offsets["right"]:+.3f}, scale={self.trigger_scales["right"]:.3f})'
+        )
+        self.get_logger().info(f'Goal pose position scale={self.goal_pose_position_scale:.3f}')
         self.get_logger().info(f'Stream fps={self.fps}, pose publish hz={self.pose_publish_hz:.1f}, queue_depth=1')
+        self.get_logger().info(
+            f'Lift->arm Z coupling: enabled={self.apply_lift_to_arm_z}, '
+            f'scale={self.lift_to_arm_z_scale:.3f}'
+        )
 
     def vr_control_callback(self, msg):
         """Callback to enable/disable VR publishing based on message content."""
@@ -329,18 +362,37 @@ class VRTrajectoryPublisher(Node):
         normalized_value = (abs_value - self.deadzone) / (1.0 - self.deadzone)
         return sign * normalized_value
 
+    def calibrate_trigger(self, side, raw_value):
+        """Apply trigger offset/scale calibration and clamp to [0, 1]."""
+        side_key = side if side in ('left', 'right') else 'left'
+        calibrated = (float(raw_value) + self.trigger_offsets[side_key]) * self.trigger_scales[side_key]
+        return float(np.clip(calibrated, 0.0, 1.0))
+
     def joint_states_callback(self, msg):
         """Receive current joint states for incremental joystick control."""
         self.current_joint_states = msg
         if 'lift_joint' in msg.name:
             idx = msg.name.index('lift_joint')
             self.lift_joint_current_position = msg.position[idx]
+            if self.lift_reference_position_for_pose is None:
+                self.lift_reference_position_for_pose = self.lift_joint_current_position
         if 'head_joint1' in msg.name:
             idx = msg.name.index('head_joint1')
             self.head_joint1_current_position = msg.position[idx]
         if 'head_joint2' in msg.name:
             idx = msg.name.index('head_joint2')
             self.head_joint2_current_position = msg.position[idx]
+
+    def get_lift_z_delta_for_arm_pose(self):
+        """Return Z delta applied to arm goals from lift joint motion."""
+        if not self.apply_lift_to_arm_z:
+            return 0.0
+        if self.lift_reference_position_for_pose is None:
+            return 0.0
+        return (
+            (self.lift_joint_current_position - self.lift_reference_position_for_pose)
+            * self.lift_to_arm_z_scale
+        )
 
     def safe_point(self, x, y, z):
         """Create safe Point (filtering NaN/inf values)."""
@@ -433,6 +485,10 @@ class VRTrajectoryPublisher(Node):
         rotation_with_offset = rotation_ros * self.wrist_rotation_offsets[side_key]
         return position_with_offset, rotation_with_offset
 
+    def scale_goal_position(self, position_ros):
+        """Scale head-relative arm target position before base/camera offsets."""
+        return np.asarray(position_ros, dtype=np.float64) * self.goal_pose_position_scale
+
     def get_body_joint_matrix_from_flat(self, body_array, joint_index):
         """Extract a 4x4 body joint matrix from flattened BODY_MOVE array."""
         start_idx = joint_index * 16
@@ -459,10 +515,13 @@ class VRTrajectoryPublisher(Node):
             relative_joint_matrix = self.head_inverse_matrix @ world_joint_matrix
             relative_pos_head, relative_quat_head = self.matrix_to_pose(relative_joint_matrix)
             relative_pos_ros, relative_quat_ros = self.vr_to_ros_transform(relative_pos_head, relative_quat_head)
+            relative_pos_ros = self.scale_goal_position(relative_pos_ros)
             relative_rot_ros = R.from_quat(relative_quat_ros)
 
             # 1) Coordinate conversion 2) camera->base shift 3) user-configurable offsets
             base_position = relative_pos_ros - self.camera_to_base_offset
+            base_position = base_position.copy()
+            base_position[2] += self.get_lift_z_delta_for_arm_pose()
             base_position, base_rotation = self.apply_wrist_offsets(side, base_position, relative_rot_ros)
             arm_quaternion = base_rotation.as_quat()  # [x, y, z, w]
 
@@ -498,9 +557,12 @@ class VRTrajectoryPublisher(Node):
             relative_joint_matrix = self.head_inverse_matrix @ world_joint_matrix
             relative_pos_head, relative_quat_head = self.matrix_to_pose(relative_joint_matrix)
             relative_pos_ros, relative_quat_ros = self.vr_to_ros_transform(relative_pos_head, relative_quat_head)
+            relative_pos_ros = self.scale_goal_position(relative_pos_ros)
             elbow_rotation = R.from_quat(relative_quat_ros)
 
             base_position = relative_pos_ros - self.camera_to_base_offset
+            base_position = base_position.copy()
+            base_position[2] += self.get_lift_z_delta_for_arm_pose()
             side_key = side if side in ('left', 'right') else 'left'
             base_position = base_position + self.elbow_position_offsets[side_key]
             elbow_quaternion = elbow_rotation.as_quat()
@@ -724,6 +786,7 @@ class VRTrajectoryPublisher(Node):
             wrist_pose_relative.position.y * vr_scale,
             wrist_pose_relative.position.z * vr_scale
         ], dtype=np.float64)
+        camera_relative_position = self.scale_goal_position(camera_relative_position)
 
         # Extract relative orientation (head/camera relative, already in ROS coordinate system)
         camera_relative_quaternion = np.array([
@@ -735,6 +798,8 @@ class VRTrajectoryPublisher(Node):
 
         # Transform from camera relative coordinates directly to base_link coordinates
         base_position = camera_relative_position - self.camera_to_base_offset
+        base_position = base_position.copy()
+        base_position[2] += self.get_lift_z_delta_for_arm_pose()
 
         # Use camera relative orientation as is
         camera_relative_rotation = R.from_quat(camera_relative_quaternion)
@@ -880,8 +945,9 @@ class VRTrajectoryPublisher(Node):
 
                 trigger_val = left_state.get('triggerValue')
                 if self.is_valid_float(trigger_val):
+                    calibrated_trigger = self.calibrate_trigger('left', trigger_val)
                     left_trigger_msg = Float32()
-                    left_trigger_msg.data = float(trigger_val)
+                    left_trigger_msg.data = calibrated_trigger
                     self.left_trigger_pub.publish(left_trigger_msg)
             else:
                 self.left_squeeze_value = 0.0
@@ -900,8 +966,9 @@ class VRTrajectoryPublisher(Node):
 
                 trigger_val = right_state.get('triggerValue')
                 if self.is_valid_float(trigger_val):
+                    calibrated_trigger = self.calibrate_trigger('right', trigger_val)
                     right_trigger_msg = Float32()
-                    right_trigger_msg.data = float(trigger_val)
+                    right_trigger_msg.data = calibrated_trigger
                     self.right_trigger_pub.publish(right_trigger_msg)
             else:
                 self.right_squeeze_value = 0.0
@@ -929,13 +996,16 @@ class VRTrajectoryPublisher(Node):
 
             self.controller_log_counter += 1
             if self.controller_log_counter % self.log_every_n == 0:
-                l_trg = float(self.left_controller_state.get('triggerValue', 0.0)) if isinstance(self.left_controller_state, dict) else 0.0
-                r_trg = float(self.right_controller_state.get('triggerValue', 0.0)) if isinstance(self.right_controller_state, dict) else 0.0
+                l_trg_raw = float(self.left_controller_state.get('triggerValue', 0.0)) if isinstance(self.left_controller_state, dict) else 0.0
+                r_trg_raw = float(self.right_controller_state.get('triggerValue', 0.0)) if isinstance(self.right_controller_state, dict) else 0.0
+                l_trg = self.calibrate_trigger('left', l_trg_raw)
+                r_trg = self.calibrate_trigger('right', r_trg_raw)
                 l_stick = self.left_controller_state.get('thumbstickValue', [0.0, 0.0]) if isinstance(self.left_controller_state, dict) else [0.0, 0.0]
                 r_stick = self.right_controller_state.get('thumbstickValue', [0.0, 0.0]) if isinstance(self.right_controller_state, dict) else [0.0, 0.0]
                 self.get_logger().info(
                     f'Controller data received | left_matrix={self.left_controller_matrix is not None}, '
                     f'right_matrix={self.right_controller_matrix is not None}, '
+                    f'left_trigger_raw={l_trg_raw:.3f}, right_trigger_raw={r_trg_raw:.3f}, '
                     f'left_trigger={l_trg:.3f}, right_trigger={r_trg:.3f}, '
                     f'left_stick={l_stick}, right_stick={r_stick}, '
                     f'mode={"LIFT+HEAD" if self.joystick_mode else "LIFT+CMD_VEL"}'

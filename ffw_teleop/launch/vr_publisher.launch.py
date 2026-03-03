@@ -17,8 +17,8 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'type',
             default_value='bh5',
-            description='VR publisher type: bh5 or bg2 (default: bh5)',
-            choices=['bh5', 'bg2']
+            description='VR publisher type: bh5 or sg2 (default: bh5)',
+            choices=['bh5', 'sg2']
         )
     )
 
@@ -73,6 +73,14 @@ def generate_launch_description():
         )
     )
 
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            'sg2_goal_pose_position_scale',
+            default_value='1.0',
+            description='SG2 goal pose position scale (head-relative arm reach gain)'
+        )
+    )
+
     # Get launch configuration
     type = LaunchConfiguration('type')
     vr_publishing_enabled = LaunchConfiguration('vr_publishing_enabled')
@@ -81,6 +89,7 @@ def generate_launch_description():
     scaling_vr = LaunchConfiguration('scaling_vr')
     pitch_offset = LaunchConfiguration('pitch_offset')
     timer_period = LaunchConfiguration('timer_period')
+    sg2_goal_pose_position_scale = LaunchConfiguration('sg2_goal_pose_position_scale')
 
     # Common parameters for both publishers
     common_parameters = {
@@ -107,15 +116,17 @@ def generate_launch_description():
         ],
     )
 
-    # BG2 VR Trajectory Publisher Node
-    vr_trajectory_publisher_bg2_node = Node(
+    # SG2 VR Trajectory Publisher Node (bg2 type kept for compatibility)
+    vr_trajectory_publisher_sg2_node = Node(
         package='ffw_teleop',
-        executable='vr_publisher_bg2',
-        name='vr_trajectory_publisher_bg2',
+        executable='vr_publisher_sg2',
+        name='vr_trajectory_publisher_sg2',
         output='screen',
-        parameters=[common_parameters],
+        parameters=[{
+            'goal_pose_position_scale': sg2_goal_pose_position_scale,
+        }],
         condition=IfCondition(PythonExpression([
-            "'", type, "' == 'bg2'"
+            "'", type, "' == 'sg2'"
         ])),
         remappings=[
             # Add any topic remappings if needed
@@ -124,7 +135,7 @@ def generate_launch_description():
 
     nodes = [
         vr_trajectory_publisher_bh5_node,
-        vr_trajectory_publisher_bg2_node,
+        vr_trajectory_publisher_sg2_node,
     ]
 
     return LaunchDescription(declared_arguments + nodes)
