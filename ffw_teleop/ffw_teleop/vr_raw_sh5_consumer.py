@@ -7,6 +7,7 @@ from nav_msgs.msg import Odometry
 import numpy as np
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from scipy.spatial.transform import Rotation as R
 from std_msgs.msg import Bool
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
@@ -14,15 +15,23 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from ffw_interfaces.msg import HandJoints
 
 
-class VRRawWholeBodyConsumer(Node):
+class VRRawSH5Consumer(Node):
     BODY_HEAD_TO_ROS_POSITION = np.array([
         [0.0, 1.0, 0.0],
         [0.0, 0.0, -1.0],
         [-1.0, 0.0, 0.0],
     ], dtype=np.float64)
 
+    VR_WORLD_TO_ROS_WORLD = np.array([
+        [0.0, 0.0, -1.0],
+        [-1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+    ], dtype=np.float64)
+
+    RELATIVE_ROS_WORLD_TO_BODY_HEAD_ROS = BODY_HEAD_TO_ROS_POSITION @ VR_WORLD_TO_ROS_WORLD.T
+
     def __init__(self):
-        super().__init__('vr_raw_whole_body_consumer')
+        super().__init__('vr_raw_sh5_consumer')
         self.get_logger().set_level(rclpy.logging.LoggingSeverity.INFO)
 
         self.declare_parameter('enable_lift_publishing', True)
@@ -97,13 +106,17 @@ class VRRawWholeBodyConsumer(Node):
             self.base_angular_deadzone = 0.05
 
         self.vr_publishing_enabled = True
+        self.head_reference_valid = False
         self.vr_hand_to_urdf = np.array([
             [0.0, -1.0, 0.0],
             [-1.0, 0.0, 0.0],
             [0.0, 0.0, -1.0],
         ], dtype=np.float64)
         self.body_head_to_ros_rot = R.from_matrix(self.BODY_HEAD_TO_ROS_POSITION)
+        self.relative_ros_world_to_body_head_rot = R.from_matrix(self.RELATIVE_ROS_WORLD_TO_BODY_HEAD_ROS)
         self.ros_to_body_head_position = self.BODY_HEAD_TO_ROS_POSITION.T
+        self.head_transform_matrix = np.eye(4, dtype=np.float64)
+        self.head_inverse_matrix = np.eye(4, dtype=np.float64)
         self.zedm_to_base_offset = np.array([
             0.0 - 0.0238122 - 0.040 - 0.049483 - 0.0055,
             0.0,
@@ -142,6 +155,11 @@ class VRRawWholeBodyConsumer(Node):
         self.latest_right_wrist = None
         self.latest_left_hand = None
         self.latest_right_hand = None
+        self.vr_stream_qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+        )
 
         self.left_hand_pos_pub = self.create_publisher(HandJoints, '/left_hand/hand_joint_pos', 10)
         self.right_hand_pos_pub = self.create_publisher(HandJoints, '/right_hand/hand_joint_pos', 10)
@@ -157,19 +175,19 @@ class VRRawWholeBodyConsumer(Node):
 
         self.create_subscription(Bool, '/vr_control/toggle', self.vr_control_callback, 10)
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
-        self.create_subscription(PoseStamped, '/vr/raw/head_pose', self.head_pose_callback, 10)
-        self.create_subscription(PoseStamped, '/vr/raw/left_wrist_pose', self.left_wrist_callback, 10)
-        self.create_subscription(PoseStamped, '/vr/raw/right_wrist_pose', self.right_wrist_callback, 10)
-        self.create_subscription(PoseStamped, '/vr/raw/left_elbow_pose', self.left_elbow_callback, 10)
-        self.create_subscription(PoseStamped, '/vr/raw/right_elbow_pose', self.right_elbow_callback, 10)
-        self.create_subscription(PoseArray, '/vr/raw/left_hand_points', self.left_hand_callback, 10)
-        self.create_subscription(PoseArray, '/vr/raw/right_hand_points', self.right_hand_callback, 10)
+        self.create_subscription(PoseStamped, '/vr/raw/head_pose_ros', self.head_pose_callback, self.vr_stream_qos)
+        self.create_subscription(PoseStamped, '/vr/raw/left_wrist_pose_ros', self.left_wrist_callback, self.vr_stream_qos)
+        self.create_subscription(PoseStamped, '/vr/raw/right_wrist_pose_ros', self.right_wrist_callback, self.vr_stream_qos)
+        self.create_subscription(PoseStamped, '/vr/raw/left_elbow_pose_ros', self.left_elbow_callback, self.vr_stream_qos)
+        self.create_subscription(PoseStamped, '/vr/raw/right_elbow_pose_ros', self.right_elbow_callback, self.vr_stream_qos)
+        self.create_subscription(PoseArray, '/vr/raw/left_hand_points_ros', self.left_hand_callback, self.vr_stream_qos)
+        self.create_subscription(PoseArray, '/vr/raw/right_hand_points_ros', self.right_hand_callback, self.vr_stream_qos)
 
         self.status_timer = self.create_timer(5.0, self.log_status)
 
-        self.get_logger().info('VR raw whole-body consumer started')
+        self.get_logger().info('VR raw SH5 consumer started')
         self.get_logger().info(
-            'Subscribers: /vr/raw/head_pose, /vr/raw/*_wrist_pose, /vr/raw/*_elbow_pose, /vr/raw/*_hand_points'
+            'Subscribers: /vr/raw/head_pose_ros, /vr/raw/*_wrist_pose_ros, /vr/raw/*_elbow_pose_ros, /vr/raw/*_hand_points_ros'
         )
 
     def odom_callback(self, msg):
@@ -193,6 +211,7 @@ class VRRawWholeBodyConsumer(Node):
         self.last_lift_time = None
         self.z_calibrated = False
         self.head_height_offset_for_arms = 0.0
+        self.head_reference_valid = False
         self.latest_left_wrist = None
         self.latest_right_wrist = None
         self.latest_left_hand = None
@@ -202,6 +221,8 @@ class VRRawWholeBodyConsumer(Node):
             self.initial_camera_height = None
             self.initial_camera_position = None
             self.initial_camera_yaw = None
+            self.head_transform_matrix = np.eye(4, dtype=np.float64)
+            self.head_inverse_matrix = np.eye(4, dtype=np.float64)
             if self.current_odom is not None:
                 pos = self.current_odom.pose.pose.position
                 quat = self.current_odom.pose.pose.orientation
@@ -225,6 +246,8 @@ class VRRawWholeBodyConsumer(Node):
     def head_pose_callback(self, msg):
         if not self.vr_publishing_enabled:
             return
+        if msg.header.frame_id != 'ros_world':
+            return
 
         pos = np.array([
             msg.pose.position.x,
@@ -240,6 +263,15 @@ class VRRawWholeBodyConsumer(Node):
         if not (np.all(np.isfinite(pos)) and np.all(np.isfinite(quat))):
             return
 
+        head_matrix = self.pose_to_matrix(msg.pose)
+        if abs(float(np.linalg.det(head_matrix[:3, :3]))) < 1e-6:
+            return
+        self.head_transform_matrix = head_matrix
+        try:
+            self.head_inverse_matrix = np.linalg.inv(head_matrix)
+        except np.linalg.LinAlgError:
+            return
+        self.head_reference_valid = True
         self.head_ros_quat = quat
         current_camera_height = float(pos[2])
         current_camera_position = np.array([pos[0], pos[1]], dtype=np.float64)
@@ -306,11 +338,15 @@ class VRRawWholeBodyConsumer(Node):
         self.process_hand_messages(wrist_msg, hand_msg, side)
 
     def process_elbow_pose(self, msg, side):
-        if not self.vr_publishing_enabled:
+        if not self.vr_publishing_enabled or not self.head_reference_valid:
             return
-        position, quaternion = self.pose_to_numpy(msg)
-        if msg.header.frame_id != 'vr_head' and self.hand_pose_is_head_relative:
+        if msg.header.frame_id != 'ros_world':
             return
+
+        relative_pose = self.compute_relative_body_head_pose(msg.pose)
+        if relative_pose is None:
+            return
+        position, quaternion = relative_pose
 
         publisher = self.left_elbow_pub if side == 'left' else self.right_elbow_pub
         self.publish_relative_pose(
@@ -329,14 +365,18 @@ class VRRawWholeBodyConsumer(Node):
     def process_hand_messages(self, wrist_msg, hand_msg, side):
         if len(hand_msg.poses) != 21:
             return
-        if hand_msg.header.frame_id != 'vr_head' and self.hand_pose_is_head_relative:
+        if not self.head_reference_valid:
+            return
+        if wrist_msg.header.frame_id != 'ros_world' or hand_msg.header.frame_id != 'ros_world':
             return
 
-        wrist_pos_ros, wrist_quat_ros = self.pose_to_numpy(wrist_msg)
-        positions_ros = np.array([
-            [pose.position.x, pose.position.y, pose.position.z]
-            for pose in hand_msg.poses
-        ], dtype=np.float64)
+        relative_wrist = self.compute_relative_body_head_pose(wrist_msg.pose)
+        if relative_wrist is None:
+            return
+        wrist_pos_ros, wrist_quat_ros = relative_wrist
+        positions_ros = self.compute_relative_body_head_positions(hand_msg.poses)
+        if positions_ros is None:
+            return
         if not (np.all(np.isfinite(positions_ros)) and np.all(np.isfinite(wrist_pos_ros)) and np.all(np.isfinite(wrist_quat_ros))):
             return
 
@@ -677,6 +717,58 @@ class VRRawWholeBodyConsumer(Node):
         ], dtype=np.float64)
         return position, quaternion
 
+    def pose_to_matrix(self, pose):
+        rotation = R.from_quat([
+            pose.orientation.x,
+            pose.orientation.y,
+            pose.orientation.z,
+            pose.orientation.w,
+        ])
+        matrix = np.eye(4, dtype=np.float64)
+        matrix[:3, :3] = rotation.as_matrix()
+        matrix[:3, 3] = np.array([
+            pose.position.x,
+            pose.position.y,
+            pose.position.z,
+        ], dtype=np.float64)
+        return matrix
+
+    def matrix_to_pose(self, mat):
+        pos = mat[:3, 3]
+        quat = R.from_matrix(mat[:3, :3]).as_quat()
+        return pos, quat
+
+    def compute_relative_body_head_pose(self, pose):
+        world_matrix = self.pose_to_matrix(pose)
+        relative_joint_matrix = self.head_inverse_matrix @ world_matrix
+        relative_pos_ros_world, relative_quat_ros_world = self.matrix_to_pose(relative_joint_matrix)
+        return self.relative_ros_world_to_body_head_transform(
+            relative_pos_ros_world, relative_quat_ros_world
+        )
+
+    def compute_relative_body_head_positions(self, poses):
+        positions_ros = []
+        head_rot_inv = self.head_inverse_matrix[:3, :3]
+        head_translation = self.head_inverse_matrix[:3, 3]
+        for pose in poses:
+            world_pos = np.array([
+                pose.position.x,
+                pose.position.y,
+                pose.position.z,
+            ], dtype=np.float64)
+            if not np.all(np.isfinite(world_pos)):
+                return None
+            relative_pos_ros_world = head_rot_inv @ world_pos + head_translation
+            positions_ros.append(self.RELATIVE_ROS_WORLD_TO_BODY_HEAD_ROS @ relative_pos_ros_world)
+        return np.asarray(positions_ros, dtype=np.float64)
+
+    def relative_ros_world_to_body_head_transform(self, ros_world_pos, ros_world_quat):
+        body_head_pos = self.RELATIVE_ROS_WORLD_TO_BODY_HEAD_ROS @ np.asarray(ros_world_pos, dtype=np.float64)
+        ros_world_rot = R.from_quat(ros_world_quat).as_matrix()
+        body_head_rot = self.RELATIVE_ROS_WORLD_TO_BODY_HEAD_ROS @ ros_world_rot @ self.VR_WORLD_TO_ROS_WORLD
+        body_head_quat = R.from_matrix(body_head_rot).as_quat()
+        return body_head_pos, body_head_quat
+
     def velocity_from_error(self, err, kp, deadzone, max_vel):
         if abs(err) <= deadzone:
             return 0.0
@@ -701,7 +793,7 @@ class VRRawWholeBodyConsumer(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = VRRawWholeBodyConsumer()
+    node = VRRawSH5Consumer()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
