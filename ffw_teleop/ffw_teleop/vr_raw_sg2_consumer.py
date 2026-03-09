@@ -13,6 +13,23 @@ from std_srvs.srv import Trigger
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
 
+VR_HEAD_TO_ROS = np.array([
+    [0.0, 1.0, 0.0],
+    [0.0, 0.0, -1.0],
+    [-1.0, 0.0, 0.0],
+], dtype=np.float64)
+
+VR_WORLD_TO_ROS_WORLD = np.array([
+    [0.0, 0.0, -1.0],
+    [-1.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0],
+], dtype=np.float64)
+
+# Convert relative transforms computed in ros_world into the head-relative ROS axes
+# used by the original vr_publisher_sg2.py pipeline.
+RELATIVE_ROS_WORLD_TO_SG2_ROS = VR_HEAD_TO_ROS @ VR_WORLD_TO_ROS_WORLD.T
+
+
 class VRRawSG2Consumer(Node):
     def __init__(self):
         super().__init__('vr_raw_sg2_consumer')
@@ -50,6 +67,7 @@ class VRRawSG2Consumer(Node):
         self.head_reference_valid = False
         self.head_transform_matrix = np.eye(4, dtype=np.float64)
         self.head_inverse_matrix = np.eye(4, dtype=np.float64)
+        self.relative_ros_world_to_sg2_ros_rot = R.from_matrix(RELATIVE_ROS_WORLD_TO_SG2_ROS)
 
         self.head_joint_pub = self.create_publisher(JointTrajectory, '/leader/joystick_controller_left/joint_trajectory', 10)
         self.lift_joint_pub = self.create_publisher(JointTrajectory, '/leader/joystick_controller_right/joint_trajectory', 10)
@@ -324,7 +342,10 @@ class VRRawSG2Consumer(Node):
 
         world_matrix = self.pose_to_matrix(msg.pose)
         relative_joint_matrix = self.head_inverse_matrix @ world_matrix
-        relative_pos_ros, relative_quat_ros = self.matrix_to_pose(relative_joint_matrix)
+        relative_pos_ros_world, relative_quat_ros_world = self.matrix_to_pose(relative_joint_matrix)
+        relative_pos_ros, relative_quat_ros = self.relative_ros_world_to_sg2_ros_transform(
+            relative_pos_ros_world, relative_quat_ros_world
+        )
         relative_pos_ros = self.scale_goal_position(relative_pos_ros)
         relative_rot_ros = R.from_quat(relative_quat_ros)
 
@@ -356,7 +377,10 @@ class VRRawSG2Consumer(Node):
 
         world_matrix = self.pose_to_matrix(msg.pose)
         relative_joint_matrix = self.head_inverse_matrix @ world_matrix
-        relative_pos_ros, relative_quat_ros = self.matrix_to_pose(relative_joint_matrix)
+        relative_pos_ros_world, relative_quat_ros_world = self.matrix_to_pose(relative_joint_matrix)
+        relative_pos_ros, relative_quat_ros = self.relative_ros_world_to_sg2_ros_transform(
+            relative_pos_ros_world, relative_quat_ros_world
+        )
         relative_pos_ros = self.scale_goal_position(relative_pos_ros)
 
         base_position = relative_pos_ros - self.camera_to_base_offset
@@ -581,6 +605,16 @@ class VRRawSG2Consumer(Node):
         pos = mat[:3, 3]
         quat = R.from_matrix(mat[:3, :3]).as_quat()
         return pos, quat
+
+    def relative_ros_world_to_sg2_ros_transform(self, ros_world_pos, ros_world_quat):
+        sg2_pos = RELATIVE_ROS_WORLD_TO_SG2_ROS @ np.asarray(ros_world_pos, dtype=np.float64)
+        ros_world_rotation = R.from_quat(ros_world_quat)
+        sg2_rotation = (
+            self.relative_ros_world_to_sg2_ros_rot
+            * ros_world_rotation
+            * self.relative_ros_world_to_sg2_ros_rot.inv()
+        )
+        return sg2_pos, sg2_rotation.as_quat()
 
     def is_valid_float(self, value):
         return isinstance(value, (int, float)) and np.isfinite(value)
