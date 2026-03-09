@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 
-import math
-
-from geometry_msgs.msg import Point, Pose, PoseStamped, Quaternion, Twist
+from geometry_msgs.msg import Point, PoseStamped, Quaternion, Twist
 import numpy as np
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from scipy.spatial.transform import Rotation as R
 from sensor_msgs.msg import Joy, JointState
 from std_msgs.msg import Bool, Float32
@@ -69,6 +68,12 @@ class VRRawSG2Consumer(Node):
         self.head_inverse_matrix = np.eye(4, dtype=np.float64)
         self.relative_ros_world_to_sg2_ros_rot = R.from_matrix(RELATIVE_ROS_WORLD_TO_SG2_ROS)
 
+        self.vr_stream_qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+        )
+
         self.head_joint_pub = self.create_publisher(JointTrajectory, '/leader/joystick_controller_left/joint_trajectory', 10)
         self.lift_joint_pub = self.create_publisher(JointTrajectory, '/leader/joystick_controller_right/joint_trajectory', 10)
         self.left_squeeze_pub = self.create_publisher(Float32, '/vr_controller/left_squeeze', 10)
@@ -89,13 +94,13 @@ class VRRawSG2Consumer(Node):
 
         self.create_subscription(Bool, '/vr_control/toggle', self.vr_control_callback, 10)
         self.create_subscription(JointState, '/joint_states', self.joint_states_callback, 10)
-        self.create_subscription(PoseStamped, '/vr/raw/controller/head_pose_ros', self.head_pose_callback, 10)
-        self.create_subscription(Joy, '/vr/raw/controller/left_state', self.left_state_callback, 10)
-        self.create_subscription(Joy, '/vr/raw/controller/right_state', self.right_state_callback, 10)
-        self.create_subscription(PoseStamped, '/vr/raw/controller/left_pose_ros', self.left_pose_callback, 10)
-        self.create_subscription(PoseStamped, '/vr/raw/controller/right_pose_ros', self.right_pose_callback, 10)
-        self.create_subscription(PoseStamped, '/vr/raw/controller/left_elbow_pose_ros', self.left_elbow_callback, 10)
-        self.create_subscription(PoseStamped, '/vr/raw/controller/right_elbow_pose_ros', self.right_elbow_callback, 10)
+        self.create_subscription(PoseStamped, '/vr/raw/controller/head_pose_ros', self.head_pose_callback, self.vr_stream_qos)
+        self.create_subscription(Joy, '/vr/raw/controller/left_state', self.left_state_callback, self.vr_stream_qos)
+        self.create_subscription(Joy, '/vr/raw/controller/right_state', self.right_state_callback, self.vr_stream_qos)
+        self.create_subscription(PoseStamped, '/vr/raw/controller/left_pose_ros', self.left_pose_callback, self.vr_stream_qos)
+        self.create_subscription(PoseStamped, '/vr/raw/controller/right_pose_ros', self.right_pose_callback, self.vr_stream_qos)
+        self.create_subscription(PoseStamped, '/vr/raw/controller/left_elbow_pose_ros', self.left_elbow_callback, self.vr_stream_qos)
+        self.create_subscription(PoseStamped, '/vr/raw/controller/right_elbow_pose_ros', self.right_elbow_callback, self.vr_stream_qos)
 
         self.left_controller_state = self.default_controller_state()
         self.right_controller_state = self.default_controller_state()
@@ -340,12 +345,10 @@ class VRRawSG2Consumer(Node):
         if self.pose_min_period > 0.0 and (now_sec - self.last_pose_publish_sec[pose_key]) < self.pose_min_period:
             return
 
-        world_matrix = self.pose_to_matrix(msg.pose)
-        relative_joint_matrix = self.head_inverse_matrix @ world_matrix
-        relative_pos_ros_world, relative_quat_ros_world = self.matrix_to_pose(relative_joint_matrix)
-        relative_pos_ros, relative_quat_ros = self.relative_ros_world_to_sg2_ros_transform(
-            relative_pos_ros_world, relative_quat_ros_world
-        )
+        relative_pose = self.compute_relative_sg2_pose(msg)
+        if relative_pose is None:
+            return
+        relative_pos_ros, relative_quat_ros = relative_pose
         relative_pos_ros = self.scale_goal_position(relative_pos_ros)
         relative_rot_ros = R.from_quat(relative_quat_ros)
 
@@ -375,12 +378,10 @@ class VRRawSG2Consumer(Node):
         if self.pose_min_period > 0.0 and (now_sec - self.last_pose_publish_sec[pose_key]) < self.pose_min_period:
             return
 
-        world_matrix = self.pose_to_matrix(msg.pose)
-        relative_joint_matrix = self.head_inverse_matrix @ world_matrix
-        relative_pos_ros_world, relative_quat_ros_world = self.matrix_to_pose(relative_joint_matrix)
-        relative_pos_ros, relative_quat_ros = self.relative_ros_world_to_sg2_ros_transform(
-            relative_pos_ros_world, relative_quat_ros_world
-        )
+        relative_pose = self.compute_relative_sg2_pose(msg)
+        if relative_pose is None:
+            return
+        relative_pos_ros, relative_quat_ros = relative_pose
         relative_pos_ros = self.scale_goal_position(relative_pos_ros)
 
         base_position = relative_pos_ros - self.camera_to_base_offset
@@ -605,6 +606,14 @@ class VRRawSG2Consumer(Node):
         pos = mat[:3, 3]
         quat = R.from_matrix(mat[:3, :3]).as_quat()
         return pos, quat
+
+    def compute_relative_sg2_pose(self, msg):
+        world_matrix = self.pose_to_matrix(msg.pose)
+        relative_joint_matrix = self.head_inverse_matrix @ world_matrix
+        relative_pos_ros_world, relative_quat_ros_world = self.matrix_to_pose(relative_joint_matrix)
+        return self.relative_ros_world_to_sg2_ros_transform(
+            relative_pos_ros_world, relative_quat_ros_world
+        )
 
     def relative_ros_world_to_sg2_ros_transform(self, ros_world_pos, ros_world_quat):
         sg2_pos = RELATIVE_ROS_WORLD_TO_SG2_ROS @ np.asarray(ros_world_pos, dtype=np.float64)
