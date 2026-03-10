@@ -1,6 +1,7 @@
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 Changelog for package ffw
 ^^^^^^^^^^^^^^^^^^^^^^^^^
+
 1.1.19 (2026-02-19)
 -------------------
 * Added MPPI navigation mode
