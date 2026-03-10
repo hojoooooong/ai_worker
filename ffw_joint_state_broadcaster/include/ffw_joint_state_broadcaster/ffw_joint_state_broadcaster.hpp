@@ -91,6 +91,7 @@ protected:
   {
     std::string topic_name;
     std::vector<std::string> joints;
+    std::vector<double> offsets;  // Per-joint position offsets (empty = no offset)
   };
 
   // Real-time safe handle for interface data access
@@ -105,6 +106,7 @@ protected:
     bool has_position;             // Whether this interface provides position data
     bool has_velocity;             // Whether this interface provides velocity data
     bool has_effort;               // Whether this interface provides effort data
+    double position_offset;        // Offset to add to position (for alignment with joint_trajectory_command_broadcaster)
   };
 
   // Group information for fast access

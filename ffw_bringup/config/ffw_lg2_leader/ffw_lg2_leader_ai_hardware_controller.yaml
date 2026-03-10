@@ -133,6 +133,7 @@
             - arm_l_joint6
             - arm_l_joint7
             - gripper_l_joint1
+          offsets: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3]  # same as left_offsets
         arm_right_leader:
           topic_name: "/robot/arm_right_leader/joint_states"
           joints:
@@ -144,6 +145,7 @@
             - arm_r_joint6
             - arm_r_joint7
             - gripper_r_joint1
+          offsets: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3]  # same as right_offsets
         head_leader:
           topic_name: "/robot/head_leader/joint_states"
           joints:

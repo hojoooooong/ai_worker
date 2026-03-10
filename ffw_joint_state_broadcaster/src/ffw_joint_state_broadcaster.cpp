@@ -194,6 +194,33 @@ controller_interface::CallbackReturn FFWJointStateBroadcaster::on_configure(
       continue;
     }
 
+    // Read optional offsets parameter (must match joints size if provided)
+    std::string offsets_param = "joint_groups." + group_name + ".offsets";
+    if (!get_node()->has_parameter(offsets_param)) {
+      get_node()->declare_parameter(offsets_param, std::vector<double>());
+    }
+    try {
+      config.offsets = get_node()->get_parameter(offsets_param).as_double_array();
+    } catch (const std::exception & e) {
+      RCLCPP_DEBUG(
+        get_node()->get_logger(),
+        "Failed to get 'offsets' for group '%s': %s. Using zeros.",
+        group_name.c_str(), e.what());
+      config.offsets.clear();
+    }
+
+    if (!config.offsets.empty() && config.offsets.size() != config.joints.size()) {
+      RCLCPP_ERROR(
+        get_node()->get_logger(),
+        "The number of offsets (%zu) for group '%s' does not match the number of joints (%zu).",
+        config.offsets.size(), group_name.c_str(), config.joints.size());
+      return controller_interface::CallbackReturn::ERROR;
+    }
+
+    if (config.offsets.empty()) {
+      config.offsets.assign(config.joints.size(), 0.0);
+    }
+
     joint_groups_[group_name] = config;
   }
 
@@ -368,6 +395,7 @@ bool FFWJointStateBroadcaster::init_publishing_handles()
     const auto & [group_idx, joint_idx] = it->second;
 
     // Create handle for this interface
+    const auto & config = joint_groups_[group_names_[group_idx]];
     InterfaceHandle handle;
     handle.state_interface_index = interface_idx;
     handle.group_index = group_idx;
@@ -379,6 +407,10 @@ bool FFWJointStateBroadcaster::init_publishing_handles()
     handle.msg_position_index = handle.has_position ? joint_idx : SIZE_MAX;
     handle.msg_velocity_index = handle.has_velocity ? joint_idx : SIZE_MAX;
     handle.msg_effort_index = handle.has_effort ? joint_idx : SIZE_MAX;
+
+    // Set position offset (applied only for position interfaces)
+    handle.position_offset =
+      (handle.has_position && joint_idx < config.offsets.size()) ? config.offsets[joint_idx] : 0.0;
 
     // Add handle to the corresponding group's vector (pre-grouped for efficient iteration)
     handles_per_group_[group_idx].push_back(handle);
@@ -450,9 +482,9 @@ void FFWJointStateBroadcaster::publish_joint_states(const rclcpp::Time & time)
       const double val = *value;
 
       // Copy value directly to pre-allocated message position
-      // No push_back, no reallocation, just direct assignment
+      // Apply position_offset for alignment with joint_trajectory_command_broadcaster
       if (handle.has_position && handle.msg_position_index != SIZE_MAX) {
-        msg.position[handle.msg_position_index] = val;
+        msg.position[handle.msg_position_index] = val + handle.position_offset;
       }
       if (handle.has_velocity && handle.msg_velocity_index != SIZE_MAX) {
         msg.velocity[handle.msg_velocity_index] = val;

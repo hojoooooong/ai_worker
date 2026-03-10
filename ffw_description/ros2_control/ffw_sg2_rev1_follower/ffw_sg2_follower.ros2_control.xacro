@@ -609,8 +609,8 @@
         <param name="Acceleration Limit">1010</param>
         <param name="Return Delay Time">0</param>
         <param name="Profile Velocity">12592</param>
-        <param name="Profile Acceleration Time">500</param>
-        <param name="Profile Time">1000</param>
+        <param name="Profile Acceleration Time">250</param>
+        <param name="Profile Time">500</param>
       </gpio>
       <!-- RIGHT WHEEL -->
       <gpio name="dxl103">
@@ -630,8 +630,8 @@
         <param name="Acceleration Limit">1010</param>
         <param name="Return Delay Time">0</param>
         <param name="Profile Velocity">12592</param>
-        <param name="Profile Acceleration Time">500</param>
-        <param name="Profile Time">1000</param>
+        <param name="Profile Acceleration Time">250</param>
+        <param name="Profile Time">500</param>
       </gpio>
       <!-- REAR WHEEL -->
       <gpio name="dxl105">
@@ -651,8 +651,8 @@
         <param name="Acceleration Limit">1010</param>
         <param name="Return Delay Time">0</param>
         <param name="Profile Velocity">12592</param>
-        <param name="Profile Acceleration Time">500</param>
-        <param name="Profile Time">1000</param>
+        <param name="Profile Acceleration Time">250</param>
+        <param name="Profile Time">500</param>
       </gpio>
     </ros2_control>
   </xacro:macro>

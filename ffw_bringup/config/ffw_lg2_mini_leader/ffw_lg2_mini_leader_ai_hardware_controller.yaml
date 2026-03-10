@@ -93,7 +93,7 @@
       sensorxel_r_joy_joint_trajectory_topic: "/leader/joystick_controller_right/joint_trajectory"
       sensorxel_l_joy_jog_scale: 0.06
       sensorxel_r_joy_jog_scale: 0.01
-      deadzone: 0.05
+      deadzone: 10.0
 
 /**:
   ffw_joint_state_broadcaster:
@@ -115,6 +115,7 @@
             - arm_l_joint6
             - arm_l_joint7
             - gripper_l_joint1
+          offsets: [0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.1]  # same as left_offsets
         arm_right_leader:
           topic_name: "/robot/arm_right_leader/joint_states"
           joints:
@@ -126,6 +127,7 @@
             - arm_r_joint6
             - arm_r_joint7
             - gripper_r_joint1
+          offsets: [0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.1]  # same as right_offsets
         head_leader:
           topic_name: "/robot/head_leader/joint_states"
           joints:
