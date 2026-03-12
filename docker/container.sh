@@ -42,7 +42,7 @@ start_container() {
     fi
 
     # Notice: rmw_zenoh_cpp is default from 1.2.0
-    print_notice
+    #print_notice
 
     # Notify if an update is available (meta package version vs GitHub latest release)
     CURRENT_VER=$(get_current_version)
@@ -84,7 +84,7 @@ enter_container() {
     fi
 
     # Notice
-    print_notice
+    # print_notice
 
     # Notify if an update is available (meta package version vs git tag)
     CURRENT_VER=$(get_current_version)
