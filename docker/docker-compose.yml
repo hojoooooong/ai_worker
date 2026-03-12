@@ -1,10 +1,7 @@
 services:
   ai_worker:
     container_name: ai_worker
-    image: robotis/ai-worker:1.2.0
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.amd64
+    image: robotis/ai-worker:amd64-1.2.0
     tty: true
     restart: always
     cap_add:
