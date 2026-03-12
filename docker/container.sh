@@ -3,6 +3,8 @@
 # Get the directory where the script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 CONTAINER_NAME="ai_worker"
+GITHUB_RELEASES_API="https://api.github.com/repos/ROBOTIS-GIT/ai_worker/releases/latest"
+META_PACKAGE_XML="${SCRIPT_DIR}/../ffw/package.xml"
 
 # Function to display help
 show_help() {
@@ -31,6 +33,23 @@ start_container() {
     fi
 
     echo "Starting ai_worker container..."
+
+    # Ensure talos-system-manager (talos CLI) is installed
+    if ! pip show talos-system-manager &>/dev/null; then
+        echo "Installing talos-system-manager (talos CLI)..."
+        pip install talos-system-manager
+        talos up
+    fi
+
+    # Notice: rmw_zenoh_cpp is default from 1.2.0
+    print_notice
+
+    # Notify if an update is available (meta package version vs GitHub latest release)
+    CURRENT_VER=$(get_current_version)
+    LATEST_VER=$(get_latest_version)
+    if update_available "${CURRENT_VER}" "${LATEST_VER}"; then
+        print_update_notice "${CURRENT_VER}" "${LATEST_VER}"
+    fi
 
     # Copy udev rule for FTDI (U2D2)
     sudo cp "${SCRIPT_DIR}/99-u2d2.rules" /etc/udev/rules.d/99-u2d2.rules
@@ -63,6 +82,17 @@ enter_container() {
         echo "Error: Container is not running"
         exit 1
     fi
+
+    # Notice
+    print_notice
+
+    # Notify if an update is available (meta package version vs git tag)
+    CURRENT_VER=$(get_current_version)
+    GIT_VER=$(get_latest_version)
+    if update_available "${CURRENT_VER}" "${GIT_VER}"; then
+        print_update_notice "${CURRENT_VER}" "${GIT_VER}"
+    fi
+
     docker exec -it "$CONTAINER_NAME" bash
 }
 
@@ -82,6 +112,79 @@ stop_container() {
         echo "Operation cancelled."
         exit 0
     fi
+}
+
+# Get current version from meta package (ffw) package.xml
+print_update_notice() {
+    local current_ver="$1"
+    local latest_ver="$2"
+    W=52
+    BAR=$(printf '%*s' $W '' | tr ' ' '=')
+    LINE1="New version available: ${latest_ver} (current: ${current_ver})."
+    LINE2="1. Stop Container: ./container.sh stop"
+    LINE3="2. Pull Git Repo: git pull origin jazzy"
+    LINE4="3. Start Container: ./container.sh start"
+    echo ""
+    echo "  +${BAR}+"
+    printf "  |  %-$((W-2))s|\n" "$LINE1"
+    printf "  |  %-$((W-2))s|\n" "$LINE2"
+    printf "  |  %-$((W-2))s|\n" "$LINE3"
+    printf "  |  %-$((W-2))s|\n" "$LINE4"
+    echo "  +${BAR}+"
+    echo ""
+}
+
+print_notice() {
+    W=58
+    BAR=$(printf '%*s' $W '' | tr ' ' '=')
+    # Current host (robot) IP for Talos UI URL
+    HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+    [ -z "$HOST_IP" ] && HOST_IP=$(ip -4 route get 8.8.8.8 2>/dev/null | grep -oP 'src \K\S+')
+    [ -z "$HOST_IP" ] && HOST_IP="<host-ip>"
+    LINE1="From 1.2.0, rmw_zenoh_cpp is used by default."
+    LINE2="Enter TALOS System Manager: http://${HOST_IP}:3000"
+    echo ""
+    echo "  +${BAR}+"
+    printf "  |  %-$((W-2))s|\n" "$LINE1"
+    printf "  |  %-$((W-2))s|\n" "$LINE2"
+    echo "  +${BAR}+"
+    echo ""
+}
+
+get_current_version() {
+    local ver
+    if [ -f "${META_PACKAGE_XML}" ]; then
+        ver=$(sed -n 's/.*<version>\([^<]*\)<\/version>.*/\1/p' "${META_PACKAGE_XML}" | head -1)
+    fi
+    echo "${ver:-unknown}"
+}
+
+# Get latest version from GitHub releases (ROBOTIS-GIT/ai_worker)
+get_latest_version() {
+    local json tag
+    json=$(curl -sL --connect-timeout 5 "${GITHUB_RELEASES_API}" 2>/dev/null)
+    tag=$(echo "${json}" | sed -n 's/.*"tag_name":\s*"\([^"]*\)".*/\1/p' | head -1)
+    # Strip optional 'v' prefix for comparison with package.xml
+    if [ -n "${tag}" ]; then
+        echo "${tag#v}"
+    else
+        echo ""
+    fi
+}
+
+# Check if the latest version is newer than the current version
+update_available() {
+    local current="$1"
+    local git_ver="$2"
+    if [ -z "${git_ver}" ]; then
+        return 1
+    fi
+    if [ "${git_ver}" = "${current}" ]; then
+        return 1
+    fi
+    local newer
+    newer=$(echo -e "${current}\n${git_ver}" | sort -V | tail -1)
+    [ "${newer}" = "${git_ver}" ]
 }
 
 # Main command handling
