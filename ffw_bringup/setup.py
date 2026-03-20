@@ -37,6 +37,8 @@ setup(
          glob('config/ffw_lg2_rev3_leader/*')),
         (os.path.join('share', package_name, 'config/ffw_lg2_rev4_leader'),
          glob('config/ffw_lg2_rev4_leader/*')),
+        (os.path.join('share', package_name, 'config/ffw_lg2_rev3_leader_current'),
+         glob('config/ffw_lg2_rev3_leader_current/*')),
         (os.path.join('share', package_name, 'config/common'), glob('config/common/*')),
         ('share/' + package_name + '/worlds', glob('worlds/*.sdf')),
     ],

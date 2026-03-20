@@ -48,25 +48,46 @@
         <state_interface name="velocity"/>
       </joint>
       <joint name="arm_l_joint1">
+        <command_interface name="effort"/>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
       </joint>
       <joint name="arm_l_joint2">
+        <command_interface name="effort"/>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
       </joint>
       <joint name="arm_l_joint3">
+        <command_interface name="effort"/>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
       </joint>
       <joint name="arm_l_joint4">
+        <command_interface name="effort"/>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
       </joint>
       <joint name="arm_l_joint5">
+        <command_interface name="effort"/>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
       </joint>
       <joint name="arm_l_joint6">
+        <command_interface name="effort"/>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
       </joint>
       <joint name="arm_l_joint7">
+        <command_interface name="effort"/>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
       </joint>
 
       <sensor name="sensorxel_r_joy">
@@ -80,25 +101,46 @@
         <state_interface name="velocity"/>
       </joint>
       <joint name="arm_r_joint1">
+        <command_interface name="effort"/>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
       </joint>
       <joint name="arm_r_joint2">
+        <command_interface name="effort"/>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
       </joint>
       <joint name="arm_r_joint3">
+        <command_interface name="effort"/>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
       </joint>
       <joint name="arm_r_joint4">
+        <command_interface name="effort"/>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
       </joint>
       <joint name="arm_r_joint5">
+        <command_interface name="effort"/>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
       </joint>
       <joint name="arm_r_joint6">
+        <command_interface name="effort"/>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
       </joint>
       <joint name="arm_r_joint7">
+        <command_interface name="effort"/>
         <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
       </joint>
 
       <gpio name="sensorxel_l_joy">
@@ -122,65 +164,86 @@
       <gpio name="dxl31">
         <param name="type">dxl</param>
         <param name="ID">31</param>
+        <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
         <param name="Drive Mode">0</param>
-        <param name="Operating Mode">3</param>
+        <param name="Operating Mode">0</param>
         <param name="Return Delay Time">0</param>
-        <param name="Torque Enable">0</param>
+        <param name="Torque Enable">1</param>
       </gpio>
       <gpio name="dxl32">
         <param name="type">dxl</param>
         <param name="ID">32</param>
+        <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
         <param name="Drive Mode">0</param>
-        <param name="Operating Mode">3</param>
+        <param name="Operating Mode">0</param>
         <param name="Return Delay Time">0</param>
-        <param name="Torque Enable">0</param>
+        <param name="Torque Enable">1</param>
       </gpio>
       <gpio name="dxl33">
         <param name="type">dxl</param>
         <param name="ID">33</param>
+        <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
         <param name="Drive Mode">1</param>
-        <param name="Operating Mode">3</param>
+        <param name="Operating Mode">0</param>
         <param name="Return Delay Time">0</param>
-        <param name="Torque Enable">0</param>
+        <param name="Torque Enable">1</param>
       </gpio>
       <gpio name="dxl34">
         <param name="type">dxl</param>
         <param name="ID">34</param>
+        <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
         <param name="Drive Mode">0</param>
-        <param name="Operating Mode">3</param>
+        <param name="Operating Mode">0</param>
         <param name="Return Delay Time">0</param>
-        <param name="Torque Enable">0</param>
+        <param name="Torque Enable">1</param>
       </gpio>
       <gpio name="dxl35">
         <param name="type">dxl</param>
         <param name="ID">35</param>
+        <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
         <param name="Drive Mode">1</param>
-        <param name="Operating Mode">3</param>
+        <param name="Operating Mode">0</param>
         <param name="Return Delay Time">0</param>
-        <param name="Torque Enable">0</param>
+        <param name="Torque Enable">1</param>
       </gpio>
       <gpio name="dxl36">
         <param name="type">dxl</param>
         <param name="ID">36</param>
+        <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
         <param name="Drive Mode">0</param>
-        <param name="Operating Mode">3</param>
+        <param name="Operating Mode">0</param>
         <param name="Return Delay Time">0</param>
-        <param name="Torque Enable">0</param>
+        <param name="Torque Enable">1</param>
       </gpio>
       <gpio name="dxl37">
         <param name="type">dxl</param>
         <param name="ID">37</param>
+        <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
         <param name="Drive Mode">0</param>
-        <param name="Operating Mode">3</param>
+        <param name="Operating Mode">0</param>
         <param name="Return Delay Time">0</param>
-        <param name="Torque Enable">0</param>
+        <param name="Torque Enable">1</param>
       </gpio>
 
 
@@ -197,6 +260,7 @@
         <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
         <param name="Drive Mode">1</param>
         <param name="Operating Mode">0</param>
         <param name="Return Delay Time">0</param>
@@ -205,65 +269,86 @@
       <gpio name="dxl1">
         <param name="type">dxl</param>
         <param name="ID">1</param>
+        <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
         <param name="Drive Mode">1</param>
-        <param name="Operating Mode">3</param>
+        <param name="Operating Mode">0</param>
         <param name="Return Delay Time">0</param>
         <param name="Torque Enable">0</param>
       </gpio>
       <gpio name="dxl2">
         <param name="type">dxl</param>
         <param name="ID">2</param>
+        <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
         <param name="Drive Mode">0</param>
-        <param name="Operating Mode">3</param>
+        <param name="Operating Mode">0</param>
         <param name="Return Delay Time">0</param>
-        <param name="Torque Enable">0</param>
+        <param name="Torque Enable">1</param>
       </gpio>
       <gpio name="dxl3">
         <param name="type">dxl</param>
         <param name="ID">3</param>
+        <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
         <param name="Drive Mode">1</param>
-        <param name="Operating Mode">3</param>
+        <param name="Operating Mode">0</param>
         <param name="Return Delay Time">0</param>
-        <param name="Torque Enable">0</param>
+        <param name="Torque Enable">1</param>
       </gpio>
       <gpio name="dxl4">
         <param name="type">dxl</param>
         <param name="ID">4</param>
+        <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
         <param name="Drive Mode">1</param>
-        <param name="Operating Mode">3</param>
+        <param name="Operating Mode">0</param>
         <param name="Return Delay Time">0</param>
-        <param name="Torque Enable">0</param>
+        <param name="Torque Enable">1</param>
       </gpio>
       <gpio name="dxl5">
         <param name="type">dxl</param>
         <param name="ID">5</param>
+        <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
         <param name="Drive Mode">1</param>
-        <param name="Operating Mode">3</param>
+        <param name="Operating Mode">0</param>
         <param name="Return Delay Time">0</param>
-        <param name="Torque Enable">0</param>
+        <param name="Torque Enable">1</param>
       </gpio>
       <gpio name="dxl6">
         <param name="type">dxl</param>
         <param name="ID">6</param>
+        <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
         <param name="Drive Mode">1</param>
-        <param name="Operating Mode">3</param>
+        <param name="Operating Mode">0</param>
         <param name="Return Delay Time">0</param>
-        <param name="Torque Enable">0</param>
+        <param name="Torque Enable">1</param>
       </gpio>
       <gpio name="dxl7">
         <param name="type">dxl</param>
         <param name="ID">7</param>
+        <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
+        <state_interface name="Present Velocity"/>
+        <state_interface name="Present Current"/>
         <param name="Drive Mode">0</param>
-        <param name="Operating Mode">3</param>
+        <param name="Operating Mode">0</param>
         <param name="Return Delay Time">0</param>
-        <param name="Torque Enable">0</param>
+        <param name="Torque Enable">1</param>
       </gpio>
 
 

@@ -27,7 +27,7 @@ def generate_launch_description():
     declared_arguments = [
         DeclareLaunchArgument(
             'description_file',
-            default_value='ffw_lg2_rev3_leader.urdf.xacro',
+            default_value='ffw_lg2_rev3_leader_current.urdf.xacro',
             description='URDF/XACRO file for the robot model.',
         ),
         DeclareLaunchArgument(
@@ -40,22 +40,13 @@ def generate_launch_description():
     description_file = LaunchConfiguration('description_file')
     use_mock_hardware = LaunchConfiguration('use_mock_hardware')
 
-    # Robot controllers config file path
     robot_controllers = PathJoinSubstitution(
         [
             FindPackageShare('ffw_bringup'),
             'config',
-            'ffw_lg2_rev3_leader',
+            'ffw_lg2_rev3_leader_current',
             'ffw_lg2_leader_ai_hardware_controller.yaml',
         ]
-    )
-
-    # ros2_control Node
-    control_node = Node(
-        package='controller_manager',
-        executable='ros2_control_node',
-        parameters=[robot_controllers],
-        output='both',
     )
 
     robot_description_content = Command(
@@ -71,14 +62,21 @@ def generate_launch_description():
     )
     robot_description = {'robot_description': robot_description_content}
 
+    control_node = Node(
+        package='controller_manager',
+        executable='ros2_control_node',
+        parameters=[robot_description, robot_controllers],
+        output='both',
+    )
+
     robot_controller_spawner = Node(
         package='controller_manager',
         executable='spawner',
         arguments=[
-            'joint_trajectory_command_broadcaster',
+            'gravity_compensation_controller',
             'spring_actuator_controller',
-            'joystick_controller',
             'joint_state_broadcaster',
+            'joint_trajectory_command_broadcaster',
         ],
         parameters=[robot_description],
     )
@@ -90,7 +88,6 @@ def generate_launch_description():
         parameters=[robot_description, {'frame_prefix': ''}],
     )
 
-    # Wrap everything in a namespace 'leader'
     leader_with_namespace = GroupAction(
         actions=[
             PushRosNamespace('leader'),
@@ -100,5 +97,4 @@ def generate_launch_description():
         ]
     )
 
-    # Return combined LaunchDescription
     return LaunchDescription(declared_arguments + [leader_with_namespace])
