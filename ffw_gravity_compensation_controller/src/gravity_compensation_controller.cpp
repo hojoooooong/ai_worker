@@ -100,11 +100,38 @@ controller_interface::return_type GravityCompensationController::update(
   // Compute torques
   idsolver.CartToJnt(q, q_dot, q_ddot, f_ext_, torques);
 
-  // Optional spring effect on joint 2
+  // Optional spring effect
   if (params_.enable_spring_effect && n_joints_ > 2) {
-    const auto spring_joint_index = static_cast<size_t>(kdl_joint_indices_[2]);
-    if (q(spring_joint_index) < 0.5) {
-      torques(spring_joint_index) += std::abs(q(spring_joint_index) - 0.5) * 2.5;
+    bool used_configured_springs =
+      !params_.spring_effect_reference_positions.empty() &&
+      !params_.spring_effect_stiffnesses.empty() &&
+      !params_.spring_effect_modes.empty();
+
+    if (used_configured_springs) {
+      for (size_t i = 0; i < n_joints_; ++i) {
+        const auto kdl_index = static_cast<size_t>(kdl_joint_indices_[i]);
+        const double stiffness = params_.spring_effect_stiffnesses[i];
+        const double mode = params_.spring_effect_modes[i];
+        const double position_error = params_.spring_effect_reference_positions[i] - q(kdl_index);
+
+        if (stiffness == 0.0 || std::abs(mode) < 0.5) {
+          continue;
+        }
+
+        if (mode > 1.5) {
+          torques(kdl_index) += stiffness * position_error;
+        } else if (mode > 0.5 && position_error > 0.0) {
+          torques(kdl_index) += stiffness * position_error;
+        } else if (mode < -0.5 && position_error < 0.0) {
+          torques(kdl_index) += stiffness * position_error;
+        }
+      }
+    } else {
+      // Backward-compatible fallback for legacy configs.
+      const auto spring_joint_index = static_cast<size_t>(kdl_joint_indices_[2]);
+      if (q(spring_joint_index) < 0.5) {
+        torques(spring_joint_index) += std::abs(q(spring_joint_index) - 0.5) * 2.5;
+      }
     }
   }
   // Add leader sync function
@@ -227,6 +254,14 @@ controller_interface::CallbackReturn GravityCompensationController::on_configure
       return true;
     };
 
+  const auto validate_optional_param_size =
+    [&](const auto & values, const char * param_name) -> bool {
+      if (values.empty()) {
+        return true;
+      }
+      return validate_param_size(values, param_name);
+    };
+
   if (
     !validate_param_size(params_.unloaded_effort_offsets, "unloaded_effort_offsets") ||
     !validate_param_size(params_.unloaded_effort_thresholds, "unloaded_effort_thresholds") ||
@@ -242,7 +277,12 @@ controller_interface::CallbackReturn GravityCompensationController::on_configure
       "friction_compensation_velocity_thresholds") ||
     !validate_param_size(params_.input_velocity_scaling_factors, "input_velocity_scaling_factors") ||
     !validate_param_size(
-      params_.input_acceleration_scaling_factors, "input_acceleration_scaling_factors"))
+      params_.input_acceleration_scaling_factors, "input_acceleration_scaling_factors") ||
+    !validate_optional_param_size(
+      params_.spring_effect_reference_positions, "spring_effect_reference_positions") ||
+    !validate_optional_param_size(
+      params_.spring_effect_stiffnesses, "spring_effect_stiffnesses") ||
+    !validate_optional_param_size(params_.spring_effect_modes, "spring_effect_modes"))
   {
     return controller_interface::CallbackReturn::ERROR;
   }

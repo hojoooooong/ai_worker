@@ -84,3 +84,18 @@ gravity_compensation_controller:
     default_value: false,
     description: "Enable additional spring effect on joint 2"
   }
+  spring_effect_reference_positions: {
+    type: double_array,
+    default_value: [],
+    description: "Per-joint reference positions for spring effect"
+  }
+  spring_effect_stiffnesses: {
+    type: double_array,
+    default_value: [],
+    description: "Per-joint spring stiffness. Zero disables the spring on that joint"
+  }
+  spring_effect_modes: {
+    type: double_array,
+    default_value: [],
+    description: "Per-joint spring mode: 0=off, 1=apply when q < ref, -1=apply when q > ref, 2=bidirectional"
+  }
