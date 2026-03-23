@@ -106,8 +106,8 @@
          </inertial>
       </link>
       <xacro:zed_camera name="zedm" model="zedm" />
-      <joint name="zedm_joint" type="fixed">
-         <parent link="head_link2"/>
+      <joint name="${prefix}zedm_joint" type="fixed">
+         <parent link="${prefix}head_link2"/>
          <child link="zedm_camera_link"/>
          <origin xyz="0.0238122 -0.00651797 -0.0242094" rpy="0 0 0" />
       </joint>

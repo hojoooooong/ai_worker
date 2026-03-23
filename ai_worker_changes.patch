@@ -1,0 +1,261 @@
+diff --git a/docker/docker-compose.yml b/docker/docker-compose.yml
+index 16e80e9..b635fab 100644
+--- a/docker/docker-compose.yml
++++ b/docker/docker-compose.yml
+@@ -12,7 +12,7 @@ services:
+       memlock: 8428281856
+     network_mode: host
+     ipc: host
+-    pid: host
++
+     environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+diff --git a/ffw_bringup/config/common/rs_serial.yaml b/ffw_bringup/config/common/rs_serial.yaml
+index 3f1baaf..a3e46c0 100644
+--- a/ffw_bringup/config/common/rs_serial.yaml
++++ b/ffw_bringup/config/common/rs_serial.yaml
+@@ -1,4 +1,4 @@
+ # Serial numbers for RealSense cameras
+ # You can add or modify serial numbers as needed
+-camera1_serial: "'315122271028'"
+-camera2_serial: "'335122271133'"
++camera1_serial: "'335122270624'"
++camera2_serial: "'335122272052'"
+diff --git a/ffw_bringup/config/ffw_lg2_leader/ffw_lg2_leader_ai_hardware_controller.yaml b/ffw_bringup/config/ffw_lg2_leader/ffw_lg2_leader_ai_hardware_controller.yaml
+index c461598..09f708c 100644
+--- a/ffw_bringup/config/ffw_lg2_leader/ffw_lg2_leader_ai_hardware_controller.yaml
++++ b/ffw_bringup/config/ffw_lg2_leader/ffw_lg2_leader_ai_hardware_controller.yaml
+@@ -133,6 +133,7 @@
+             - arm_l_joint6
+             - arm_l_joint7
+             - gripper_l_joint1
++          offsets: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3]  # same as left_offsets
+         arm_right_leader:
+           topic_name: "/robot/arm_right_leader/joint_states"
+           joints:
+@@ -144,6 +145,7 @@
+             - arm_r_joint6
+             - arm_r_joint7
+             - gripper_r_joint1
++          offsets: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3]  # same as right_offsets
+         head_leader:
+           topic_name: "/robot/head_leader/joint_states"
+           joints:
+diff --git a/ffw_bringup/config/ffw_lg2_mini_leader/ffw_lg2_mini_leader_ai_hardware_controller.yaml b/ffw_bringup/config/ffw_lg2_mini_leader/ffw_lg2_mini_leader_ai_hardware_controller.yaml
+index dafe065..7dc1a20 100644
+--- a/ffw_bringup/config/ffw_lg2_mini_leader/ffw_lg2_mini_leader_ai_hardware_controller.yaml
++++ b/ffw_bringup/config/ffw_lg2_mini_leader/ffw_lg2_mini_leader_ai_hardware_controller.yaml
+@@ -93,7 +93,7 @@
+       sensorxel_r_joy_joint_trajectory_topic: "/leader/joystick_controller_right/joint_trajectory"
+       sensorxel_l_joy_jog_scale: 0.06
+       sensorxel_r_joy_jog_scale: 0.01
+-      deadzone: 0.05
++      deadzone: 10.0
+ 
+ /**:
+   ffw_joint_state_broadcaster:
+@@ -115,6 +115,7 @@
+             - arm_l_joint6
+             - arm_l_joint7
+             - gripper_l_joint1
++          offsets: [0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.1]  # same as left_offsets
+         arm_right_leader:
+           topic_name: "/robot/arm_right_leader/joint_states"
+           joints:
+@@ -126,6 +127,7 @@
+             - arm_r_joint6
+             - arm_r_joint7
+             - gripper_r_joint1
++          offsets: [0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.1]  # same as right_offsets
+         head_leader:
+           topic_name: "/robot/head_leader/joint_states"
+           joints:
+@@ -134,4 +136,4 @@
+         lift_leader:
+           topic_name: "/robot/lift_leader/joint_states"
+           joints:
+-            - lift_joint
+\ No newline at end of file
++            - lift_joint
+diff --git a/ffw_bringup/config/ffw_sg2_rev1_follower/ffw_sg2_follower_initial_positions.yaml b/ffw_bringup/config/ffw_sg2_rev1_follower/ffw_sg2_follower_initial_positions.yaml
+index 34faed0..48b01b6 100644
+--- a/ffw_bringup/config/ffw_sg2_rev1_follower/ffw_sg2_follower_initial_positions.yaml
++++ b/ffw_bringup/config/ffw_sg2_rev1_follower/ffw_sg2_follower_initial_positions.yaml
+@@ -10,8 +10,9 @@
+         - arm_l_joint6
+         - arm_l_joint7
+         - gripper_l_joint1
+-      step_names: [home]
+-      home: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
++      step_names: [step0, step1]
++      step0: [1.57, 0.0, 0.0, -2.8, 0.0, 0.0, 0.0, 0.0]
++      step1: [0.75, 0.0, 0.0, -2.3, 0.0, 0.0, 0.0, 0.0]
+       duration: 5.0
+       position_tolerance: 0.1
+       velocity_tolerance: 0.01
+@@ -30,8 +31,9 @@
+         - arm_r_joint6
+         - arm_r_joint7
+         - gripper_r_joint1
+-      step_names: [home]
+-      home: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
++      step_names: [step0, step1]
++      step0: [1.57, 0.0, 0.0, -2.8, 0.0, 0.0, 0.0, 0.0]
++      step1: [0.75, 0.0, 0.0, -2.3, 0.0, 0.0, 0.0, 0.0]
+       duration: 5.0
+       position_tolerance: 0.1
+       velocity_tolerance: 0.01
+@@ -45,7 +47,7 @@
+         - head_joint1
+         - head_joint2
+       step_names: [home]
+-      home: [0.0, 0.0]
++      home: [0.69369, 0.0]
+       duration: 5.0
+       position_tolerance: 0.1
+       velocity_tolerance: 0.01
+@@ -57,11 +59,12 @@
+     ros__parameters:
+       joint_names:
+         - lift_joint
+-      step_names: [home]
+-      home: [0.0]
+-      duration: 10.0
+-      position_tolerance: 0.1
+-      velocity_tolerance: 0.01
++      step_names: [step0, step1]
++      step0: [0.0]
++      step1: [-0.15]
++      duration: 5.0
++      position_tolerance: 0.001
++      velocity_tolerance: 0.001
+       action_topic: '/lift_controller/follow_joint_trajectory'
+       joint_states_topic: '/joint_states'
+ 
+diff --git a/ffw_description/ros2_control/ffw_sg2_rev1_follower/ffw_sg2_follower.ros2_control.xacro b/ffw_description/ros2_control/ffw_sg2_rev1_follower/ffw_sg2_follower.ros2_control.xacro
+index 857461c..a58ee63 100644
+--- a/ffw_description/ros2_control/ffw_sg2_rev1_follower/ffw_sg2_follower.ros2_control.xacro
++++ b/ffw_description/ros2_control/ffw_sg2_rev1_follower/ffw_sg2_follower.ros2_control.xacro
+@@ -609,8 +609,8 @@
+         <param name="Acceleration Limit">1010</param>
+         <param name="Return Delay Time">0</param>
+         <param name="Profile Velocity">12592</param>
+-        <param name="Profile Acceleration Time">500</param>
+-        <param name="Profile Time">1000</param>
++        <param name="Profile Acceleration Time">250</param>
++        <param name="Profile Time">500</param>
+       </gpio>
+       <!-- RIGHT WHEEL -->
+       <gpio name="dxl103">
+@@ -630,8 +630,8 @@
+         <param name="Acceleration Limit">1010</param>
+         <param name="Return Delay Time">0</param>
+         <param name="Profile Velocity">12592</param>
+-        <param name="Profile Acceleration Time">500</param>
+-        <param name="Profile Time">1000</param>
++        <param name="Profile Acceleration Time">250</param>
++        <param name="Profile Time">500</param>
+       </gpio>
+       <!-- REAR WHEEL -->
+       <gpio name="dxl105">
+@@ -651,8 +651,8 @@
+         <param name="Acceleration Limit">1010</param>
+         <param name="Return Delay Time">0</param>
+         <param name="Profile Velocity">12592</param>
+-        <param name="Profile Acceleration Time">500</param>
+-        <param name="Profile Time">1000</param>
++        <param name="Profile Acceleration Time">250</param>
++        <param name="Profile Time">500</param>
+       </gpio>
+     </ros2_control>
+   </xacro:macro>
+diff --git a/ffw_joint_state_broadcaster/include/ffw_joint_state_broadcaster/ffw_joint_state_broadcaster.hpp b/ffw_joint_state_broadcaster/include/ffw_joint_state_broadcaster/ffw_joint_state_broadcaster.hpp
+index 2c85668..6d85d60 100644
+--- a/ffw_joint_state_broadcaster/include/ffw_joint_state_broadcaster/ffw_joint_state_broadcaster.hpp
++++ b/ffw_joint_state_broadcaster/include/ffw_joint_state_broadcaster/ffw_joint_state_broadcaster.hpp
+@@ -91,6 +91,7 @@ protected:
+   {
+     std::string topic_name;
+     std::vector<std::string> joints;
++    std::vector<double> offsets;  // Per-joint position offsets (empty = no offset)
+   };
+ 
+   // Real-time safe handle for interface data access
+@@ -105,6 +106,7 @@ protected:
+     bool has_position;             // Whether this interface provides position data
+     bool has_velocity;             // Whether this interface provides velocity data
+     bool has_effort;               // Whether this interface provides effort data
++    double position_offset;        // Offset to add to position (for alignment with joint_trajectory_command_broadcaster)
+   };
+ 
+   // Group information for fast access
+diff --git a/ffw_joint_state_broadcaster/src/ffw_joint_state_broadcaster.cpp b/ffw_joint_state_broadcaster/src/ffw_joint_state_broadcaster.cpp
+index c4d1404..e9d862e 100644
+--- a/ffw_joint_state_broadcaster/src/ffw_joint_state_broadcaster.cpp
++++ b/ffw_joint_state_broadcaster/src/ffw_joint_state_broadcaster.cpp
+@@ -194,6 +194,33 @@ controller_interface::CallbackReturn FFWJointStateBroadcaster::on_configure(
+       continue;
+     }
+ 
++    // Read optional offsets parameter (must match joints size if provided)
++    std::string offsets_param = "joint_groups." + group_name + ".offsets";
++    if (!get_node()->has_parameter(offsets_param)) {
++      get_node()->declare_parameter(offsets_param, std::vector<double>());
++    }
++    try {
++      config.offsets = get_node()->get_parameter(offsets_param).as_double_array();
++    } catch (const std::exception & e) {
++      RCLCPP_DEBUG(
++        get_node()->get_logger(),
++        "Failed to get 'offsets' for group '%s': %s. Using zeros.",
++        group_name.c_str(), e.what());
++      config.offsets.clear();
++    }
++
++    if (!config.offsets.empty() && config.offsets.size() != config.joints.size()) {
++      RCLCPP_ERROR(
++        get_node()->get_logger(),
++        "The number of offsets (%zu) for group '%s' does not match the number of joints (%zu).",
++        config.offsets.size(), group_name.c_str(), config.joints.size());
++      return controller_interface::CallbackReturn::ERROR;
++    }
++
++    if (config.offsets.empty()) {
++      config.offsets.assign(config.joints.size(), 0.0);
++    }
++
+     joint_groups_[group_name] = config;
+   }
+ 
+@@ -368,6 +395,7 @@ bool FFWJointStateBroadcaster::init_publishing_handles()
+     const auto & [group_idx, joint_idx] = it->second;
+ 
+     // Create handle for this interface
++    const auto & config = joint_groups_[group_names_[group_idx]];
+     InterfaceHandle handle;
+     handle.state_interface_index = interface_idx;
+     handle.group_index = group_idx;
+@@ -380,6 +408,10 @@ bool FFWJointStateBroadcaster::init_publishing_handles()
+     handle.msg_velocity_index = handle.has_velocity ? joint_idx : SIZE_MAX;
+     handle.msg_effort_index = handle.has_effort ? joint_idx : SIZE_MAX;
+ 
++    // Set position offset (applied only for position interfaces)
++    handle.position_offset =
++      (handle.has_position && joint_idx < config.offsets.size()) ? config.offsets[joint_idx] : 0.0;
++
+     // Add handle to the corresponding group's vector (pre-grouped for efficient iteration)
+     handles_per_group_[group_idx].push_back(handle);
+ 
+@@ -450,9 +482,9 @@ void FFWJointStateBroadcaster::publish_joint_states(const rclcpp::Time & time)
+       const double val = *value;
+ 
+       // Copy value directly to pre-allocated message position
+-      // No push_back, no reallocation, just direct assignment
++      // Apply position_offset for alignment with joint_trajectory_command_broadcaster
+       if (handle.has_position && handle.msg_position_index != SIZE_MAX) {
+-        msg.position[handle.msg_position_index] = val;
++        msg.position[handle.msg_position_index] = val + handle.position_offset;
+       }
+       if (handle.has_velocity && handle.msg_velocity_index != SIZE_MAX) {
+         msg.velocity[handle.msg_velocity_index] = val;

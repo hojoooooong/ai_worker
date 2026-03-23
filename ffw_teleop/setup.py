@@ -29,6 +29,7 @@ setup(
     entry_points={
         'console_scripts': [
             'keyborad_control = ffw_teleop.keyboard_control:main',
+            'preset_hand_controller = ffw_teleop.preset_hand_controller:main',
         ],
     },
 )
