@@ -15,11 +15,20 @@ class HandPublisher(Node):
         self.left_preset_release = np.array([
             # 1.0, 0.7, 0.5, 0.4, # option 0
             # 1.3, 1.2, 0.5, 0.4, # option 1, thumb 0.7
-            0.0, 0.0, 0.0, 0.0, # option 2, thumb 0.0
+            0.0, 1.57, 0.0, 0.0, # option 2, thumb 0.0
             0.0, 0.0, 0.0, 0.0,
             0.0, 0.0, 0.0, 0.0,
             0.0, 0.0, 0.0, 0.0,
             0.0, 0.0, 0.0, 0.0
+        ])
+
+        self.left_preset_grasp = np.array([
+            # 2.0, 2.0, 1.4, 0.7, # option 1
+            -0.2, 1.57, -0.6, -0.48, # option 2
+            0.0, 0.9, 0.9, 0.45,
+            0.0, 0.9, 0.9, 0.45,
+            0.0, 1.0, 0.8, 0.45,
+            0.0, 0.85, 0.8, 0.45
         ])
 
         self.left_preset_grasp = np.array([
