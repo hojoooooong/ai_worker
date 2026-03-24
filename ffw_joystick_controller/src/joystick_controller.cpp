@@ -600,6 +600,14 @@ controller_interface::CallbackReturn JoystickController::on_configure(
     } else {
       RCLCPP_WARN(get_node()->get_logger(), "parameter: %s not found", topic_param.c_str());
     }
+    // joint_states_stamped_topic
+    std::string joint_state_topic_param = sensor_name + "_joint_states_stamped_topic";
+    if (get_node()->has_parameter(joint_state_topic_param)) {
+      sensor_joint_state_stamped_topic_[sensor_name] =
+        get_node()->get_parameter(joint_state_topic_param).as_string();
+    } else {
+      sensor_joint_state_stamped_topic_[sensor_name] = "";
+    }
     // jog_scale
     std::string jog_scale_param = sensor_name + "_jog_scale";
     if (get_node()->has_parameter(jog_scale_param)) {
@@ -627,15 +635,18 @@ controller_interface::CallbackReturn JoystickController::on_configure(
       sensor_joint_trajectory_topic_[sensor_name], rclcpp::SystemDefaultsQoS());
 
     // Create joint state publisher for this sensor with timestamp from update() function
-    std::string joint_state_topic_name = sensor_joint_trajectory_topic_[sensor_name];
-    // Replace "joint_trajectory" with "joint_states_stamped" in topic name
-    size_t pos = joint_state_topic_name.find("joint_trajectory");
-    if (pos != std::string::npos) {
-      joint_state_topic_name.replace(pos, std::string("joint_trajectory").length(),
-          "joint_states_stamped");
-    } else {
-      // Fallback: append "_joint_states_stamped" if pattern not found
-      joint_state_topic_name += "_joint_states_stamped";
+    std::string joint_state_topic_name = sensor_joint_state_stamped_topic_[sensor_name];
+    if (joint_state_topic_name.empty()) {
+      joint_state_topic_name = sensor_joint_trajectory_topic_[sensor_name];
+      // Replace "joint_trajectory" with "joint_states_stamped" in topic name
+      size_t pos = joint_state_topic_name.find("joint_trajectory");
+      if (pos != std::string::npos) {
+        joint_state_topic_name.replace(pos, std::string("joint_trajectory").length(),
+            "joint_states_stamped");
+      } else {
+        // Fallback: append "_joint_states_stamped" if pattern not found
+        joint_state_topic_name += "_joint_states_stamped";
+      }
     }
     sensor_joint_state_stamped_publisher_[sensor_name] =
       get_node()->create_publisher<sensor_msgs::msg::JointState>(
