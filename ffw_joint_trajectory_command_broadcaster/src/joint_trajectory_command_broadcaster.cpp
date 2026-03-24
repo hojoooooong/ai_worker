@@ -155,8 +155,15 @@ controller_interface::CallbackReturn JointTrajectoryCommandBroadcaster::on_confi
         group_name.c_str(), topic_name.c_str(), group_joints.size());
 
       // Create joint state publisher for this group with timestamp from update() function
-      std::string joint_state_topic_name =
-        "joint_trajectory_command_broadcaster_" + group_name + "/joint_states_stamped";
+      std::string joint_state_topic_name;
+      if (group_name == "left" && !params_.left_joint_states_stamped_topic.empty()) {
+        joint_state_topic_name = params_.left_joint_states_stamped_topic;
+      } else if (group_name == "right" && !params_.right_joint_states_stamped_topic.empty()) {
+        joint_state_topic_name = params_.right_joint_states_stamped_topic;
+      } else {
+        joint_state_topic_name =
+          "joint_trajectory_command_broadcaster_" + group_name + "/joint_states_stamped";
+      }
       joint_state_stamped_publishers_[group_name] =
         get_node()->create_publisher<sensor_msgs::msg::JointState>(
         joint_state_topic_name, rclcpp::SystemDefaultsQoS());

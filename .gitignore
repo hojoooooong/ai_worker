@@ -532,3 +532,4 @@ doc/
 ## GurumDDS
 *.ar
 
+ffw_bringup/config/common/rs_serial.yaml

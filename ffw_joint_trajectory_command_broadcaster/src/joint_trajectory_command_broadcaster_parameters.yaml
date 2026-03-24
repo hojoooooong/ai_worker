@@ -56,6 +56,11 @@ joint_trajectory_command_broadcaster:
     default_value: [],
     description: "Reverse joints for left arm group."
   }
+  left_joint_states_stamped_topic: {
+    type: string,
+    default_value: "",
+    description: "Topic to publish stamped joint states for the left group. If empty, derive from the group name."
+  }
   right_joints: {
     type: string_array,
     default_value: [],
@@ -70,6 +75,11 @@ joint_trajectory_command_broadcaster:
     type: string_array,
     default_value: [],
     description: "Reverse joints for right arm group."
+  }
+  right_joint_states_stamped_topic: {
+    type: string,
+    default_value: "",
+    description: "Topic to publish stamped joint states for the right group. If empty, derive from the group name."
   }
   trigger_threshold: {
     type: double,
