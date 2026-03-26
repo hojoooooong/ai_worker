@@ -5,10 +5,29 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 CONTAINER_NAME="ai_worker"
 GITHUB_RELEASES_API="https://api.github.com/repos/ROBOTIS-GIT/ai_worker/releases/latest"
 META_PACKAGE_XML="${SCRIPT_DIR}/../ffw/package.xml"
-COMPOSE_FILES=(
-    -f "${SCRIPT_DIR}/docker-compose.yml"
-    -f "${SCRIPT_DIR}/docker-compose.novnc.yml"
-)
+
+is_arm_host() {
+    case "$(uname -m)" in
+        aarch64|arm64)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+get_compose_files() {
+    local compose_files=(
+        -f "${SCRIPT_DIR}/docker-compose.yml"
+    )
+
+    if is_arm_host; then
+        compose_files+=(-f "${SCRIPT_DIR}/docker-compose.novnc.yml")
+    fi
+
+    echo "${compose_files[@]}"
+}
 
 # Function to display help
 show_help() {
@@ -28,6 +47,9 @@ show_help() {
 
 # Function to start the container
 start_container() {
+    local compose_files
+    read -r -a compose_files <<< "$(get_compose_files)"
+
     # Set up X11 forwarding only if DISPLAY is set
     if [ -n "$DISPLAY" ]; then
         echo "Setting up X11 forwarding..."
@@ -55,11 +77,17 @@ start_container() {
     sudo udevadm control --reload-rules
     sudo udevadm trigger
 
+    if is_arm_host; then
+        echo "ARM host detected. Starting novnc-server with ai_worker."
+    else
+        echo "Non-ARM host detected. Skipping novnc-server."
+    fi
+
     # Pull the latest images
-    docker compose "${COMPOSE_FILES[@]}" pull
+    docker compose "${compose_files[@]}" pull
 
     # Run docker-compose
-    docker compose "${COMPOSE_FILES[@]}" up -d
+    docker compose "${compose_files[@]}" up -d
 }
 
 # Function to enter the container
@@ -89,6 +117,9 @@ enter_container() {
 
 # Function to stop the container
 stop_container() {
+    local compose_files
+    read -r -a compose_files <<< "$(get_compose_files)"
+
     if ! docker ps | grep -q "$CONTAINER_NAME"; then
         echo "Error: Container is not running"
         exit 1
@@ -98,7 +129,7 @@ stop_container() {
     read -p "Are you sure you want to continue? [y/N] " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        docker compose "${COMPOSE_FILES[@]}" down
+        docker compose "${compose_files[@]}" down
     else
         echo "Operation cancelled."
         exit 0
