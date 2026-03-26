@@ -5,6 +5,10 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 CONTAINER_NAME="ai_worker"
 GITHUB_RELEASES_API="https://api.github.com/repos/ROBOTIS-GIT/ai_worker/releases/latest"
 META_PACKAGE_XML="${SCRIPT_DIR}/../ffw/package.xml"
+COMPOSE_FILES=(
+    -f "${SCRIPT_DIR}/docker-compose.yml"
+    -f "${SCRIPT_DIR}/docker-compose.novnc.yml"
+)
 
 # Function to display help
 show_help() {
@@ -34,16 +38,6 @@ start_container() {
 
     echo "Starting ai_worker container..."
 
-    # Ensure talos-system-manager (talos CLI) is installed
-    if ! pip show talos-system-manager &>/dev/null; then
-        echo "Installing talos-system-manager (talos CLI)..."
-        pip install talos-system-manager
-        talos up
-    fi
-
-    # Notice: rmw_zenoh_cpp is default from 1.2.0
-    #print_notice
-
     # Notify if an update is available (meta package version vs GitHub latest release)
     CURRENT_VER=$(get_current_version)
     LATEST_VER=$(get_latest_version)
@@ -62,10 +56,10 @@ start_container() {
     sudo udevadm trigger
 
     # Pull the latest images
-    docker compose -f "${SCRIPT_DIR}/docker-compose.yml" pull
+    docker compose "${COMPOSE_FILES[@]}" pull
 
     # Run docker-compose
-    docker compose -f "${SCRIPT_DIR}/docker-compose.yml" up -d
+    docker compose "${COMPOSE_FILES[@]}" up -d
 }
 
 # Function to enter the container
@@ -82,9 +76,6 @@ enter_container() {
         echo "Error: Container is not running"
         exit 1
     fi
-
-    # Notice
-    # print_notice
 
     # Notify if an update is available (meta package version vs git tag)
     CURRENT_VER=$(get_current_version)
@@ -107,7 +98,7 @@ stop_container() {
     read -p "Are you sure you want to continue? [y/N] " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        docker compose -f "${SCRIPT_DIR}/docker-compose.yml" down
+        docker compose "${COMPOSE_FILES[@]}" down
     else
         echo "Operation cancelled."
         exit 0
@@ -134,22 +125,6 @@ print_update_notice() {
     echo ""
 }
 
-print_notice() {
-    W=58
-    BAR=$(printf '%*s' $W '' | tr ' ' '=')
-    # Current host (robot) IP for Talos UI URL
-    HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-    [ -z "$HOST_IP" ] && HOST_IP=$(ip -4 route get 8.8.8.8 2>/dev/null | grep -oP 'src \K\S+')
-    [ -z "$HOST_IP" ] && HOST_IP="<host-ip>"
-    LINE1="From 1.2.0, rmw_zenoh_cpp is used by default."
-    LINE2="Enter TALOS System Manager: http://${HOST_IP}:3000"
-    echo ""
-    echo "  +${BAR}+"
-    printf "  |  %-$((W-2))s|\n" "$LINE1"
-    printf "  |  %-$((W-2))s|\n" "$LINE2"
-    echo "  +${BAR}+"
-    echo ""
-}
 
 get_current_version() {
     local ver
