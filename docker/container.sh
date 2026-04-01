@@ -7,14 +7,7 @@ GITHUB_RELEASES_API="https://api.github.com/repos/ROBOTIS-GIT/ai_worker/releases
 META_PACKAGE_XML="${SCRIPT_DIR}/../ffw/package.xml"
 
 is_arm_host() {
-    case "$(uname -m)" in
-        aarch64|arm64)
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
+    [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]]
 }
 
 get_compose_files() {
