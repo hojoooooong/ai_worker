@@ -17,10 +17,10 @@
 # Authors: Sungho Woo, Woojin Wie, Wonho Yun
 
 from launch import LaunchDescription
-from launch.actions import ExecuteProcess
 from launch.actions import DeclareLaunchArgument
-from launch.actions import RegisterEventHandler
+from launch.actions import ExecuteProcess
 from launch.actions import IncludeLaunchDescription
+from launch.actions import RegisterEventHandler
 from launch.actions import TimerAction
 from launch.conditions import IfCondition
 from launch.conditions import UnlessCondition
@@ -164,7 +164,6 @@ def generate_launch_description():
         ],
         parameters=[robot_description],
     )
-
 
     # Separate spawner for swerve_steering_initial_position_controller
     swerve_steering_initial_position_spawner = Node(
