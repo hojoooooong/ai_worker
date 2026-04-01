@@ -7,14 +7,7 @@ GITHUB_RELEASES_API="https://api.github.com/repos/ROBOTIS-GIT/ai_worker/releases
 META_PACKAGE_XML="${SCRIPT_DIR}/../ffw/package.xml"
 
 is_arm_host() {
-    case "$(uname -m)" in
-        aarch64|arm64)
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
+    [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]]
 }
 
 get_compose_files() {
@@ -35,13 +28,17 @@ show_help() {
     echo ""
     echo "Commands:"
     echo "  help                    Show this help message"
-    echo "  start                   Start the container"
+    echo "  start                   Start the ai_worker container"
+    echo "  start-novnc             Run novnc-server in the foreground (ARM only; Ctrl+C to stop)"
     echo "  enter                   Enter the running container"
+    echo "  stop-novnc              Stop the novnc-server container (ARM only)"
     echo "  stop                    Stop the container"
     echo ""
     echo "Examples:"
-    echo "  $0 start                Start container"
+    echo "  $0 start                Start ai_worker container"
+    echo "  $0 start-novnc          Run novnc-server in the foreground"
     echo "  $0 enter                Enter the running container"
+    echo "  $0 stop-novnc           Stop novnc-server container"
     echo "  $0 stop                 Stop the container"
 }
 
@@ -77,17 +74,50 @@ start_container() {
     sudo udevadm control --reload-rules
     sudo udevadm trigger
 
+    # Pull the latest images
+    docker compose "${compose_files[@]}" pull
+
     if is_arm_host; then
-        echo "ARM host detected. Starting novnc-server with ai_worker."
+        echo "ARM host detected. novnc-server image will be pulled, but the container will stay stopped until you run '$0 start-novnc'."
     else
         echo "Non-ARM host detected. Skipping novnc-server."
     fi
 
-    # Pull the latest images
-    docker compose "${compose_files[@]}" pull
+    # Start only the ai_worker service. On ARM, novnc-server is managed separately.
+    docker compose "${compose_files[@]}" up -d ai_worker
+}
 
-    # Run docker-compose
-    docker compose "${compose_files[@]}" up -d
+# Function to start the novnc container
+start_novnc_container() {
+    local compose_files
+    read -r -a compose_files <<< "$(get_compose_files)"
+
+    if ! is_arm_host; then
+        echo "Error: novnc-server is only supported on ARM hosts."
+        exit 1
+    fi
+
+    echo "Running novnc-server in the foreground (not detached). Press Ctrl+C to stop."
+    docker compose "${compose_files[@]}" up novnc-server
+}
+
+# Function to stop the novnc container
+stop_novnc_container() {
+    local compose_files
+    read -r -a compose_files <<< "$(get_compose_files)"
+
+    if ! is_arm_host; then
+        echo "Error: novnc-server is only supported on ARM hosts."
+        exit 1
+    fi
+
+    if ! docker ps --format '{{.Names}}' | grep -qx "novnc-server"; then
+        echo "novnc-server is not running."
+        exit 0
+    fi
+
+    echo "Stopping novnc-server container..."
+    docker compose "${compose_files[@]}" stop novnc-server
 }
 
 # Function to enter the container
@@ -201,8 +231,14 @@ case "$1" in
     "start")
         start_container
         ;;
+    "start-novnc")
+        start_novnc_container
+        ;;
     "enter")
         enter_container
+        ;;
+    "stop-novnc")
+        stop_novnc_container
         ;;
     "stop")
         stop_container

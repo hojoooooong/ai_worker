@@ -2,7 +2,7 @@ services:
   novnc-server:
     container_name: novnc-server
     image: robotis/novnc-server:latest
-    restart: always
+    restart: "no"
     cap_add:
       - SYS_NICE
     ulimits:
