@@ -2,6 +2,11 @@
 Changelog for package ffw
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.2.0 (2026-04-01)
+-------------------
+* Added support for SH5
+* Contributors: Hyunwoo Nam
+
 1.1.20 (2026-03-12)
 -------------------
 * Fixed version of docker image in docker-compose.yml
