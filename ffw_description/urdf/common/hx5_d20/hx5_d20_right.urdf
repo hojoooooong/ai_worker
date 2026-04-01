@@ -29,8 +29,8 @@
    </link>
    <!-- THUMB -->
    <joint name="finger_r_joint_a" type="revolute">
-      <parent link="${prefix}hx5_d20_right_base" />
-      <child link="${prefix}finger_r_link1" />
+      <parent link="hx5_d20_right_base" />
+      <child link="finger_r_link1" />
       <origin xyz="-0.0125 0.03493 0.04475" rpy="0 0 0" />
       <axis xyz="1 0 0" />
       <limit velocity="4.8" effort="1000" lower="-1.57" upper="1.57" />
