@@ -72,6 +72,9 @@ std::shared_ptr<RobotType> create_robot_type(const std::string & type_name)
   if (type_name == "ffw_sg2_rev1") {
     return std::make_shared<FfwSg2Rev1RobotType>();
   }
+  else if (type_name == "ffw_sh5_rev1") {
+    return std::make_shared<FfwSh5Rev1RobotType>();
+  }
 
   return nullptr;  // Type not found
 }

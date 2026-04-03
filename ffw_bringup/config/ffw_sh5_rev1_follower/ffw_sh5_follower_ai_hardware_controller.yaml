@@ -37,6 +37,9 @@
       effort_r_controller:
         type: effort_controllers/JointGroupEffortController
 
+      ffw_robot_manager:
+        type: ffw_robot_manager/FfwRobotManager
+
 /**:
   arm_l_controller:
     ros__parameters:
@@ -320,3 +323,10 @@
         - finger_r_joint18
         - finger_r_joint19
         - finger_r_joint20
+
+/**:
+  ffw_robot_manager:
+    ros__parameters:
+      disable_torque_on_error: false
+      set_led_error_on_error: true
+      ffw_type: ffw_sh5_rev1
