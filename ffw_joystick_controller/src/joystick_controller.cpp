@@ -468,15 +468,27 @@ controller_interface::return_type JoystickController::update(
     const auto & controlled_joints = sensor_controlled_joints_[sensor_name];
     auto & last_active_positions = sensor_last_active_positions_[sensor_name];
 
-    // Read and normalize sensor values
-    std::vector<double> normalized_values(state_interface_types_.size(), 0.0);
-    if (joystick_update_enabled) {
-      normalized_values = read_and_normalize_sensor_values(sensor_idx);
+    // Read all joystick interfaces so tact-switch features still work even when motion is disabled.
+    std::vector<double> normalized_values = read_and_normalize_sensor_values(sensor_idx);
+    if (!joystick_update_enabled) {
+      for (size_t j = 0; j < normalized_values.size(); ++j) {
+        if (j != constants::TACT_SWITCH_INTERFACE_INDEX) {
+          normalized_values[j] = 0.0;
+        }
+      }
     }
 
-    // Check if any joystick is active
-    bool any_sensorxel_joy_active = std::any_of(normalized_values.begin(), normalized_values.end(),
-        [](double value) {return std::abs(value) > 0.0;});
+    // Motion activity only depends on joystick axes, not the tact switch state.
+    bool any_sensorxel_joy_active = false;
+    for (size_t j = 0; j < normalized_values.size(); ++j) {
+      if (j == constants::TACT_SWITCH_INTERFACE_INDEX) {
+        continue;
+      }
+      if (std::abs(normalized_values[j]) > 0.0) {
+        any_sensorxel_joy_active = true;
+        break;
+      }
+    }
 
     // Update joystick values
     update_joystick_values(sensor_name, normalized_values, joystick_values,

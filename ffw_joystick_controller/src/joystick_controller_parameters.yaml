@@ -107,7 +107,7 @@ joystick_controller:
   enable_joystick_update: {
     type: bool,
     default_value: true,
-    description: "Enable joystick input processing and trajectory publishing.",
+    description: "Enable joystick X/Y motion updates and trajectory publishing while keeping tact-switch features active.",
     read_only: true
   }
   long_press_duration: {
