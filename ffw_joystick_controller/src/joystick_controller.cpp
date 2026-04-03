@@ -14,6 +14,7 @@
 
 #include <joystick_controller/joystick_controller.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <string>
 #include <stdexcept>
@@ -60,6 +61,8 @@ double JoystickController::normalize_joystick_value(double raw_adc, bool is_tact
     return raw_adc;
   }
 
+  const double deadzone = std::clamp(params_.deadzone, 0.0, std::nextafter(1.0, 0.0));
+
   double normalized_value;
   if (raw_adc < params_.joystick_calibration_center) {
     normalized_value = -(params_.joystick_calibration_center - raw_adc) /
@@ -70,15 +73,15 @@ double JoystickController::normalize_joystick_value(double raw_adc, bool is_tact
   }
 
   // Apply deadzone
-  if (std::abs(normalized_value) < params_.deadzone) {
+  if (std::abs(normalized_value) < deadzone) {
     return 0.0;
   }
 
   // Normalize after deadzone
   if (normalized_value > 0) {
-    normalized_value = (normalized_value - params_.deadzone) / (1.0 - params_.deadzone);
+    normalized_value = (normalized_value - deadzone) / (1.0 - deadzone);
   } else {
-    normalized_value = (normalized_value + params_.deadzone) / (1.0 - params_.deadzone);
+    normalized_value = (normalized_value + deadzone) / (1.0 - deadzone);
   }
 
   return normalized_value;
@@ -559,6 +562,14 @@ controller_interface::CallbackReturn JoystickController::on_configure(
 
   // get parameters from the listener in case they were updated
   params_ = param_listener_->get_params();
+
+  if (params_.deadzone < 0.0 || params_.deadzone >= 1.0) {
+    RCLCPP_ERROR(
+      logger,
+      "Invalid deadzone %.3f. 'deadzone' must be in the range [0.0, 1.0).",
+      params_.deadzone);
+    return controller_interface::CallbackReturn::ERROR;
+  }
 
   // Get sensorxel_joy sensor names from parameters
   sensorxel_joy_names_ = params_.joystick_sensors;

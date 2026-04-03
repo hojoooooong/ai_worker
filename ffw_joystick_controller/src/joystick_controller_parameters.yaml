@@ -101,7 +101,7 @@ joystick_controller:
   deadzone: {
     type: double,
     default_value: 0.05,
-    description: "Deadzone around center position (0.0 to 1.0)",
+    description: "Deadzone around center position [0.0, 1.0)",
     read_only: true
   }
   long_press_duration: {
