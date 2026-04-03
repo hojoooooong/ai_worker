@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-  <xacro:macro name="ffw_sh5_follower_system" params="use_sim:=^|false use_mock_hardware:=^|false mock_sensor_commands:=^|false">
-    <ros2_control name="ffw_sh5_follower" type="system" is_async="true">
+  <xacro:macro name="ffw_sg2_follower_system" params="use_sim:=^|false use_mock_hardware:=^|false mock_sensor_commands:=^|false">
+    <ros2_control name="ffw_sg2_follower" type="system" is_async="true">
       <xacro:if value="$(arg use_sim)">
         <hardware>
           <plugin>gz_ros2_control/GazeboSimSystem</plugin>
@@ -10,7 +10,7 @@
       <xacro:unless value="$(arg use_sim)">
         <hardware>
           <xacro:if value="${use_mock_hardware}">
-            <plugin>fake_components/GenericSystem</plugin>
+            <plugin>mock_components/GenericSystem</plugin>
             <param name="mock_sensor_commands">${mock_sensor_commands}</param>
             <param name="state_following_offset">0.0</param>
           </xacro:if>
@@ -22,10 +22,10 @@
             <param name="number_of_joints">60</param>
             <param name="number_of_transmissions">60</param>
             <param name="disable_torque_at_init">true</param>
-            <param name="dynamixel_state_pub_msg_name">dynamixel_hardware_interface/dxl_state</param>
-            <param name="get_dynamixel_data_srv_name">dynamixel_hardware_interface/get_dxl_data</param>
-            <param name="set_dynamixel_data_srv_name">dynamixel_hardware_interface/set_dxl_data</param>
-            <param name="reboot_dxl_srv_name">dynamixel_hardware_interface/reboot_dxl</param>
+            <param name="dynamixel_state_pub_msg_name">ffw_follower/dxl_state</param>
+            <param name="get_dynamixel_data_srv_name">ffw_follower/get_dxl_data</param>
+            <param name="set_dynamixel_data_srv_name">ffw_follower/set_dxl_data</param>
+            <param name="reboot_dxl_srv_name">ffw_follower/reboot_dxl</param>
             <param name="set_dxl_torque_srv_name">dynamixel_hardware_interface/set_dxl_torque</param>
           </xacro:unless>
         </hardware>
@@ -706,7 +706,7 @@
         <param name="Reboot">1</param>
         <param name="Startup Configuration">2</param>
         <param name="Operating Mode">5</param>
-        <param name="Drive Mode">13</param>
+        <param name="Drive Mode">12</param>
         <param name="Bus Watchdog">100</param>
         <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
@@ -730,7 +730,7 @@
         <param name="Reboot">1</param>
         <param name="Startup Configuration">2</param>
         <param name="Operating Mode">5</param>
-        <param name="Drive Mode">13</param>
+        <param name="Drive Mode">12</param>
         <param name="Bus Watchdog">100</param>
         <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
@@ -753,7 +753,7 @@
         <param name="Reboot">1</param>
         <param name="Startup Configuration">2</param>
         <param name="Operating Mode">5</param>
-        <param name="Drive Mode">13</param>
+        <param name="Drive Mode">12</param>
         <param name="Bus Watchdog">100</param>
         <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
@@ -1455,11 +1455,14 @@
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Error Code"/>
+        <state_interface name="Present Input Voltage"/>
         <param name="Drive Mode">69</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">3591</param>
         <param name="Acceleration Limit">35910</param>
+        <param name="Profile Velocity">3591</param>
+        <param name="Profile Acceleration">3591</param>
         <param name="Profile Acceleration Time">250</param>
         <param name="Profile Time">500</param>
         <param name="Max Position Limit">262144</param>
@@ -1482,6 +1485,8 @@
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">3591</param>
         <param name="Acceleration Limit">35910</param>
+        <param name="Profile Velocity">3591</param>
+        <param name="Profile Acceleration">3591</param>
         <param name="Profile Acceleration Time">250</param>
         <param name="Profile Time">500</param>
         <param name="Max Position Limit">0</param>
@@ -1504,6 +1509,8 @@
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">3591</param>
         <param name="Acceleration Limit">35910</param>
+        <param name="Profile Velocity">3591</param>
+        <param name="Profile Acceleration">3591</param>
         <param name="Profile Acceleration Time">250</param>
         <param name="Profile Time">500</param>
         <param name="Max Position Limit">262144</param>
@@ -1526,6 +1533,8 @@
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">6486</param>
         <param name="Acceleration Limit">35910</param>
+        <param name="Profile Velocity">6486</param>
+        <param name="Profile Acceleration">3591</param>
         <param name="Profile Acceleration Time">250</param>
         <param name="Profile Time">500</param>
         <param name="Max Position Limit">90000</param>
@@ -1548,6 +1557,8 @@
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">6486</param>
         <param name="Acceleration Limit">35910</param>
+        <param name="Profile Velocity">6486</param>
+        <param name="Profile Acceleration">3591</param>
         <param name="Profile Acceleration Time">250</param>
         <param name="Profile Time">500</param>
         <param name="Max Position Limit">262144</param>
@@ -1570,6 +1581,8 @@
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">6486</param>
         <param name="Acceleration Limit">35910</param>
+        <param name="Profile Velocity">6486</param>
+        <param name="Profile Acceleration">3591</param>
         <param name="Profile Acceleration Time">250</param>
         <param name="Profile Time">500</param>
         <param name="Max Position Limit">131072</param>
@@ -1592,7 +1605,7 @@
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">2920</param>
         <param name="Acceleration Limit">359100</param>
-        <param name="Current Limit">1000</param>
+        <param name="Current Limit">1500</param>
         <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
         <param name="Max Position Limit">131875</param>
@@ -1738,7 +1751,7 @@
         <param name="Reboot">1</param>
         <param name="Startup Configuration">2</param>
         <param name="Operating Mode">5</param>
-        <param name="Drive Mode">12</param>
+        <param name="Drive Mode">13</param>
         <param name="Bus Watchdog">100</param>
         <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
@@ -1786,7 +1799,7 @@
         <param name="Reboot">1</param>
         <param name="Startup Configuration">2</param>
         <param name="Operating Mode">5</param>
-        <param name="Drive Mode">12</param>
+        <param name="Drive Mode">13</param>
         <param name="Bus Watchdog">100</param>
         <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
@@ -1809,7 +1822,7 @@
         <param name="Reboot">1</param>
         <param name="Startup Configuration">2</param>
         <param name="Operating Mode">5</param>
-        <param name="Drive Mode">12</param>
+        <param name="Drive Mode">13</param>
         <param name="Bus Watchdog">100</param>
         <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
@@ -2516,6 +2529,8 @@
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">3591</param>
         <param name="Acceleration Limit">35910</param>
+        <param name="Profile Velocity">3591</param>
+        <param name="Profile Acceleration">3591</param>
         <param name="Profile Acceleration Time">250</param>
         <param name="Profile Time">500</param>
         <param name="Max Position Limit">262144</param>
@@ -2538,6 +2553,8 @@
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">3591</param>
         <param name="Acceleration Limit">35910</param>
+        <param name="Profile Velocity">3591</param>
+        <param name="Profile Acceleration">3591</param>
         <param name="Profile Acceleration Time">250</param>
         <param name="Profile Time">500</param>
         <param name="Max Position Limit">262144</param>
@@ -2560,6 +2577,8 @@
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">3591</param>
         <param name="Acceleration Limit">35910</param>
+        <param name="Profile Velocity">3591</param>
+        <param name="Profile Acceleration">3591</param>
         <param name="Profile Acceleration Time">250</param>
         <param name="Profile Time">500</param>
         <param name="Max Position Limit">262144</param>
@@ -2582,6 +2601,8 @@
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">6486</param>
         <param name="Acceleration Limit">35910</param>
+        <param name="Profile Velocity">6486</param>
+        <param name="Profile Acceleration">3591</param>
         <param name="Profile Acceleration Time">250</param>
         <param name="Profile Time">500</param>
         <param name="Max Position Limit">90000</param>
@@ -2604,6 +2625,8 @@
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">6486</param>
         <param name="Acceleration Limit">35910</param>
+        <param name="Profile Velocity">6486</param>
+        <param name="Profile Acceleration">3591</param>
         <param name="Profile Acceleration Time">250</param>
         <param name="Profile Time">500</param>
         <param name="Max Position Limit">262144</param>
@@ -2626,6 +2649,8 @@
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">6486</param>
         <param name="Acceleration Limit">35910</param>
+        <param name="Profile Velocity">6486</param>
+        <param name="Profile Acceleration">3591</param>
         <param name="Profile Acceleration Time">250</param>
         <param name="Profile Time">500</param>
         <param name="Max Position Limit">131072</param>
@@ -2648,7 +2673,7 @@
         <param name="Return Delay Time">0</param>
         <param name="Velocity Limit">2920</param>
         <param name="Acceleration Limit">359100</param>
-        <param name="Current Limit">1000</param>
+        <param name="Current Limit">1500</param>
         <param name="Profile Velocity">100</param>
         <param name="Profile Acceleration">50</param>
         <param name="Max Position Limit">131875</param>
@@ -2678,18 +2703,24 @@
         <param name="Position P Gain">1583185</param>
         <param name="Velocity P Gain">41387</param>
         <param name="Velocity I Gain">1065630</param>
+        <param name="[unit info]">
+          Present Position,0.00001,m,signed,0.0;
+          Goal Position,0.00001,m,signed,0.0;
+          Present Velocity,0.00087381333,m/s,signed,0.0;
+          Goal Velocity,0.00087381333,m/s,signed,0.0;
+        </param>
       </gpio>
-
       <!-- HEAD -->
       <gpio name="dxl61">
         <param name="type">dxl</param>
-        <param name="ID">61</param>z
+        <param name="ID">61</param>
         <command_interface name="Goal Position"/>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Hardware Error Status"/>
-        <param name="Drive Mode">1</param>
+        <state_interface name="Present Input Voltage"/>
+        <param name="Drive Mode">5</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Profile Velocity">100</param>
@@ -2710,7 +2741,7 @@
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Hardware Error Status"/>
-        <param name="Drive Mode">1</param>
+        <param name="Drive Mode">5</param>
         <param name="Operating Mode">3</param>
         <param name="Return Delay Time">0</param>
         <param name="Profile Velocity">100</param>
@@ -2720,8 +2751,8 @@
         <param name="Position P Gain">800</param>
         <param name="Position I Gain">200</param>
         <param name="Position D Gain">200</param>
-        <param name="Feedforward 1st Gain">30</param>
-        <param name="Feedforward 2nd Gain">30</param>
+        <param name="Feedforward 1st Gain">20</param>
+        <param name="Feedforward 2nd Gain">20</param>
       </gpio>
 
 
@@ -2789,6 +2820,5 @@
         <param name="Profile Time">1000</param>
       </gpio>
     </ros2_control>
-
   </xacro:macro>
 </robot>
