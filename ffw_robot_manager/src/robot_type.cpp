@@ -67,6 +67,52 @@ std::vector<BatteryInfo> FfwSg2Rev1RobotType::get_battery_configurations() const
   return batteries;
 }
 
+FfwSh5Rev1RobotType::FfwSh5Rev1RobotType()
+{
+  // SH5 uses the same battery model and monitored interfaces as SG2.
+  battery_model_ = std::make_shared<UbetterBatteryModel>();
+}
+
+std::string FfwSh5Rev1RobotType::get_type_name() const
+{
+  return "ffw_sh5_rev1";
+}
+
+bool FfwSh5Rev1RobotType::is_battery_monitoring_enabled() const
+{
+  return true;
+}
+
+std::shared_ptr<BatteryModel> FfwSh5Rev1RobotType::get_battery_model() const
+{
+  return battery_model_;
+}
+
+std::vector<BatteryInfo> FfwSh5Rev1RobotType::get_battery_configurations() const
+{
+  std::vector<BatteryInfo> batteries;
+
+  // Left battery
+  BatteryInfo left_battery;
+  left_battery.name = "left";
+  left_battery.interface_name = "dxl1";
+  left_battery.topic_name = "ai_worker/battery/left/state";
+  left_battery.frame_id = "battery_left";
+  left_battery.voltage_index = std::numeric_limits<size_t>::max();
+  batteries.push_back(left_battery);
+
+  // Right battery
+  BatteryInfo right_battery;
+  right_battery.name = "right";
+  right_battery.interface_name = "dxl61";
+  right_battery.topic_name = "ai_worker/battery/right/state";
+  right_battery.frame_id = "battery_right";
+  right_battery.voltage_index = std::numeric_limits<size_t>::max();
+  batteries.push_back(right_battery);
+
+  return batteries;
+}
+
 std::shared_ptr<RobotType> create_robot_type(const std::string & type_name)
 {
   if (type_name == "ffw_sg2_rev1") {
