@@ -46,13 +46,13 @@ def generate_launch_description():
                               description='Enable mock sensor commands.'),
         DeclareLaunchArgument('port_name', default_value='/dev/follower',
                               description='Port name for hardware connection.'),
-        DeclareLaunchArgument('launch_cameras', default_value='false',
+        DeclareLaunchArgument('launch_cameras', default_value='true',
                               description='Whether to launch cameras.'),
         DeclareLaunchArgument('init_position', default_value='true',
                               description='Whether to launch the init_position node.'),
         DeclareLaunchArgument('model', default_value='ffw_sh5_rev1_follower',
                               description='Robot model name.'),
-        DeclareLaunchArgument('use_head_eef_tracker', default_value='true',
+        DeclareLaunchArgument('use_head_eef_tracker', default_value='false',
                               description='Whether to launch the head EEF tracker node.'),
         DeclareLaunchArgument(
             'init_position_file',
@@ -161,6 +161,7 @@ def generate_launch_description():
             'hand_r_controller',
             'effort_l_controller',
             'effort_r_controller',
+            'ffw_robot_manager',
         ],
         parameters=[robot_description],
     )
