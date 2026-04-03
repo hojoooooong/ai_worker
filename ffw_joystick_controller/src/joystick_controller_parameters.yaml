@@ -104,6 +104,12 @@ joystick_controller:
     description: "Deadzone around center position [0.0, 1.0)",
     read_only: true
   }
+  enable_joystick_update: {
+    type: bool,
+    default_value: true,
+    description: "Enable joystick input processing and trajectory publishing.",
+    read_only: true
+  }
   long_press_duration: {
     type: double,
     default_value: 2.0,

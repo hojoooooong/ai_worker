@@ -454,6 +454,7 @@ controller_interface::return_type JoystickController::update(
     return controller_interface::return_type::OK;
   }
 
+  const bool joystick_update_enabled = params_.enable_joystick_update;
   bool swerve_mode = (current_mode_ == constants::SWERVE_MODE);
   JoystickValues joystick_values;
   bool left_tact_switch_pressed = false;
@@ -468,7 +469,10 @@ controller_interface::return_type JoystickController::update(
     auto & last_active_positions = sensor_last_active_positions_[sensor_name];
 
     // Read and normalize sensor values
-    std::vector<double> normalized_values = read_and_normalize_sensor_values(sensor_idx);
+    std::vector<double> normalized_values(state_interface_types_.size(), 0.0);
+    if (joystick_update_enabled) {
+      normalized_values = read_and_normalize_sensor_values(sensor_idx);
+    }
 
     // Check if any joystick is active
     bool any_sensorxel_joy_active = std::any_of(normalized_values.begin(), normalized_values.end(),
@@ -496,7 +500,9 @@ controller_interface::return_type JoystickController::update(
     }
 
     // Publish joint trajectory
-    if (!current_joint_states_.name.empty() && !controlled_joints.empty()) {
+    if (
+      joystick_update_enabled && !current_joint_states_.name.empty() && !controlled_joints.empty())
+    {
       std::vector<double> positions;
 
       if (swerve_mode || any_sensorxel_joy_active) {
@@ -569,6 +575,10 @@ controller_interface::CallbackReturn JoystickController::on_configure(
       "Invalid deadzone %.3f. 'deadzone' must be in the range [0.0, 1.0).",
       params_.deadzone);
     return controller_interface::CallbackReturn::ERROR;
+  }
+
+  if (!params_.enable_joystick_update) {
+    RCLCPP_INFO(logger, "Joystick updates are disabled by parameter.");
   }
 
   // Get sensorxel_joy sensor names from parameters
