@@ -41,9 +41,6 @@ start_container() {
         talos up
     fi
 
-    # Notice: rmw_zenoh_cpp is default from 1.2.0
-    print_notice
-
     # Notify if an update is available (meta package version vs GitHub latest release)
     CURRENT_VER=$(get_current_version)
     LATEST_VER=$(get_latest_version)
@@ -82,9 +79,6 @@ enter_container() {
         echo "Error: Container is not running"
         exit 1
     fi
-
-    # Notice
-    print_notice
 
     # Notify if an update is available (meta package version vs git tag)
     CURRENT_VER=$(get_current_version)
