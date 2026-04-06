@@ -55,6 +55,7 @@ class PedalInputNode(Node):
 
         # Press/toggle state
         self.current_state = False  # 0 or 1
+        self.prev_state = False
         self.pressed_start_time: Optional[rclpy.time.Time] = None
         self.toggle_done_for_current_press: bool = False
 
@@ -135,12 +136,14 @@ class PedalInputNode(Node):
 
             if not self.toggle_done_for_current_press:
                 held_duration = now - self.pressed_start_time
+                self.get_logger().info(f'{held_duration}')
                 if held_duration >= Duration(seconds=self.long_press_seconds):
                     # Toggle state once per press-and-hold
                     self.current_state = False if self.current_state == True else True
                     self.toggle_done_for_current_press = True
-                    if self.current_state:
+                    if self.current_state != self.prev_state:
                         self._call_reactivate()
+                        self.prev_state = self.current_state
         else:
             # Released: reset tracking for next press
             self.pressed_start_time = None
