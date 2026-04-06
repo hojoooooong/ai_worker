@@ -70,14 +70,13 @@ RUN mkdir -p /var/run/agent && \
     chmod 777 /var/run/agent
 
 
-RUN git clone https://github.com/ROBOTIS-GIT/talos_system_manager.git /opt/talos_system_manager
+RUN git clone -b feature-first-update https://github.com/ROBOTIS-GIT/cyclo_manager.git /opt/cyclo_manager
 
-ENV PYTHONPATH=/opt/talos_system_manager:${PYTHONPATH}
+ENV PYTHONPATH=/opt/cyclo_manager:${PYTHONPATH}
 
 RUN pip config set global.break-system-packages true
 
-# Install requirements.txt. tqdm (transitive dep e.g. from zenoh-ros2-sdk) is already installed by ros-jazzy-rmw-zenoh-cpp; pip reuses it.
-RUN pip install --no-cache-dir --ignore-installed -r /opt/talos_system_manager/requirements.txt
+RUN pip install --no-cache-dir --ignore-installed -r /opt/cyclo_manager/requirements.txt
 
 # New-style s6-rc services (recommended in s6-overlay v3 docs)
 # Define services under /etc/s6-overlay/s6-rc.d and add them to the user bundle.
