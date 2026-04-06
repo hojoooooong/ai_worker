@@ -2,6 +2,11 @@
 Changelog for package ffw
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.1.21 (2026-03-26)
+-------------------
+* Added docker-compose.novnc.yml
+* Contributors: Wonho Yun
+
 1.1.20 (2026-03-12)
 -------------------
 * Fixed version of docker image in docker-compose.yml
