@@ -136,7 +136,6 @@ class PedalInputNode(Node):
 
             if not self.toggle_done_for_current_press:
                 held_duration = now - self.pressed_start_time
-                self.get_logger().info(f'{held_duration}')
                 if held_duration >= Duration(seconds=self.long_press_seconds):
                     # Toggle state once per press-and-hold
                     self.current_state = False if self.current_state == True else True
