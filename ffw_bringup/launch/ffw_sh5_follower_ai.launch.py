@@ -41,7 +41,7 @@ def generate_launch_description():
                               description='Enable mock sensor commands.'),
         DeclareLaunchArgument('port_name', default_value='/dev/follower',
                               description='Port name for hardware connection.'),
-        DeclareLaunchArgument('launch_cameras', default_value='false',
+        DeclareLaunchArgument('launch_cameras', default_value='true',
                               description='Whether to launch cameras.'),
         DeclareLaunchArgument('init_position', default_value='true',
                               description='Whether to launch the init_position node.'),
@@ -338,6 +338,21 @@ def generate_launch_description():
         output='screen',
     )
 
+    # Camera launch include
+    bringup_launch_dir = PathJoinSubstitution([FindPackageShare('ffw_bringup'), 'launch'])
+    camera_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([bringup_launch_dir,
+                                                            'camera.launch.py'])),
+        launch_arguments={'launch_wrist_cameras': 'false'}.items(),
+        condition=IfCondition(launch_cameras)
+    )
+
+    # Camera timers with conditional delay based on init_position
+    camera_timer_20s = TimerAction(period=20.0, actions=[camera_launch],
+                                   condition=IfCondition(init_position))
+    camera_timer_10s = TimerAction(period=10.0, actions=[camera_launch],
+                                   condition=UnlessCondition(init_position))
+
     init_position_event_handler = RegisterEventHandler(
         event_handler=OnProcessExit(
             target_action=robot_controller_spawner,
@@ -382,6 +397,8 @@ def generate_launch_description():
             swerve_drive_spawner_direct,
             init_position_event_handler,
             swerve_controller_switch_event_handler,
+            camera_timer_20s,
+            camera_timer_10s,
             preset_hand_controller,
         ]
     )

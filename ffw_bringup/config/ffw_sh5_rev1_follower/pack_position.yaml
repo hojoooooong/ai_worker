@@ -58,7 +58,7 @@
       joint_names:
         - lift_joint
       step_names: [step0]
-      step0: [-0.145]
+      step0: [-0.150]
       duration: 10.0
       position_tolerance: 0.1
       velocity_tolerance: 0.01

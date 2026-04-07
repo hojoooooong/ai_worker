@@ -20,12 +20,21 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import GroupAction, IncludeLaunchDescription, TimerAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
+    declared_arguments = [
+        DeclareLaunchArgument('launch_wrist_cameras', default_value='true',
+                              description='Whether to launch wrist (RealSense) cameras.'),
+    ]
+
+    launch_wrist_cameras = LaunchConfiguration('launch_wrist_cameras')
+
     bringup_launch_dir = os.path.join(get_package_share_directory('ffw_bringup'), 'launch')
 
     # ZED camera launch
@@ -84,6 +93,7 @@ def generate_launch_description():
     camera_realsense = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(bringup_launch_dir, 'camera_realsense.launch.py')),
+        condition=IfCondition(launch_wrist_cameras),
     )
 
     # RealSense topic relay nodes
@@ -144,12 +154,16 @@ def generate_launch_description():
     realsense_relay_nodes = TimerAction(
         period=15.0,
         actions=[relay_left_wrist, relay_right_wrist,
-                 relay_left_wrist_info, relay_right_wrist_info]
+                 relay_left_wrist_info, relay_right_wrist_info],
+        condition=IfCondition(launch_wrist_cameras),
     )
 
-    return LaunchDescription([
-        camera_zed,
-        zed_relay_nodes,
-        TimerAction(period=10.0, actions=[camera_realsense]),
-        realsense_relay_nodes,
-    ])
+    return LaunchDescription(
+        declared_arguments + [
+            camera_zed,
+            zed_relay_nodes,
+            TimerAction(period=10.0, actions=[camera_realsense],
+                        condition=IfCondition(launch_wrist_cameras)),
+            realsense_relay_nodes,
+        ]
+    )
