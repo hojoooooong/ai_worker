@@ -34,19 +34,19 @@
             <param name="set_dxl_torque_srv_name">dynamixel_hardware_interface/set_dxl_torque</param>
             <param name="transmission_to_joint_matrix">
               1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, -1.5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 1.5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, -2.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, -1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
               0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 2.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
               0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
               0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0,
               0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 1.5, 0, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.5, 0, 0, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -2.0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0,
               0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -2.0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0,
               0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
               0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1
             </param>
@@ -143,6 +143,9 @@
         <state_interface name="Present Position"/>
         <param name="Return Delay Time">0</param>
         <param name="Torque Enable">0</param>
+        <param name="[unit info]">
+          Present Position, 0.00038349519697141030,rad,signed, -3.490658654;
+        </param>
       </gpio>
       <gpio name="dxl31">
         <param name="type">dxl</param>
@@ -165,7 +168,7 @@
         <param name="Return Delay Time">0</param>
         <param name="Drive Mode">1</param>
         <param name="[unit info]">
-          Present Position, 0.00038349519697141030,rad,signed,-1.5707963268;
+          Present Position, 0.00038349519697141030,rad,signed,-1.396263327;
         </param>
         <param name="Torque Enable">0</param>
       </gpio>
@@ -223,6 +226,9 @@
         <state_interface name="Present Position"/>
         <param name="Return Delay Time">0</param>
         <param name="Torque Enable">0</param>
+        <param name="[unit info]">
+          Present Position, 0.00038349519697141030,rad,signed, -2.792526654;
+        </param>
       </gpio>
       <gpio name="dxl1">
         <param name="type">dxl</param>
@@ -244,7 +250,7 @@
         <state_interface name="Present Position"/>
         <param name="Return Delay Time">0</param>
         <param name="[unit info]">
-          Present Position, 0.00038349519697141030,rad,signed,-4.7123889804;
+          Present Position, 0.00038349519697141030,rad,signed,-4.88692198;
         </param>
         <param name="Torque Enable">0</param>
       </gpio>
