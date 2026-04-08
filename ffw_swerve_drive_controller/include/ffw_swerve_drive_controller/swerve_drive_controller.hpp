@@ -67,9 +67,6 @@ using TfStateMsg = tf2_msgs::msg::TFMessage;
 using OdomStatePublisher = realtime_tools::RealtimePublisher<OdomStateMsg>;
 using TfStatePublisher = realtime_tools::RealtimePublisher<TfStateMsg>;
 
-// Enum definitions
-enum Rotation { CCW, CW, STOP };
-
 // Structure to hold module information for easier access
 struct ModuleHandles
 {
@@ -152,20 +149,26 @@ protected:
   std::vector<double> module_steering_limit_upper_;
   std::vector<double> module_wheel_speed_limit_lower_;
   std::vector<double> module_wheel_speed_limit_upper_;
-  bool enabled_steering_flip_;
   bool enabled_steering_angular_velocity_limit_;
-  bool enabled_steering_angular_limit_;
   bool enabled_open_loop_;
-  uint is_rotation_direction_;
   std::vector<double> previoud_steering_commands_;
   double steering_angular_velocity_limit_;
+
+  // 180° Rule: Smooth direction reversal state tracking per module
+  // Reversal phases: DECEL → STEERING → ACCEL
+  enum class ReversalPhase { NORMAL, DECELERATING, STEERING, ACCELERATING };
+  std::vector<ReversalPhase> reversal_phase_;              // Current phase per module
+  std::vector<double> previous_wheel_rotation_direction_;  // Previous direction per module
+  std::vector<double> wheel_speed_scale_;                  // Speed scale during reversal (0.0~1.0)
+  std::vector<double> reversal_target_steering_angle_;     // Target steering angle after reversal
   double steering_alignment_angle_error_threshold_;
   double steering_alignment_start_angle_error_threshold_;
   double steering_alignment_start_speed_error_threshold_;
+  double linear_vel_deadband_;
+  double angular_vel_deadband_;
   std::string odom_solver_method_str_;
 
   std::string cmd_vel_topic_;
-  bool use_stamped_cmd_vel_;
   double cmd_vel_timeout_;
   rclcpp::Duration ref_timeout_;
 
@@ -190,7 +193,6 @@ protected:
   Odometry odometry_;
   rclcpp::Publisher<OdomStateMsg>::SharedPtr odom_s_publisher_ = nullptr;
   std::unique_ptr<OdomStatePublisher> rt_odom_state_publisher_ = nullptr;
-  OdomStateMsg odom_msg_;
 
   // joint commander publisher
   using CommandedJointStatePublisher =
@@ -198,7 +200,6 @@ protected:
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr commanded_joint_state_publisher_ =
     nullptr;
   std::unique_ptr<CommandedJointStatePublisher> rt_commanded_joint_state_publisher_ = nullptr;
-  sensor_msgs::msg::JointState joint_state_msg_;
 
   // Odometry Parameters
   std::string odom_frame_id_;
@@ -212,7 +213,6 @@ protected:
   // TF Broadcaster
   rclcpp::Publisher<TfStateMsg>::SharedPtr tf_odom_s_publisher_;
   std::unique_ptr<TfStatePublisher> rt_tf_odom_state_publisher_;
-  TfStateMsg tf_msg_;
 
   // Visualization
   bool enable_visualization_;
@@ -229,7 +229,6 @@ protected:
   std::shared_ptr<realtime_tools::RealtimePublisher<geometry_msgs::msg::Twist>>
   realtime_limited_velocity_publisher_ =
     nullptr;
-  geometry_msgs::msg::Twist limited_velocity_msg_;
   std::queue<Twist> previous_commands_;
 
   SpeedLimiter limiter_linear_x_;
@@ -237,12 +236,27 @@ protected:
   SpeedLimiter limiter_angular_z_;
 
   // Flag to check if stopping due to timeout
-  bool enable_direct_joint_commands_ = false;
   double wheel_saturation_scale_factor_ = 1.0;
   bool enabled_wheel_saturation_scaling_ = false;
 
-  // Open Loop ctrl
-  std::vector<double> previous_wheel_directions_;
+  // Pre-allocated vectors for update() to avoid heap allocation in real-time loop
+  std::vector<double> current_wheel_velocities_;
+  std::vector<double> corrected_steering_positions_;
+  std::vector<double> final_steering_commands_;
+  std::vector<double> final_wheel_velocity_commands_;
+  std::vector<double> robot_frame_steering_angles_for_viz_;
+  std::vector<double> wheel_linear_vels_for_viz_;
+
+  // Mathematical constants
+  static constexpr double kPiHalf = M_PI * 0.5;
+  static constexpr double kTwoPi = 2.0 * M_PI;
+  static constexpr double kEpsilon = 1e-9;
+
+  // Reversal constants
+  static constexpr double kReversalDecelRate = 5.0;
+  static constexpr double kReversalAccelRate = 3.0;
+  static constexpr double kReversalThreshold = 0.05;
+  static constexpr double kSteeringTolerance = 0.1;
 
   /**
    * @brief Normalize angle to be within the range [-pi, pi].

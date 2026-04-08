@@ -49,6 +49,11 @@ def generate_launch_description():
                               description='Whether to launch cameras.'),
         DeclareLaunchArgument('launch_lidar', default_value='true',
                               description='Whether to launch lidar.'),
+        DeclareLaunchArgument(
+            'launch_v_marker_estimation',
+            default_value='true',
+            description='Whether to launch v_marker_estimation (L-V-V-L dock stack).',
+        ),
         DeclareLaunchArgument('init_position', default_value='true',
                               description='Whether to launch the init_position node.'),
         DeclareLaunchArgument('model', default_value='ffw_sg2_rev1_follower',
@@ -73,6 +78,7 @@ def generate_launch_description():
     port_name = LaunchConfiguration('port_name')
     launch_cameras = LaunchConfiguration('launch_cameras')
     launch_lidar = LaunchConfiguration('launch_lidar')
+    launch_v_marker_estimation = LaunchConfiguration('launch_v_marker_estimation')
     init_position = LaunchConfiguration('init_position')
     model = LaunchConfiguration('model')
     use_head_eef_tracker = LaunchConfiguration('use_head_eef_tracker')
@@ -329,6 +335,51 @@ def generate_launch_description():
     lidar_timer_10s = TimerAction(period=10.0, actions=[lidar_launch],
                                   condition=UnlessCondition(init_position))
 
+    # V-marker estimation (dock localization / holonomic approach)
+    # Inlined from v_marker_estimation.launch.py for consistent control with
+    # other nodes in this launch file (params, naming, lifecycle).
+    v_marker_param_file = PathJoinSubstitution([
+        FindPackageShare('v_marker_estimation'),
+        'param',
+        'v_marker_estimation_config.yaml',
+    ])
+
+    lidar_cluster_node = Node(
+        package='v_marker_estimation',
+        executable='lidar_cluster',
+        name='lidar_cluster',
+        parameters=[v_marker_param_file],
+        output='screen',
+        condition=IfCondition(launch_v_marker_estimation),
+    )
+
+    v_marker_localization_node = Node(
+        package='v_marker_estimation',
+        executable='v_marker_localization',
+        name='v_marker_localization',
+        parameters=[v_marker_param_file],
+        output='screen',
+        condition=IfCondition(launch_v_marker_estimation),
+    )
+
+    holonomic_drive_controller_node = Node(
+        package='v_marker_estimation',
+        executable='holonomic_drive_controller',
+        name='holonomic_drive_controller',
+        parameters=[v_marker_param_file],
+        output='screen',
+        condition=IfCondition(launch_v_marker_estimation),
+    )
+
+    marker_ab_goal_router_node = Node(
+        package='v_marker_estimation',
+        executable='marker_ab_goal_router',
+        name='marker_ab_goal_router',
+        parameters=[v_marker_param_file],
+        output='screen',
+        condition=IfCondition(launch_v_marker_estimation),
+    )
+
     # Head EEF Tracker node
     head_eef_tracker_node = Node(
         package='ffw_bringup',
@@ -350,7 +401,7 @@ def generate_launch_description():
             'target_frame': 'base_link',
             'angle_min': -3.141592654,
             'angle_max': 3.141592654,
-            'angle_increment': 0.006544985,
+            'angle_increment': 0.004544985,
             'scan_time': 0.1,
             'range_min': 0.05,
             'range_max': 20.0,
@@ -380,6 +431,10 @@ def generate_launch_description():
             camera_timer_10s,
             lidar_timer_20s,
             lidar_timer_10s,
+            lidar_cluster_node,
+            v_marker_localization_node,
+            holonomic_drive_controller_node,
+            marker_ab_goal_router_node,
             head_eef_tracker_node,
             dual_laser_merger_node,
         ]

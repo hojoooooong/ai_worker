@@ -1,0 +1,3 @@
+std_msgs/Header header
+v_marker_estimation/LaserSampleSet[] sampleset_list
+geometry_msgs/Point robot_pose

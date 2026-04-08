@@ -533,3 +533,7 @@ doc/
 *.ar
 
 ffw_bringup/config/common/rs_serial.yaml
+*.mcap
+*.db3
+*.bag
+v_marker_estimation/lidar_tf_bag/
