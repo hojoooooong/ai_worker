@@ -167,6 +167,9 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc  && \
     echo "alias motion_controller_hand='ros2 launch cyclo_motion_controller_ros ai_worker_controller.launch.py controller_type:=vr hand:=true'" >> ~/.bashrc && \
     echo "export ROS_DOMAIN_ID=30" >> ~/.bashrc
 
+RUN echo "export C_INCLUDE_PATH=$C_INCLUDE_PATH:/opt/venv/lib/python3.12/site-packages/numpy/core/include" >> ~/.bashrc  && \
+    echo "export CPLUS_INCLUDE_PATH=$CPLUS_INCLUDE_PATH:/opt/venv/lib/python3.12/site-packages/numpy/core/include" >> ~/.bashrc
+
 # Create directory for agent Unix Domain Socket
 RUN mkdir -p /var/run/agent && \
     chmod 777 /var/run/agent
@@ -215,3 +218,6 @@ RUN mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d && \
 
 # Set s6-overlay as entrypoint
 ENTRYPOINT ["/init"]
+
+# Install numpy<2 for cyclo_control retargeting
+RUN pip install "numpy<2"
