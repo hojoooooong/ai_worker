@@ -36,7 +36,7 @@
             izz="2.0124950e-04" />
          </inertial>
       </link>
-      <joint name="${prefix}palm" type="fixed">
+      <joint name="${prefix}l_palm" type="fixed">
          <parent link="${prefix}hx5_d20_left_base" />
          <child link="end_effector_l_link" />
          <origin xyz="0.0 0.0 0.054" rpy="0 0 0" />
