@@ -2,6 +2,11 @@
 Changelog for package ffw_description
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.2.1 (2026-04-09)
+------------------
+* Fixed palm joint name for HX5
+* Contributors: Hyunwoo Nam
+
 1.2.0 (2026-04-01)
 ------------------
 * Added support for SH5, BH5
