@@ -2,6 +2,11 @@
 Changelog for package ffw_bringup
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.2.0 (2026-04-01)
+------------------
+* Added support for SH5, BH5
+* Contributors: Hyunwoo Nam
+
 1.1.21 (2026-03-26)
 -------------------
 * None
