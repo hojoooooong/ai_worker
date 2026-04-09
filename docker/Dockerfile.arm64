@@ -134,6 +134,8 @@ RUN mkdir -p ${COLCON_WS}/src && \
     git clone -b jazzy https://github.com/ROBOTIS-GIT/DynamixelSDK.git && \
     git clone -b jazzy https://github.com/ROBOTIS-GIT/ai_worker.git && \
     git clone -b jazzy https://github.com/ROBOTIS-GIT/Lakibeam_ROS2_Driver.git && \
+    git clone -b jazzy https://github.com/ROBOTIS-GIT/cyclo_control.git && \
+    git clone -b jazzy https://github.com/ROBOTIS-GIT/robotis_interfaces.git && \
     git clone -b r/4.56.4 https://github.com/IntelRealSense/realsense-ros.git && \
     cd realsense-ros && git checkout cbd8b8487d4c0126bb590822db9469414496e62a && \
     cd ${COLCON_WS}/src && \
@@ -159,7 +161,14 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc  && \
     echo "alias ffw_sg2_follower_ai='ros2 launch ffw_bringup ffw_sg2_follower_ai.launch.py'" >> ~/.bashrc && \
     echo "alias ffw_bg2_ai='ros2 launch ffw_bringup ffw_bg2_ai.launch.py'" >> ~/.bashrc && \
     echo "alias ffw_sg2_ai='ros2 launch ffw_bringup ffw_sg2_ai.launch.py'" >> ~/.bashrc && \
+    echo "alias ffw_sh5_follower_ai='ros2 launch ffw_bringup ffw_sh5_follower_ai.launch.py'" >> ~/.bashrc && \
+    echo "alias ffw_bh5_follower_ai='ros2 launch ffw_bringup ffw_bh5_follower_ai.launch.py'" >> ~/.bashrc && \
+    echo "alias motion_controller='ros2 launch cyclo_motion_controller_ros ai_worker_controller.launch.py'" >> ~/.bashrc && \
+    echo "alias motion_controller_hand='ros2 launch cyclo_motion_controller_ros ai_worker_controller.launch.py controller_type:=vr hand:=true'" >> ~/.bashrc && \
     echo "export ROS_DOMAIN_ID=30" >> ~/.bashrc
+
+RUN echo "export C_INCLUDE_PATH=$C_INCLUDE_PATH:/opt/venv/lib/python3.12/site-packages/numpy/core/include" >> ~/.bashrc  && \
+    echo "export CPLUS_INCLUDE_PATH=$CPLUS_INCLUDE_PATH:/opt/venv/lib/python3.12/site-packages/numpy/core/include" >> ~/.bashrc
 
 # Create directory for agent Unix Domain Socket
 RUN mkdir -p /var/run/agent && \
@@ -209,3 +218,6 @@ RUN mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d && \
 
 # Set s6-overlay as entrypoint
 ENTRYPOINT ["/init"]
+
+# Install numpy<2 for cyclo_control retargeting
+RUN pip install "numpy<2"
