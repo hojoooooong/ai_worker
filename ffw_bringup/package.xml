@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>ffw_bringup</name>
-  <version>1.2.1</version>
+  <version>1.1.20</version>
   <description>
     ROS 2 launch scripts for starting the FFW
   </description>
@@ -20,6 +20,7 @@
   <depend>ros_gz_sim</depend>
   <depend>ros_gz_image</depend>
   <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>ffw_robot_state_publisher</exec_depend>
   <exec_depend>gz_ros2_control</exec_depend>
   <exec_depend>ros2_control</exec_depend>
   <exec_depend>ros2_controllers</exec_depend>
