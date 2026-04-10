@@ -14,6 +14,7 @@
 
 #include <joystick_controller/joystick_controller.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <string>
 #include <stdexcept>
@@ -60,6 +61,8 @@ double JoystickController::normalize_joystick_value(double raw_adc, bool is_tact
     return raw_adc;
   }
 
+  const double deadzone = std::clamp(params_.deadzone, 0.0, std::nextafter(1.0, 0.0));
+
   double normalized_value;
   if (raw_adc < params_.joystick_calibration_center) {
     normalized_value = -(params_.joystick_calibration_center - raw_adc) /
@@ -70,15 +73,15 @@ double JoystickController::normalize_joystick_value(double raw_adc, bool is_tact
   }
 
   // Apply deadzone
-  if (std::abs(normalized_value) < params_.deadzone) {
+  if (std::abs(normalized_value) < deadzone) {
     return 0.0;
   }
 
   // Normalize after deadzone
   if (normalized_value > 0) {
-    normalized_value = (normalized_value - params_.deadzone) / (1.0 - params_.deadzone);
+    normalized_value = (normalized_value - deadzone) / (1.0 - deadzone);
   } else {
-    normalized_value = (normalized_value + params_.deadzone) / (1.0 - params_.deadzone);
+    normalized_value = (normalized_value + deadzone) / (1.0 - deadzone);
   }
 
   return normalized_value;
@@ -231,6 +234,30 @@ void JoystickController::publish_joint_trajectory(
   } else {
     RCLCPP_WARN(get_node()->get_logger(),
         "Joint trajectory publisher not found for sensor: %s", sensor_name.c_str());
+  }
+}
+
+void JoystickController::publish_joint_state(
+  const std::vector<std::string> & controlled_joints,
+  const std::vector<double> & positions,
+  const std::string & sensor_name,
+  const rclcpp::Time & time)
+{
+  auto joint_state_msg = sensor_msgs::msg::JointState();
+  joint_state_msg.header.stamp = time;
+  joint_state_msg.header.frame_id = "";
+  joint_state_msg.name = controlled_joints;
+  joint_state_msg.position = positions;
+  // Set velocity and effort to NaN (not available from joystick)
+  joint_state_msg.velocity.resize(positions.size(), std::numeric_limits<double>::quiet_NaN());
+  joint_state_msg.effort.resize(positions.size(), std::numeric_limits<double>::quiet_NaN());
+
+  auto joint_state_publisher = sensor_joint_state_stamped_publisher_[sensor_name];
+  if (joint_state_publisher) {
+    joint_state_publisher->publish(joint_state_msg);
+  } else {
+    RCLCPP_WARN(get_node()->get_logger(),
+        "Joint state publisher not found for sensor: %s", sensor_name.c_str());
   }
 }
 
@@ -427,6 +454,7 @@ controller_interface::return_type JoystickController::update(
     return controller_interface::return_type::OK;
   }
 
+  const bool joystick_update_enabled = params_.enable_joystick_update;
   bool swerve_mode = (current_mode_ == constants::SWERVE_MODE);
   JoystickValues joystick_values;
   bool left_tact_switch_pressed = false;
@@ -440,12 +468,27 @@ controller_interface::return_type JoystickController::update(
     const auto & controlled_joints = sensor_controlled_joints_[sensor_name];
     auto & last_active_positions = sensor_last_active_positions_[sensor_name];
 
-    // Read and normalize sensor values
+    // Read all joystick interfaces so tact-switch features still work even when motion is disabled.
     std::vector<double> normalized_values = read_and_normalize_sensor_values(sensor_idx);
+    if (!joystick_update_enabled) {
+      for (size_t j = 0; j < normalized_values.size(); ++j) {
+        if (j != constants::TACT_SWITCH_INTERFACE_INDEX) {
+          normalized_values[j] = 0.0;
+        }
+      }
+    }
 
-    // Check if any joystick is active
-    bool any_sensorxel_joy_active = std::any_of(normalized_values.begin(), normalized_values.end(),
-        [](double value) {return std::abs(value) > 0.0;});
+    // Motion activity only depends on joystick axes, not the tact switch state.
+    bool any_sensorxel_joy_active = false;
+    for (size_t j = 0; j < normalized_values.size(); ++j) {
+      if (j == constants::TACT_SWITCH_INTERFACE_INDEX) {
+        continue;
+      }
+      if (std::abs(normalized_values[j]) > 0.0) {
+        any_sensorxel_joy_active = true;
+        break;
+      }
+    }
 
     // Update joystick values
     update_joystick_values(sensor_name, normalized_values, joystick_values,
@@ -469,7 +512,9 @@ controller_interface::return_type JoystickController::update(
     }
 
     // Publish joint trajectory
-    if (!current_joint_states_.name.empty() && !controlled_joints.empty()) {
+    if (
+      joystick_update_enabled && !current_joint_states_.name.empty() && !controlled_joints.empty())
+    {
       std::vector<double> positions;
 
       if (swerve_mode || any_sensorxel_joy_active) {
@@ -484,6 +529,8 @@ controller_interface::return_type JoystickController::update(
       }
 
       publish_joint_trajectory(controlled_joints, positions, sensor_name);
+      // Publish joint state with timestamp from update() function
+      publish_joint_state(controlled_joints, positions, sensor_name, time);
     }
 
     was_active_ = any_sensorxel_joy_active;
@@ -534,6 +581,18 @@ controller_interface::CallbackReturn JoystickController::on_configure(
   // get parameters from the listener in case they were updated
   params_ = param_listener_->get_params();
 
+  if (params_.deadzone < 0.0 || params_.deadzone >= 1.0) {
+    RCLCPP_ERROR(
+      logger,
+      "Invalid deadzone %.3f. 'deadzone' must be in the range [0.0, 1.0).",
+      params_.deadzone);
+    return controller_interface::CallbackReturn::ERROR;
+  }
+
+  if (!params_.enable_joystick_update) {
+    RCLCPP_INFO(logger, "Joystick updates are disabled by parameter.");
+  }
+
   // Get sensorxel_joy sensor names from parameters
   sensorxel_joy_names_ = params_.joystick_sensors;
   n_sensorxel_joys_ = sensorxel_joy_names_.size();
@@ -574,6 +633,14 @@ controller_interface::CallbackReturn JoystickController::on_configure(
     } else {
       RCLCPP_WARN(get_node()->get_logger(), "parameter: %s not found", topic_param.c_str());
     }
+    // joint_states_stamped_topic
+    std::string joint_state_topic_param = sensor_name + "_joint_states_stamped_topic";
+    if (get_node()->has_parameter(joint_state_topic_param)) {
+      sensor_joint_state_stamped_topic_[sensor_name] =
+        get_node()->get_parameter(joint_state_topic_param).as_string();
+    } else {
+      sensor_joint_state_stamped_topic_[sensor_name] = "";
+    }
     // jog_scale
     std::string jog_scale_param = sensor_name + "_jog_scale";
     if (get_node()->has_parameter(jog_scale_param)) {
@@ -599,6 +666,27 @@ controller_interface::CallbackReturn JoystickController::on_configure(
     sensor_joint_trajectory_publisher_[sensor_name] =
       get_node()->create_publisher<trajectory_msgs::msg::JointTrajectory>(
       sensor_joint_trajectory_topic_[sensor_name], rclcpp::SystemDefaultsQoS());
+
+    // Create joint state publisher for this sensor with timestamp from update() function
+    std::string joint_state_topic_name = sensor_joint_state_stamped_topic_[sensor_name];
+    if (joint_state_topic_name.empty()) {
+      joint_state_topic_name = sensor_joint_trajectory_topic_[sensor_name];
+      // Replace "joint_trajectory" with "joint_states_stamped" in topic name
+      size_t pos = joint_state_topic_name.find("joint_trajectory");
+      if (pos != std::string::npos) {
+        joint_state_topic_name.replace(pos, std::string("joint_trajectory").length(),
+            "joint_states_stamped");
+      } else {
+        // Fallback: append "_joint_states_stamped" if pattern not found
+        joint_state_topic_name += "_joint_states_stamped";
+      }
+    }
+    sensor_joint_state_stamped_publisher_[sensor_name] =
+      get_node()->create_publisher<sensor_msgs::msg::JointState>(
+      joint_state_topic_name, rclcpp::SystemDefaultsQoS());
+    RCLCPP_INFO(get_node()->get_logger(),
+        "Created joint state stamped publisher for sensor: %s, topic: %s",
+        sensor_name.c_str(), joint_state_topic_name.c_str());
   }
 
   // Create subscriber for joint states

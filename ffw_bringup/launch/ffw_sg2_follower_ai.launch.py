@@ -121,9 +121,16 @@ def generate_launch_description():
     )
 
     robot_state_pub_node = Node(
-        package='robot_state_publisher',
-        executable='robot_state_publisher',
-        parameters=[robot_description, {'use_sim_time': use_sim}],
+        package='ffw_robot_state_publisher',
+        executable='ffw_robot_state_publisher',
+        parameters=[
+            robot_description,
+            {'use_sim_time': use_sim},
+            {'left_arm.base_link': 'base_link'},
+            {'left_arm.end_effector_link': 'end_effector_l_link'},
+            {'right_arm.base_link': 'base_link'},
+            {'right_arm.end_effector_link': 'end_effector_r_link'},
+        ],
         output='screen'
     )
 
@@ -139,6 +146,13 @@ def generate_launch_description():
         package='controller_manager',
         executable='spawner',
         arguments=['joint_state_broadcaster'],
+        output='screen'
+    )
+
+    ffw_joint_state_broadcaster_spawner = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['ffw_joint_state_broadcaster'],
         output='screen'
     )
 
@@ -355,6 +369,7 @@ def generate_launch_description():
             control_node,
             robot_state_pub_node,
             joint_state_broadcaster_spawner,
+            ffw_joint_state_broadcaster_spawner,
             delay_rviz_after_joint_state_broadcaster_spawner,
             robot_controller_spawner,
             swerve_steering_initial_position_spawner,
