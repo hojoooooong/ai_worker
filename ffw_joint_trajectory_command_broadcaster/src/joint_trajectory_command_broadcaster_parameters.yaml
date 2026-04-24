@@ -117,6 +117,11 @@ joint_trajectory_command_broadcaster:
     default_value: 1.2,
     description: "Seconds to blend from last_target to leader value when entering state=1."
   }
+  resync_ramp_duration: {
+    type: double,
+    default_value: 2.5,
+    description: "Seconds of follower-side ramp after ffw_safety resync. During this window, published trajectory points carry time_from_start=resync_ramp_duration so follower JTC smoothly interpolates from its held pose to the current last_target instead of snapping. Only active when a resync Empty message is received."
+  }
   save_pose_ids: {
     type: int_array,
     default_value: [],

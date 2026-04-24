@@ -190,6 +190,8 @@ controller_interface::CallbackReturn JointTrajectoryCommandBroadcaster::on_confi
       bool init_enabled = (group_name == "left") ?
         params_.left_enabled_init : params_.right_enabled_init;
       group_runtime_[group_name].mode = init_enabled ? Mode::TELEOP : Mode::IDLE;
+      // Default synced: publishes use time_from_start=0 unless resync flips this.
+      group_joints_synced_[group_name] = true;
     }
     RCLCPP_INFO(get_node()->get_logger(),
       "Initial mode: left=%s, right=%s",
@@ -266,22 +268,20 @@ controller_interface::CallbackReturn JointTrajectoryCommandBroadcaster::on_confi
       });
 
     // Safety resync: ffw_safety/leader_safety_filter publishes std_msgs/Empty
-    // on these topics after a violation→safe transition. In TELEOP we restart
-    // the teleop blend so the leader re-merges from the held follower pose
-    // instead of snapping to wherever the leader drifted during the pause.
+    // on these topics after a violation→safe transition. ffw_safety deactivates
+    // the follower JTC (arm_{l,r}_controller) during violation while broadcaster
+    // keeps tracking the leader, so last_target drifts away from the held
+    // follower pose. On resync we mark the group as out-of-sync so the next
+    // publishes carry time_from_start=resync_ramp_duration, letting the follower
+    // JTC interpolate smoothly from its held pose to the current last_target.
     auto make_resync_cb = [this](const std::string & group_name) {
       return [this, group_name](const std_msgs::msg::Empty::SharedPtr) {
-        if (group_runtime_[group_name].mode == Mode::TELEOP) {
-          start_teleop_blend(group_name);
-          RCLCPP_INFO(
-            get_node()->get_logger(),
-            "[%s] resync triggered — restarting teleop blend",
-            group_name.c_str());
-        } else {
-          RCLCPP_INFO(
-            get_node()->get_logger(),
-            "[%s] resync ignored (not in TELEOP)", group_name.c_str());
-        }
+        group_joints_synced_[group_name] = false;
+        group_resync_start_time_[group_name] = get_node()->now();
+        RCLCPP_INFO(
+          get_node()->get_logger(),
+          "[%s] resync triggered — follower JTC will ramp over %.2fs",
+          group_name.c_str(), params_.resync_ramp_duration);
       };
     };
     left_resync_sub_ = get_node()->create_subscription<std_msgs::msg::Empty>(
@@ -454,6 +454,8 @@ controller_interface::CallbackReturn JointTrajectoryCommandBroadcaster::on_deact
   group_upper_limits_.clear();
   group_last_target_.clear();
   group_runtime_.clear();
+  group_joints_synced_.clear();
+  group_resync_start_time_.clear();
 
   return CallbackReturn::SUCCESS;
 }
@@ -637,12 +639,29 @@ controller_interface::return_type JointTrajectoryCommandBroadcaster::update(
     // Publish trajectory (always when last_target valid)
     auto & realtime_publisher = realtime_joint_trajectory_publishers_[group_name];
     if (valid && realtime_publisher) {
+      // During a ffw_safety resync window, publish with a non-zero
+      // time_from_start so the follower JTC ramps smoothly. Auto-recover
+      // to synced=true once the window elapses.
+      rclcpp::Duration tfs = rclcpp::Duration(0, 0);
+      auto sync_it = group_joints_synced_.find(group_name);
+      if (sync_it != group_joints_synced_.end() && !sync_it->second) {
+        double elapsed =
+          (get_node()->now() - group_resync_start_time_[group_name]).seconds();
+        if (elapsed >= params_.resync_ramp_duration) {
+          sync_it->second = true;
+          RCLCPP_INFO(get_node()->get_logger(),
+            "[%s] resync ramp complete — synced", group_name.c_str());
+        } else {
+          tfs = rclcpp::Duration::from_seconds(params_.resync_ramp_duration);
+        }
+      }
+
       trajectory_msgs::msg::JointTrajectory traj_msg;
       traj_msg.header.stamp = rclcpp::Time(0, 0);
       traj_msg.joint_names = group_joints;
       traj_msg.points.resize(1);
       traj_msg.points[0].positions = last_target;
-      traj_msg.points[0].time_from_start = rclcpp::Duration(0, 0);
+      traj_msg.points[0].time_from_start = tfs;
       realtime_publisher->try_publish(traj_msg);
     }
 

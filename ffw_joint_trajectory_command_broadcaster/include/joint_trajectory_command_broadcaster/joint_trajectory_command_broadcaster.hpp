@@ -141,11 +141,16 @@ protected:
   rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr right_enable_sub_;
 
   // Safety-triggered resync: ffw_safety publishes std_msgs/Empty on these
-  // topics after a violation→safe transition. In this architecture we
-  // handle it by restarting the teleop blend so the leader re-merges
-  // smoothly instead of snapping.
+  // topics after a violation→safe transition. During violation ffw_safety
+  // deactivates the follower JTC (arm_{l,r}_controller) while broadcaster
+  // keeps tracking the leader — so on reactivation the follower would
+  // snap to a far-away last_target. On resync we flip the group out of
+  // synced state so the next publishes carry a non-zero time_from_start,
+  // letting the follower JTC interpolate smoothly to the current target.
   rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr left_resync_sub_;
   rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr right_resync_sub_;
+  std::unordered_map<std::string, bool> group_joints_synced_;
+  std::unordered_map<std::string, rclcpp::Time> group_resync_start_time_;
 
   // Last published target per group (used as blend/interp start)
   std::unordered_map<std::string, std::vector<double>> group_last_target_;
