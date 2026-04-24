@@ -12,9 +12,11 @@
             pub_frame_rate: 15.0 # Must match grab_frame_rate to avoid jitter!
 
         depth:
-            depth_mode: 'NONE' # Disable depth processing (not needed, reduces CPU load)
-            min_depth: 0.1 # Min: 0.1, Max: 3.0
-            max_depth: 10.0 # Max: 20.0
+            depth_mode: 'NEURAL' # AI-based depth: sharper edges and better fill on textureless surfaces vs ULTRA. Models optimized via ZED_Diagnostic -nrlo_all (depends on host nvidia-l4t-dla-compiler).
+            max_depth: 3.0 # Covers the scan ROI (x_max 1.5 m in base_link) with margin for off-axis points.
+            depth_confidence: 60 # Overrides common_stereo (95). Slightly relaxed; consensus filter drops residual noise.
+            depth_texture_conf: 100 # Off. Matte/textureless desk surfaces keep their points.
+
 
         sensors:
             publish_imu_tf: false # Disable IMU TF (not needed)

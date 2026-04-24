@@ -1,0 +1,36 @@
+# Capsule definitions for leader_safety_filter.
+#
+# Each capsule is (frame, p1, p2, radius) where p1/p2 are offsets in the
+# link's local frame, and radius is in meters. FK transforms p1/p2 to
+# base_link at runtime; collision check uses the capsule vs the
+# height-map ceiling (per xy cell).
+#
+# For FFW BG2/SG2 arms, each arm link extends mostly along its LOCAL
+# -z axis (per URDF in ffw_follower_body.xacro), not x. p2 values below
+# come from the child joint origins in that URDF so each capsule covers
+# the segment from the link's origin to where the next link starts.
+#
+# arm_l_link7 covers link7 + the fixed 21.5 cm down to end_effector
+# (gripper body), so end_effector_l_link only needs a small sphere for
+# the gripper tip area (or can be omitted).
+#
+# Tune visually: launch the safety filter and observe
+# /safety/capsule_markers in RViz. Adjust radius until each capsule
+# tightly covers the link's physical envelope.
+
+#대상 링크 , 시작점, 끝점, 반지름
+left:
+  - {frame: arm_l_link3, p1: [0.0, 0.0, 0.0], p2: [0.041, 0.0, -0.135], radius: 0.045}
+  - {frame: arm_l_link4, p1: [0.0, 0.0, 0.0], p2: [-0.041, 0.0, -0.149], radius: 0.045}
+  - {frame: arm_l_link5, p1: [0.0, 0.0, 0.0], p2: [0.0, 0.0, -0.104], radius: 0.040}
+  - {frame: arm_l_link6, p1: [0.0, 0.0, 0.0], p2: [0.0, 0.0, -0.089], radius: 0.035}
+  - {frame: arm_l_link7, p1: [0.0, 0.0, 0.0], p2: [0.0, 0.0, -0.215], radius: 0.035}
+  - {frame: end_effector_l_link, p1: [0.0, 0.0, 0.0], p2: [0.0, 0.0, 0.0], radius: 0.020}
+
+right:
+  - {frame: arm_r_link3, p1: [0.0, 0.0, 0.0], p2: [0.041, 0.0, -0.135], radius: 0.045}
+  - {frame: arm_r_link4, p1: [0.0, 0.0, 0.0], p2: [-0.041, 0.0, -0.149], radius: 0.045}
+  - {frame: arm_r_link5, p1: [0.0, 0.0, 0.0], p2: [0.0, 0.0, -0.104], radius: 0.040}
+  - {frame: arm_r_link6, p1: [0.0, 0.0, 0.0], p2: [0.0, 0.0, -0.089], radius: 0.035}
+  - {frame: arm_r_link7, p1: [0.0, 0.0, 0.0], p2: [0.0, 0.0, -0.215], radius: 0.035}
+  - {frame: end_effector_r_link, p1: [0.0, 0.0, 0.0], p2: [0.0, 0.0, 0.0], radius: 0.020}

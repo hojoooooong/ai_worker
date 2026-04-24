@@ -29,6 +29,7 @@
 #include "realtime_tools/realtime_publisher.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/u_int8.hpp"
+#include "std_msgs/msg/empty.hpp"
 #include "urdf/model.h"
 #include "trajectory_msgs/msg/joint_trajectory.hpp"
 #include "rclcpp/subscription.hpp"
@@ -138,6 +139,13 @@ protected:
   // Enable subscribers
   rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr left_enable_sub_;
   rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr right_enable_sub_;
+
+  // Safety-triggered resync: ffw_safety publishes std_msgs/Empty on these
+  // topics after a violation→safe transition. In this architecture we
+  // handle it by restarting the teleop blend so the leader re-merges
+  // smoothly instead of snapping.
+  rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr left_resync_sub_;
+  rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr right_resync_sub_;
 
   // Last published target per group (used as blend/interp start)
   std::unordered_map<std::string, std::vector<double>> group_last_target_;

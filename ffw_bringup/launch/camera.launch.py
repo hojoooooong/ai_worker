@@ -32,7 +32,12 @@ def generate_launch_description():
     camera_zed = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(bringup_launch_dir, 'camera_zed.launch.py')),
-        launch_arguments={'camera_model': 'zedm'}.items()
+        launch_arguments={
+            'camera_model': 'zedm',
+            'camera_name': 'zedm',
+            'publish_tf': 'false',
+            'publish_urdf': 'false',
+        }.items()
     )
 
     # ZED topic relay nodes
@@ -41,7 +46,7 @@ def generate_launch_description():
         executable='relay',
         name='relay_cam_left_head',
         arguments=[
-            '/zed/zed_node/left/image_rect_color/compressed',
+            '/zedm/zed_node/left/image_rect_color/compressed',
             '/robot/camera/cam_left_head/image_raw/compressed'
         ],
         output='screen'
@@ -52,7 +57,7 @@ def generate_launch_description():
         executable='relay',
         name='relay_cam_right_head',
         arguments=[
-            '/zed/zed_node/right/image_rect_color/compressed',
+            '/zedm/zed_node/right/image_rect_color/compressed',
             '/robot/camera/cam_right_head/image_raw/compressed'
         ],
         output='screen'
@@ -63,7 +68,7 @@ def generate_launch_description():
         executable='relay',
         name='relay_cam_left_head_info',
         arguments=[
-            '/zed/zed_node/left/camera_info',
+            '/zedm/zed_node/left/camera_info',
             '/robot/camera/cam_left_head/image_raw/compressed/camera_info'
         ],
         output='screen'
@@ -74,7 +79,7 @@ def generate_launch_description():
         executable='relay',
         name='relay_cam_right_head_info',
         arguments=[
-            '/zed/zed_node/right/camera_info',
+            '/zedm/zed_node/right/camera_info',
             '/robot/camera/cam_right_head/image_raw/compressed/camera_info'
         ],
         output='screen'

@@ -265,6 +265,30 @@ controller_interface::CallbackReturn JointTrajectoryCommandBroadcaster::on_confi
         handle_enable_msg("right", msg->data);
       });
 
+    // Safety resync: ffw_safety/leader_safety_filter publishes std_msgs/Empty
+    // on these topics after a violation→safe transition. In TELEOP we restart
+    // the teleop blend so the leader re-merges from the held follower pose
+    // instead of snapping to wherever the leader drifted during the pause.
+    auto make_resync_cb = [this](const std::string & group_name) {
+      return [this, group_name](const std_msgs::msg::Empty::SharedPtr) {
+        if (group_runtime_[group_name].mode == Mode::TELEOP) {
+          start_teleop_blend(group_name);
+          RCLCPP_INFO(
+            get_node()->get_logger(),
+            "[%s] resync triggered — restarting teleop blend",
+            group_name.c_str());
+        } else {
+          RCLCPP_INFO(
+            get_node()->get_logger(),
+            "[%s] resync ignored (not in TELEOP)", group_name.c_str());
+        }
+      };
+    };
+    left_resync_sub_ = get_node()->create_subscription<std_msgs::msg::Empty>(
+      "/leader/resync_left", rclcpp::SystemDefaultsQoS(), make_resync_cb("left"));
+    right_resync_sub_ = get_node()->create_subscription<std_msgs::msg::Empty>(
+      "/leader/resync_right", rclcpp::SystemDefaultsQoS(), make_resync_cb("right"));
+
     // Block until follower joint_states init last_target for every group
     while (rclcpp::ok()) {
       bool all_init = true;
