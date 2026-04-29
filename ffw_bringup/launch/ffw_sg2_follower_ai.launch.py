@@ -29,6 +29,7 @@ from launch.substitutions import Command
 from launch.substitutions import FindExecutable
 from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PathJoinSubstitution
+from launch.substitutions import PythonExpression
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -64,6 +65,15 @@ def generate_launch_description():
             default_value='ffw_sg2_follower',
             description='Type of ros2_control',
         ),
+        DeclareLaunchArgument(
+            'use_qp_shield',
+            default_value='false',
+            description=(
+                'Route arm trajectories through ffw_safety_qp::leader_shield. '
+                'When true, the controllers subscribe to /safety/qp_{left,right}/'
+                'joint_trajectory instead of the leader broadcaster topics.'
+            ),
+        ),
     ]
 
     start_rviz = LaunchConfiguration('start_rviz')
@@ -78,6 +88,20 @@ def generate_launch_description():
     use_head_eef_tracker = LaunchConfiguration('use_head_eef_tracker')
     init_position_file = LaunchConfiguration('init_position_file')
     ros2_control_type = LaunchConfiguration('ros2_control_type')
+    use_qp_shield = LaunchConfiguration('use_qp_shield')
+
+    arm_l_traj_src = PythonExpression([
+        "'/safety/qp_left/joint_trajectory' if '",
+        use_qp_shield,
+        "' == 'true' else "
+        "'/leader/joint_trajectory_command_broadcaster_left/joint_trajectory'",
+    ])
+    arm_r_traj_src = PythonExpression([
+        "'/safety/qp_right/joint_trajectory' if '",
+        use_qp_shield,
+        "' == 'true' else "
+        "'/leader/joint_trajectory_command_broadcaster_right/joint_trajectory'",
+    ])
 
     robot_description_content = Command([
         PathJoinSubstitution([FindExecutable(name='xacro')]),
@@ -161,11 +185,9 @@ def generate_launch_description():
         executable='spawner',
         arguments=[
             '--controller-ros-args',
-            '-r /arm_l_controller/joint_trajectory:='
-            '/leader/joint_trajectory_command_broadcaster_left/joint_trajectory',
+            ['-r /arm_l_controller/joint_trajectory:=', arm_l_traj_src],
             '--controller-ros-args',
-            '-r /arm_r_controller/joint_trajectory:='
-            '/leader/joint_trajectory_command_broadcaster_right/joint_trajectory',
+            ['-r /arm_r_controller/joint_trajectory:=', arm_r_traj_src],
             '--controller-ros-args',
             '-r /head_controller/joint_trajectory:='
             '/leader/joystick_controller_left/joint_trajectory',

@@ -1,0 +1,42 @@
+leader_shield:
+  ros__parameters:
+    base_frame: base_link
+    control_dt: 0.02
+    buffer: 0.10
+    search_margin: 0.05
+    alpha_obs: 5.0
+    alpha_jl: 10.0
+    damping: 0.01
+    slack_penalty: 1.0e4
+    safe_distance: 0.02
+    max_capsules_per_side: 24
+    link_whitelist_left:
+      - arm_l_link3
+      - arm_l_link4
+      - arm_l_link5
+      - arm_l_link6
+      - arm_l_link7
+      - end_effector_l_link
+    link_whitelist_right:
+      - arm_r_link3
+      - arm_r_link4
+      - arm_r_link5
+      - arm_r_link6
+      - arm_r_link7
+      - end_effector_r_link
+    arm_joint_names_left:
+      - arm_l_joint1
+      - arm_l_joint2
+      - arm_l_joint3
+      - arm_l_joint4
+      - arm_l_joint5
+      - arm_l_joint6
+      - arm_l_joint7
+    arm_joint_names_right:
+      - arm_r_joint1
+      - arm_r_joint2
+      - arm_r_joint3
+      - arm_r_joint4
+      - arm_r_joint5
+      - arm_r_joint6
+      - arm_r_joint7
